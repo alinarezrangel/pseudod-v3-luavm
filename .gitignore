@@ -1,0 +1,10 @@
+\#*\#
+*~
+*.o
+*.so
+*.a
+*.out
+sample
+sample.c
+.emacs.desktop*
+.projectile
