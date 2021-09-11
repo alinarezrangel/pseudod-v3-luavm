@@ -18,6 +18,7 @@ typedef struct pdcrt_objeto
     union
     {
         int i;
+        float f;
     } value;
 } pdcrt_objeto;
 
@@ -28,6 +29,7 @@ const char* pdcrt_tipo_como_texto(pdcrt_tipo_de_objeto tipo);
 void pdcrt_objeto_debe_tener_tipo(pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo);
 
 pdcrt_objeto pdcrt_objeto_entero(int v);
+pdcrt_objeto pdcrt_objeto_float(float v);
 pdcrt_objeto pdcrt_objeto_marca_de_pila(void);
 
 typedef struct pdcrt_pila

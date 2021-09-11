@@ -30,6 +30,14 @@ pdcrt_objeto pdcrt_objeto_entero(int v)
     return obj;
 }
 
+pdcrt_objeto pdcrt_objeto_float(float v)
+{
+    pdcrt_objeto obj;
+    obj.tag = PDCRT_TOBJ_FLOAT;
+    obj.value.f = v;
+    return obj;
+}
+
 pdcrt_objeto pdcrt_objeto_marca_de_pila(void)
 {
     pdcrt_objeto obj;
