@@ -1,3 +1,4 @@
+LUA=lua5.4
 CC=gcc
 CFLAGS=-std=c18 -Wall -g -O0 -fsanitize=address -fsanitize=undefined
 CLIBS=-L. -lpdcrt
@@ -11,7 +12,7 @@ clean:
 	rm -f sample pdcrt.o libpdcrt.a
 
 sample.c: main.lua
-	lua5.4 main.lua > sample.c
+	$(LUA) main.lua > sample.c
 
 sample: sample.c libpdcrt.a
 	$(CC) $(CFLAGS) sample.c $(CLIBS) -o sample
