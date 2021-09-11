@@ -93,7 +93,7 @@ local function escapecstr(str)
          return ("\\x%02x"):format(string.byte(st))
       end
    end
-   return (string.gsub(str, "[^a-zA-Z0-9.+/^&$!@ -]", repl))
+   return (string.gsub(str, "[^a-zA-Z0-9.+/^&$@ -]", repl))
 end
 
 local function processoparg(tbl)
