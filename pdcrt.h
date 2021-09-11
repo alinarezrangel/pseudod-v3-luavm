@@ -79,9 +79,12 @@ void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra);
     do {} while(0)
 
 #define PDCRT_MAIN_POSTLUDE()                   \
-    pdcrt_deinic_contexto(ctx);                 \
-    exit(EXIT_SUCCESS);                         \
-    do {} while(0)
+    do                                          \
+    {                                           \
+        pdcrt_deinic_contexto(ctx);             \
+        exit(EXIT_SUCCESS);                     \
+    }                                           \
+    while(0)
 
 #define PDCRT_LOCAL(ctx, idx, name)             \
     pdcrt_objeto name
@@ -90,8 +93,8 @@ void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra);
 #define PDCRT_GET_LVAR(ctx, name)               \
     name
 
-#define PDCRT_PROC(name)                            \
-    int pdproc_##name(pdcrt_contexto* ctx) // {}
+#define PDCRT_PROC(name)                                                \
+    int pdproc_##name(pdcrt_contexto* ctx, int name##nargs, int name##nrets) // {}
 #define PDCRT_PROC_PRELUDE(ctx, name)                                   \
     do                                                                  \
     {                                                                   \
@@ -111,7 +114,7 @@ void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra);
 #define PDCRT_DECLARE_PROC(name)                \
     PDCRT_PROC(name);
 
-typedef int (*pdcrt_proc_t)(pdcrt_contexto* ctx);
+typedef int (*pdcrt_proc_t)(pdcrt_contexto* ctx, int args, int rets);
 
 void pdcrt_op_iconst(pdcrt_contexto* ctx, int c);
 void pdcrt_op_sum(pdcrt_contexto* ctx);

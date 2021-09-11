@@ -231,7 +231,7 @@ void pdcrt_op_call(pdcrt_contexto* ctx, pdcrt_proc_t proc, int acepta, int devue
     (void) acepta;
     (void) devuelve;
     pdcrt_depurar_contexto(ctx, "precall");
-    (*proc)(ctx);
+    (*proc)(ctx, acepta, devuelve);
     pdcrt_depurar_contexto(ctx, "postcall");
 }
 
