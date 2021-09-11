@@ -76,6 +76,26 @@ local function pv(...)
 end
 
 
+local function escapecstr(str)
+   assert(type(str) == "string", "expected string")
+   local function repl(st)
+      if st == "\n" then
+         return "\\n"
+      elseif st == "\r" then
+         return "\\r"
+      elseif st == "\t" then
+         return "\\t"
+      elseif st == "'" then
+         return "\\'"
+      elseif st == "\"" then
+         return "\\\""
+      else
+         return ("\\x%02x"):format(string.byte(st))
+      end
+   end
+   return (string.gsub(str, "[^a-zA-Z0-9.+/^&$!@ -]", repl))
+end
+
 local function processoparg(tbl)
    assert(type(tbl) == "table", "expected table")
    if tbl.int then
@@ -258,8 +278,7 @@ function toc.makeemitter()
          return "name_" .. tostring(arg)
       elseif spec == "strlit" then
          assert(type(arg) == "string", "expected string")
-         -- String literal. Again, not perfect.
-         return string.format("%q", arg)
+         return '"' .. escapecstr(arg) .. '"'
       else
          error("unknown specifier " .. spec)
       end
