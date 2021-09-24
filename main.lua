@@ -51,7 +51,8 @@ code <- {| '' -> 'locals'  (rs local)* |}
 local <- {| {"LOCAL"} rs id |}
 
 OP <- "LCONST" / "ICONST" / "FCONST" / "CALL" / "SUM" / "SUB"
-    / "MUL" / "DIV" / "LSET" / "LGET" / "RETN" / "RET"
+    / "MUL" / "DIV" / "LSET" / "LGET" / "RETN" / "RET" / "DYNCALL"
+    / "ESET" / "EGET" / "MKENV" / "MKCLZ" / "MK0CLZ"
 
 procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
@@ -273,9 +274,12 @@ function toc.makeemitter()
          assert(math.type(arg) == "float", "expected float")
          -- Same caveat
          return tostring(arg)
-      elseif spec == "id" then
+      elseif spec == "idname" then
          assert(math.type(arg) == "integer" and arg >= 0, "expected integer")
          return "name_" .. tostring(arg)
+      elseif spec == "idint" then
+         assert(math.type(arg) == "integer" and arg >= 0, "expected integer")
+         return tostring(arg)
       elseif spec == "strlit" then
          assert(type(arg) == "string", "expected string")
          return '"' .. escapecstr(arg) .. '"'
@@ -335,7 +339,7 @@ toc.opschema = {}
 
 toc.opschema.ICONST = schema "i"
 function toc.opcodes.ICONST(emit, state, op)
-   emit:stmt("pdcrt_op_iconst(ctx, «1:int»)", op[2])
+   emit:stmt("pdcrt_op_iconst(marco, «1:int»)", op[2])
 end
 
 toc.opschema.LCONST = schema "d"
@@ -343,53 +347,83 @@ function toc.opcodes.LCONST(emit, state, op)
    local c = state.constants[op[2]]
    local t, v = c.type, c.value
    if t == "string" then
-      emit:stmt("pdcrt_op_lconst_string(ctx, «2:strlit»)", op[2], v)
+      emit:stmt("pdcrt_op_lconst_string(marco, «2:strlit»)", op[2], v)
    else
-      emit:stmt("pdcrt_op_lconst_int(ctx, «2:int»)", op[2], v)
+      emit:stmt("pdcrt_op_lconst_int(marco, «2:int»)", op[2], v)
    end
 end
 
 toc.opschema.SUM = schema ""
 function toc.opcodes.SUM(emit, state, op)
-   emit:stmt("pdcrt_op_sum(ctx)")
+   emit:stmt("pdcrt_op_sum(marco)")
 end
 
 toc.opschema.MUL = schema ""
 function toc.opcodes.MUL(emit, state, op)
-   emit:stmt("pdcrt_op_mul(ctx)")
+   emit:stmt("pdcrt_op_mul(marco)")
 end
 
 toc.opschema.SUB = schema ""
 function toc.opcodes.SUB(emit, state, op)
-   emit:stmt("pdcrt_op_sub(ctx)")
+   emit:stmt("pdcrt_op_sub(marco)")
 end
 
 toc.opschema.DIV = schema ""
 function toc.opcodes.DIV(emit, state, op)
-   emit:stmt("pdcrt_op_div(ctx)")
+   emit:stmt("pdcrt_op_div(marco)")
 end
 
 toc.opschema.CALL = schema "duu"
 function toc.opcodes.CALL(emit, state, op)
-   emit:stmt("pdcrt_op_call(ctx, PDCRT_PROC_NAME(ctx, «1:id»), «2:int», «3:int»)", op[2], op[3], op[4])
+   emit:stmt("pdcrt_op_call(marco, PDCRT_PROC_NAME(«1:idname»), «2:int», «3:int»)", op[2], op[3], op[4])
 end
 
 toc.opschema.LGET = schema "d"
 function toc.opcodes.LGET(emit, state, op)
-   emit:stmt("pdcrt_op_lget(ctx, PDCRT_GET_LVAR(ctx, «1:id»))", op[2])
+   emit:stmt("pdcrt_op_lget(marco, PDCRT_GET_LVAR(«1:idint»))", op[2])
 end
 
 toc.opschema.LSET = schema "d"
 function toc.opcodes.LSET(emit, state, op)
-   emit:stmt("PDCRT_SET_LVAR(ctx, «1:id», pdcrt_op_lset(ctx))", op[2])
+   emit:stmt("PDCRT_SET_LVAR(«1:idint», pdcrt_op_lset(marco))", op[2])
 end
 
 toc.opschema.RETN = schema "u"
 function toc.opcodes.RETN(emit, state, op)
-   emit:stmt("pdcrt_op_retn(ctx, «1:int»)", op[2])
+   emit:stmt("pdcrt_op_retn(marco, «1:int»)", op[2])
    assert(state.in_procedure, "RETN can only appear inside a procedure")
-   emit:stmt("PDCRT_PROC_POSTLUDE(ctx, «1:id»)", state.current_proc.id)
-   emit:stmt("return pdcrt_real_return(ctx)")
+   emit:stmt("PDCRT_PROC_POSTLUDE(«1:idname»)", state.current_proc.id)
+   emit:stmt("return pdcrt_real_return(marco)")
+end
+
+toc.opschema.MKENV = schema "u"
+function toc.opcodes.MKENV(emit, state, op)
+   emit:stmt("pdcrt_op_mkenv(marco, «1:int»)", op[2])
+end
+
+toc.opschema.ESET = schema "du"
+function toc.opcodes.ESET(emit, state, op)
+   emit:stmt("pdcrt_op_eset(marco, PDCRT_GET_LVAR(«1:idint»), «2:int»)", op[2], op[3])
+end
+
+toc.opschema.EGET = schema "du"
+function toc.opcodes.EGET(emit, state, op)
+   emit:stmt("pdcrt_op_eget(marco, PDCRT_GET_LVAR(«1:idint»), «2:int»)", op[2], op[3])
+end
+
+toc.opschema.MKCLZ = schema "d"
+function toc.opcodes.MKCLZ(emit, state, op)
+   emit:stmt("pdcrt_op_mkclz(marco, PDCRT_PROC_NAME(«1:idname»))", op[2])
+end
+
+toc.opschema.MK0CLZ = schema "d"
+function toc.opcodes.MK0CLZ(emit, state, op)
+   emit:stmt("pdcrt_op_mk0clz(marco, PDCRT_PROC_NAME(«1:idname»))", op[2])
+end
+
+toc.opschema.DYNCALL = schema "uu"
+function toc.opcodes.DYNCALL(emit, state, op)
+   emit:stmt("pdcrt_op_dyncall(marco, «1:int», «2:int»)", op[2], op[3])
 end
 
 function toc.opcode(emit, state, op)
@@ -400,10 +434,10 @@ end
 
 function toc.compcode(emit, state)
    emit:opentoplevel("PDCRT_MAIN() {")
-   emit:stmt("PDCRT_MAIN_PRELUDE()")
+   emit:stmt("PDCRT_MAIN_PRELUDE(«1:int»)", #state.code.locals)
    for i = 1, #state.code.locals do
       local p = state.code.locals[i]
-      emit:stmt("PDCRT_LOCAL(ctx, «1:int», «2:id»)", i, p[2])
+      emit:stmt("PDCRT_LOCAL(«1:idint», «2:idint»)", p[2], p[2])
    end
    for i = 1, #state.code.opcodes do
       toc.opcode(emit, state, state.code.opcodes[i])
@@ -413,22 +447,22 @@ function toc.compcode(emit, state)
 end
 
 function toc.opproc(emit, state, proc)
-   emit:opentoplevel("PDCRT_PROC(«1:id») {", proc.id)
-   emit:stmt("PDCRT_PROC_PRELUDE(ctx, «1:id»)", proc.id)
-   emit:stmt("PDCRT_ASSERT_PARAMS(ctx, «1:int»)", #proc.params)
+   emit:opentoplevel("PDCRT_PROC(«1:idname») {", proc.id)
+   emit:stmt("PDCRT_PROC_PRELUDE(«1:idname», «2:int»)", proc.id, #proc.params + #proc.locals)
+   emit:stmt("PDCRT_ASSERT_PARAMS(«1:int»)", #proc.params)
    for i = 1, #proc.params do
       local p = proc.params[i]
-      emit:stmt("PDCRT_PARAM(ctx, «1:int», «2:id»)", i, p[2])
+      emit:stmt("PDCRT_PARAM(«2:idint», «2:idname»)", p[2], p[2])
    end
    for i = 1, #proc.locals do
       local p = proc.locals[i]
-      emit:stmt("PDCRT_LOCAL(ctx, «1:int», «2:id»)", i, p[2])
+      emit:stmt("PDCRT_LOCAL(«2:idint», «2:idname»)", p[2], p[2])
    end
    for i = 1, #proc.opcodes do
       toc.opcode(emit, state, proc.opcodes[i])
    end
-   emit:stmt("PDCRT_PROC_POSTLUDE(ctx, «1:id»)", proc.id)
-   emit:stmt("return pdcrt_passthru_return(ctx)")
+   emit:stmt("PDCRT_PROC_POSTLUDE(«1:idname»)", proc.id)
+   emit:stmt("return pdcrt_passthru_return(marco)")
    emit:closetoplevel("}")
 end
 
@@ -444,7 +478,7 @@ end
 
 function toc.compprocdeclrs(emit, state)
    for id, proc in pairs(state.procedures) do
-      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:id»)", id)
+      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:idname»)", id)
    end
 end
 
@@ -455,39 +489,50 @@ PDVM 1.0
 PLATFORM "pdcrt"
 
 SECTION "code"
+  LOCAL 0
+  LOCAL 1
+  ICONST 2
+  CALL 1, 1, 1
+  LSET 0
   ICONST 3
-  CALL 5, 1, 1
+  LGET 0
+  DYNCALL 1, 1
+  LSET 1
+  ICONST 5
+  LGET 0
+  DYNCALL 1, 1
+  ICONST 0
+  LGET 0
+  DYNCALL 1, 1
 ENDSECTION
 
 SECTION "constant pool"
 ENDSECTION
 
 SECTION "procedures"
-  PROC 2
-    PARAM 3
-    PARAM 4
-    LGET 3
-    LGET 4
-    SUM
+  PROC 1 ;; 1 -- 1
+    PARAM 0
+    LOCAL 1
+    MKENV 2
+    LSET 1
+    LGET 0
+    ESET 1, 0
+    LGET 1
+    MKCLZ 4
     RETN 1
   ENDPROC
 
-  PROC 5
-    PARAM 7
-    LGET 7
-    ICONST 5
-    MUL
-    ICONST 4
-    CALL 6, 1, 1
+  PROC 4 ;; e+1 -- 1
+    PARAM 0
+    PARAM 1
+    LOCAL 2
+    EGET 0, 0
+    LGET 1
     SUM
-    RETN 1
-  ENDPROC
-
-  PROC 6
-    PARAM 8
-    LGET 8
-    ICONST 1
-    SUM
+    LSET 2
+    LGET 2
+    ESET 0, 0
+    LGET 2
     RETN 1
   ENDPROC
 ENDSECTION
@@ -495,6 +540,14 @@ ENDSECTION
 ;; SECTION "exports"
 ;;   EXPORT PROC 2 NAMED "hello_world" (CCONV "C")
 ;;   EXPORT CODE NAMED "my_main" (CCONV "C")
+;; ENDSECTION
+
+;; SECTION "externs"
+;;   EXTERN PROC 2 NAMED "print" (CCONV "C")
+;; ENDSECTION
+
+;; SECTION "FFI"
+;;   IMPORT PROC 3 NAMED "sin" (CCONV "C") TYPED (c_double -> c_double)
 ;; ENDSECTION
 
 ]=]
