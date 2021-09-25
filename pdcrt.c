@@ -191,7 +191,7 @@ pdcrt_alojador pdcrt_alojador_de_malloc(void)
 
 typedef struct pdcrt_alojador_de_arena
 {
-    void** punteros;
+    PDCRT_ARR(num_punteros) void** punteros;
     size_t num_punteros;
 } pdcrt_alojador_de_arena;
 
@@ -199,6 +199,7 @@ static void pdcrt_arena_agregar(pdcrt_alojador_de_arena* arena, void* ptr)
 {
     void** narena = realloc(arena->punteros, sizeof(void*) * (arena->num_punteros + 1));
     assert(narena != NULL);
+    narena[arena->num_punteros] = ptr;
     arena->num_punteros++;
     arena->punteros = narena;
 }
@@ -219,7 +220,7 @@ static void* pdcrt_alojar_en_arena(void* vdt, void* ptr, size_t tam_viejo, size_
     pdcrt_alojador_de_arena* dt = vdt;
     if(tam_nuevo == 0)
     {
-        // Nada: toda la memoria se liberará cuando se destruyá la arena
+        // Nada: toda la memoria se liberará cuando se destruya la arena
         return NULL;
     }
     else if(tam_viejo == 0)
