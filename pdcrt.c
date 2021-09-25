@@ -13,7 +13,7 @@ const char* pdcrt_perror(pdcrt_error err)
     return errores[err];
 }
 
-pdcrt_error pdcrt_aloj_env(pdcrt_alojador alojador, size_t env_size, pdcrt_env** env)
+pdcrt_error pdcrt_aloj_env(pdcrt_env** env, pdcrt_alojador alojador, size_t env_size)
 {
     *env = pdcrt_alojar_simple(alojador, sizeof(pdcrt_env) + sizeof(pdcrt_objeto*) * env_size);
     if(!env)
@@ -27,7 +27,7 @@ pdcrt_error pdcrt_aloj_env(pdcrt_alojador alojador, size_t env_size, pdcrt_env**
     }
 }
 
-void pdcrt_dealoj_env(pdcrt_alojador alojador, pdcrt_env* env)
+void pdcrt_dealoj_env(pdcrt_env* env, pdcrt_alojador alojador)
 {
     pdcrt_dealojar_simple(alojador, env, sizeof(pdcrt_env) + sizeof(pdcrt_objeto*) * env->env_size);
 }
@@ -79,7 +79,7 @@ pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc
 {
     obj->tag = PDCRT_TOBJ_CLOSURE;
     obj->value.c.proc = proc;
-    return pdcrt_aloj_env(alojador, env_size, &obj->value.c.env);
+    return pdcrt_aloj_env(&obj->value.c.env, alojador, env_size);
 }
 
 pdcrt_error pdcrt_inic_pila(pdcrt_pila* pila, pdcrt_alojador alojador)
@@ -485,7 +485,7 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
     pdcrt_objeto clz;
     clz.tag = PDCRT_TOBJ_CLOSURE;
     clz.value.c.proc = proc;
-    no_falla(pdcrt_aloj_env(marco->contexto->alojador, 0, &clz.value.c.env));
+    no_falla(pdcrt_aloj_env(&clz.value.c.env, marco->contexto->alojador, 0));
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
 }
 

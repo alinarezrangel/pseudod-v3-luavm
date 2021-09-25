@@ -49,8 +49,8 @@ typedef struct pdcrt_env
     PDCRT_ARR(env_size) struct pdcrt_objeto* env[];
 } pdcrt_env;
 
-pdcrt_error pdcrt_aloj_env(pdcrt_alojador alojador, size_t env_size, PDCRT_OUT pdcrt_env** env);
-void pdcrt_dealoj_env(pdcrt_alojador alojador, pdcrt_env* env);
+pdcrt_error pdcrt_aloj_env(PDCRT_OUT pdcrt_env** env, pdcrt_alojador alojador, size_t env_size);
+void pdcrt_dealoj_env(pdcrt_env* env, pdcrt_alojador alojador);
 
 typedef struct pdcrt_closure
 {
