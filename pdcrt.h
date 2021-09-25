@@ -29,7 +29,7 @@ typedef enum pdcrt_error
 
 const char* pdcrt_perror(pdcrt_error err);
 
-typedef void* (*pdcrt_func_alojar)(void* datos_del_usuario, PDCRT_IN void* ptr, size_t tam_viejo, size_t tam_nuevo);
+typedef PDCRT_NULL void* (*pdcrt_func_alojar)(void* datos_del_usuario, PDCRT_IN PDCRT_NULL void* ptr, size_t tam_viejo, size_t tam_nuevo);
 
 typedef struct pdcrt_alojador
 {
@@ -117,10 +117,10 @@ void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra);
 
 void* pdcrt_alojar(pdcrt_contexto* ctx, size_t tam);
 void pdcrt_dealojar(pdcrt_contexto* ctx, void* ptr, size_t tam);
-void* pdcrt_realojar(pdcrt_contexto* ctx, void* ptr, size_t tam_actual, size_t tam_nuevo);
+void* pdcrt_realojar(pdcrt_contexto* ctx, PDCRT_NULL void* ptr, size_t tam_actual, size_t tam_nuevo);
 void* pdcrt_alojar_simple(pdcrt_alojador alojador, size_t tam);
 void pdcrt_dealojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam);
-void* pdcrt_realojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam_actual, size_t tam_nuevo);
+void* pdcrt_realojar_simple(pdcrt_alojador alojador, PDCRT_NULL void* ptr, size_t tam_actual, size_t tam_nuevo);
 
 typedef struct pdcrt_marco
 {
