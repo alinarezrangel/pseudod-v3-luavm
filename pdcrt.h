@@ -12,6 +12,9 @@
 // Marca un parámetro como "de salida".
 #define PDCRT_OUT
 
+// Marca un parámetro como "de entrada".
+#define PDCRT_IN
+
 // Indica que un arreglo o puntero es realmente un arreglo de tamaño
 // dinámico. `campo_tam` es una variable o campo que contiene el tamaño del
 // arreglo.
@@ -26,7 +29,7 @@ typedef enum pdcrt_error
 
 const char* pdcrt_perror(pdcrt_error err);
 
-typedef void* (*pdcrt_func_alojar)(void* datos_del_usuario, void* ptr, size_t tam_viejo, size_t tam_nuevo);
+typedef void* (*pdcrt_func_alojar)(void* datos_del_usuario, PDCRT_IN void* ptr, size_t tam_viejo, size_t tam_nuevo);
 
 typedef struct pdcrt_alojador
 {
@@ -90,17 +93,17 @@ typedef struct pdcrt_pila
     size_t capacidad;
 } pdcrt_pila;
 
-pdcrt_error pdcrt_inic_pila(PDCRT_OUT pdcrt_pila* pila);
-void pdcrt_deinic_pila(pdcrt_pila* pila);
-pdcrt_error pdcrt_empujar_en_pila(pdcrt_pila* pila, pdcrt_objeto val);
+pdcrt_error pdcrt_inic_pila(PDCRT_OUT pdcrt_pila* pila, pdcrt_alojador alojador);
+void pdcrt_deinic_pila(pdcrt_pila* pila, pdcrt_alojador alojador);
+pdcrt_error pdcrt_empujar_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, pdcrt_objeto val);
 pdcrt_objeto pdcrt_sacar_de_pila(pdcrt_pila* pila);
 pdcrt_objeto pdcrt_cima_de_pila(pdcrt_pila* pila);
 pdcrt_objeto pdcrt_eliminar_elemento_en_pila(pdcrt_pila* pila, size_t n);
-void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, size_t n, pdcrt_objeto obj);
+void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, size_t n, pdcrt_objeto obj);
 
 typedef struct pdcrt_contexto
 {
-    pdcrt_pila* pila;
+    pdcrt_pila pila;
     pdcrt_alojador alojador;
 } pdcrt_contexto;
 
@@ -108,8 +111,8 @@ pdcrt_alojador pdcrt_alojador_de_malloc(void);
 pdcrt_error pdcrt_aloj_alojador_de_arena(pdcrt_alojador* aloj);
 void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj);
 
-pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_pila* pila, pdcrt_alojador alojador);
-void pdcrt_deinic_contexto(pdcrt_contexto* ctx);
+pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador);
+void pdcrt_deinic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador);
 void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra);
 
 void* pdcrt_alojar(pdcrt_contexto* ctx, size_t tam);
@@ -142,19 +145,13 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, size_t n);
     pdcrt_contexto* ctx = &ctx_real;                                    \
     pdcrt_marco marco_real;                                             \
     pdcrt_marco* marco = &marco_real;                                   \
-    pdcrt_pila pila;                                                    \
     pdcrt_alojador aloj;                                                \
     if((pderrno = pdcrt_aloj_alojador_de_arena(&aloj)) != PDCRT_OK)     \
     {                                                                   \
         puts(pdcrt_perror(pderrno));                                    \
         exit(EXIT_FAILURE);                                             \
     }                                                                   \
-    if((pderrno = pdcrt_inic_pila(&pila)) != PDCRT_OK)                  \
-    {                                                                   \
-        puts(pdcrt_perror(pderrno));                                    \
-        exit(EXIT_FAILURE);                                             \
-    }                                                                   \
-    if((pderrno = pdcrt_inic_contexto(&ctx_real, &pila, aloj)) != PDCRT_OK) \
+    if((pderrno = pdcrt_inic_contexto(&ctx_real, aloj)) != PDCRT_OK) \
     {                                                                   \
         puts(pdcrt_perror(pderrno));                                    \
         exit(EXIT_FAILURE);                                             \
@@ -170,7 +167,7 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, size_t n);
     do                                          \
     {                                           \
         pdcrt_deinic_marco(&marco_real);        \
-        pdcrt_deinic_contexto(ctx);             \
+        pdcrt_deinic_contexto(ctx, aloj);       \
         pdcrt_dealoj_alojador_de_arena(aloj);   \
         exit(EXIT_SUCCESS);                     \
     }                                           \
@@ -179,7 +176,7 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, size_t n);
 #define PDCRT_LOCAL(idx, name)                              \
     pdcrt_fijar_local(marco, idx, pdcrt_objeto_entero(0))
 #define PDCRT_SET_LVAR(idx, val)                                    \
-    pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(ctx->pila))
+    pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
 #define PDCRT_GET_LVAR(idx)                     \
     pdcrt_obtener_local(marco, idx)
 
@@ -198,14 +195,14 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, size_t n);
             exit(EXIT_FAILURE);                                         \
         }                                                               \
         pdcrt_depurar_contexto(ctx, "P1 " #name);                       \
-        pdcrt_empujar_en_pila(ctx->pila, pdcrt_objeto_marca_de_pila()); \
+        pdcrt_empujar_en_pila(&ctx->pila, ctx->alojador, pdcrt_objeto_marca_de_pila()); \
         pdcrt_depurar_contexto(ctx, "P2 " #name);                       \
     }                                                                   \
     while(0)
 #define PDCRT_ASSERT_PARAMS(nparams)       \
     pdcrt_assert_params(marco, nparams)
 #define PDCRT_PARAM(idx, param)                        \
-    pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(ctx->pila))
+    pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
 #define PDCRT_PROC_POSTLUDE(name)          \
     do {} while(0)
 #define PDCRT_PROC_NAME(name)              \

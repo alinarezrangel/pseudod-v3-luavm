@@ -82,11 +82,11 @@ pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc
     return pdcrt_aloj_env(alojador, env_size, &obj->value.c.env);
 }
 
-pdcrt_error pdcrt_inic_pila(pdcrt_pila* pila)
+pdcrt_error pdcrt_inic_pila(pdcrt_pila* pila, pdcrt_alojador alojador)
 {
     pila->capacidad = 1;
     pila->num_elementos = 0;
-    pila->elementos = malloc(sizeof(pdcrt_objeto) * pila->capacidad);
+    pila->elementos = pdcrt_alojar_simple(alojador, sizeof(pdcrt_objeto) * pila->capacidad);
     if(!pila->elementos)
     {
         pila->capacidad = 0;
@@ -98,19 +98,19 @@ pdcrt_error pdcrt_inic_pila(pdcrt_pila* pila)
     }
 }
 
-void pdcrt_deinic_pila(pdcrt_pila* pila)
+void pdcrt_deinic_pila(pdcrt_pila* pila, pdcrt_alojador alojador)
 {
     pila->capacidad = 0;
     pila->num_elementos = 0;
-    free(pila->elementos);
+    pdcrt_dealojar_simple(alojador, pila->elementos, sizeof(pdcrt_objeto) * pila->capacidad);
 }
 
-pdcrt_error pdcrt_empujar_en_pila(pdcrt_pila* pila, pdcrt_objeto val)
+pdcrt_error pdcrt_empujar_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, pdcrt_objeto val)
 {
     if(pila->num_elementos >= pila->capacidad)
     {
         size_t nuevacap = pila->capacidad * 2;
-        pdcrt_objeto* nuevosels = realloc(pila->elementos, nuevacap * sizeof(pdcrt_objeto));
+        pdcrt_objeto* nuevosels = pdcrt_realojar_simple(alojador, pila->elementos, pila->capacidad * sizeof(pdcrt_objeto), nuevacap * sizeof(pdcrt_objeto));
         if(!nuevosels)
         {
             return PDCRT_ENOMEM;
@@ -155,9 +155,9 @@ pdcrt_objeto pdcrt_eliminar_elemento_en_pila(pdcrt_pila* pila, size_t n)
     return r;
 }
 
-void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, size_t n, pdcrt_objeto obj)
+void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, size_t n, pdcrt_objeto obj)
 {
-    pdcrt_empujar_en_pila(pila, pdcrt_objeto_entero(0));
+    pdcrt_empujar_en_pila(pila, alojador, pdcrt_objeto_entero(0));
     size_t I = pila->num_elementos - n - 1;
     for(size_t i = pila->num_elementos - 1; i > I; i--)
     {
@@ -268,26 +268,30 @@ void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj)
     free(arena);
 }
 
-pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_pila* pila, pdcrt_alojador alojador)
+pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
 {
-    ctx->pila = pila;
+    pdcrt_error pderrno;
+    if((pderrno = pdcrt_inic_pila(&ctx->pila, alojador)) != PDCRT_OK)
+    {
+        return pderrno;
+    }
     ctx->alojador = alojador;
     return PDCRT_OK;
 }
 
-void pdcrt_deinic_contexto(pdcrt_contexto* ctx)
+void pdcrt_deinic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
 {
     pdcrt_depurar_contexto(ctx, "deinic");
-    pdcrt_deinic_pila(ctx->pila);
+    pdcrt_deinic_pila(&ctx->pila, alojador);
 }
 
 void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra)
 {
     printf("Contexto: %s\n", extra);
-    printf("  Pila [%zd elementos de %zd max.]\n", ctx->pila->num_elementos, ctx->pila->capacidad);
-    for(size_t i = 0; i < ctx->pila->num_elementos; i++)
+    printf("  Pila [%zd elementos de %zd max.]\n", ctx->pila.num_elementos, ctx->pila.capacidad);
+    for(size_t i = 0; i < ctx->pila.num_elementos; i++)
     {
-        pdcrt_objeto obj = ctx->pila->elementos[i];
+        pdcrt_objeto obj = ctx->pila.elementos[i];
         switch(obj.tag)
         {
         case PDCRT_TOBJ_ENTERO:
@@ -381,64 +385,64 @@ static void no_falla(pdcrt_error err)
 
 void pdcrt_op_iconst(pdcrt_marco* marco, int c)
 {
-    no_falla(pdcrt_empujar_en_pila(marco->contexto->pila, pdcrt_objeto_entero(c)));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(c)));
 }
 
 void pdcrt_op_sum(pdcrt_marco* marco)
 {
     pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(marco->contexto->pila);
+    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
     pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(marco->contexto->pila, pdcrt_objeto_entero(a.value.i + b.value.i)));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(a.value.i + b.value.i)));
 }
 
 void pdcrt_op_sub(pdcrt_marco* marco)
 {
     pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(marco->contexto->pila);
+    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
     pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(marco->contexto->pila, pdcrt_objeto_entero(a.value.i - b.value.i)));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(a.value.i - b.value.i)));
 }
 
 void pdcrt_op_mul(pdcrt_marco* marco)
 {
     pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(marco->contexto->pila);
+    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
     pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(marco->contexto->pila, pdcrt_objeto_entero(a.value.i * b.value.i)));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(a.value.i * b.value.i)));
 }
 
 void pdcrt_op_div(pdcrt_marco* marco)
 {
     pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(marco->contexto->pila);
+    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
     pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(marco->contexto->pila, pdcrt_objeto_entero(a.value.i / b.value.i)));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(a.value.i / b.value.i)));
 }
 
 pdcrt_objeto pdcrt_op_lset(pdcrt_marco* marco)
 {
-    return pdcrt_sacar_de_pila(marco->contexto->pila);
+    return pdcrt_sacar_de_pila(&marco->contexto->pila);
 }
 
 void pdcrt_op_lget(pdcrt_marco* marco, pdcrt_objeto v)
 {
-    no_falla(pdcrt_empujar_en_pila(marco->contexto->pila, v));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, v));
 }
 
 void pdcrt_op_mkenv(pdcrt_marco* marco, size_t tam)
 {
     pdcrt_objeto env;
     no_falla(pdcrt_objeto_aloj_closure(marco->contexto->alojador, NULL, tam, &env));
-    no_falla(pdcrt_empujar_en_pila(marco->contexto->pila, env));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, env));
 }
 
 static pdcrt_objeto* pdcrt_mover_al_monton(pdcrt_contexto* ctx, pdcrt_objeto obj)
@@ -452,7 +456,7 @@ static pdcrt_objeto* pdcrt_mover_al_monton(pdcrt_contexto* ctx, pdcrt_objeto obj
 
 void pdcrt_op_eset(pdcrt_marco* marco, pdcrt_objeto env, size_t i)
 {
-    pdcrt_objeto cima = pdcrt_sacar_de_pila(marco->contexto->pila);
+    pdcrt_objeto cima = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
     env.value.c.env->env[i] = pdcrt_mover_al_monton(marco->contexto, cima);
 }
@@ -460,12 +464,12 @@ void pdcrt_op_eset(pdcrt_marco* marco, pdcrt_objeto env, size_t i)
 void pdcrt_op_eget(pdcrt_marco* marco, pdcrt_objeto env, size_t i)
 {
     pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
-    pdcrt_empujar_en_pila(marco->contexto->pila, *env.value.c.env->env[i]);
+    pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, *env.value.c.env->env[i]);
 }
 
 void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_proc_t proc)
 {
-    pdcrt_objeto cima = pdcrt_sacar_de_pila(marco->contexto->pila);
+    pdcrt_objeto cima = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(cima, PDCRT_TOBJ_CLOSURE);
     pdcrt_objeto nuevo_env;
     no_falla(pdcrt_objeto_aloj_closure(marco->contexto->alojador, proc, cima.value.c.env->env_size, &nuevo_env));
@@ -473,7 +477,7 @@ void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_proc_t proc)
     {
         nuevo_env.value.c.env->env[i] = cima.value.c.env->env[i];
     }
-    no_falla(pdcrt_empujar_en_pila(marco->contexto->pila, nuevo_env));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, nuevo_env));
 }
 
 void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
@@ -482,14 +486,14 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
     clz.tag = PDCRT_TOBJ_CLOSURE;
     clz.value.c.proc = proc;
     no_falla(pdcrt_aloj_env(marco->contexto->alojador, 0, &clz.value.c.env));
-    no_falla(pdcrt_empujar_en_pila(marco->contexto->pila, clz));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
 }
 
 void pdcrt_op_dyncall(pdcrt_marco* marco, int acepta, int devuelve)
 {
-    pdcrt_objeto cima = pdcrt_sacar_de_pila(marco->contexto->pila);
+    pdcrt_objeto cima = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(cima, PDCRT_TOBJ_CLOSURE);
-    no_falla(pdcrt_empujar_en_pila(marco->contexto->pila, cima));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, cima));
     (*cima.value.c.proc)(marco, acepta + 1, devuelve);
 }
 
@@ -503,16 +507,16 @@ void pdcrt_op_call(pdcrt_marco* marco, pdcrt_proc_t proc, int acepta, int devuel
 void pdcrt_op_retn(pdcrt_marco* marco, int n)
 {
     pdcrt_depurar_contexto(marco->contexto, "P1 retn");
-    for(size_t i = marco->contexto->pila->num_elementos - n; i < marco->contexto->pila->num_elementos; i++)
+    for(size_t i = marco->contexto->pila.num_elementos - n; i < marco->contexto->pila.num_elementos; i++)
     {
-        pdcrt_objeto obj = marco->contexto->pila->elementos[i];
+        pdcrt_objeto obj = marco->contexto->pila.elementos[i];
         if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA)
         {
             fprintf(stderr, "Trato de devolver a traves de una marca de pila\n");
             abort();
         }
     }
-    pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(marco->contexto->pila, n);
+    pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, n);
     pdcrt_objeto_debe_tener_tipo(marca, PDCRT_TOBJ_MARCA_DE_PILA);
     pdcrt_depurar_contexto(marco->contexto, "P2 retn");
 }
@@ -520,27 +524,27 @@ void pdcrt_op_retn(pdcrt_marco* marco, int n)
 void pdcrt_assert_params(pdcrt_marco* marco, int nparams)
 {
     pdcrt_depurar_contexto(marco->contexto, "P1 assert_params");
-    pdcrt_objeto marca = pdcrt_sacar_de_pila(marco->contexto->pila);
+    pdcrt_objeto marca = pdcrt_sacar_de_pila(&marco->contexto->pila);
     if(marca.tag != PDCRT_TOBJ_MARCA_DE_PILA)
     {
         fprintf(stderr, "Se esperaba una marca de pila pero se obtuvo un %s\n", pdcrt_tipo_como_texto(marca.tag));
         abort();
     }
-    if(marco->contexto->pila->num_elementos < (size_t)nparams)
+    if(marco->contexto->pila.num_elementos < (size_t)nparams)
     {
         fprintf(stderr, "Se esperaban al menos %d elementos.\n", nparams);
         abort();
     }
-    for(size_t i = marco->contexto->pila->num_elementos - nparams; i < marco->contexto->pila->num_elementos; i++)
+    for(size_t i = marco->contexto->pila.num_elementos - nparams; i < marco->contexto->pila.num_elementos; i++)
     {
-        pdcrt_objeto obj = marco->contexto->pila->elementos[i];
+        pdcrt_objeto obj = marco->contexto->pila.elementos[i];
         if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA)
         {
             fprintf(stderr, "Faltaron elementos en el marco de llamada\n");
             abort();
         }
     }
-    pdcrt_insertar_elemento_en_pila(marco->contexto->pila, nparams, marca);
+    pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, nparams, marca);
     pdcrt_depurar_contexto(marco->contexto, "P2 assert_params");
 }
 
