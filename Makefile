@@ -12,7 +12,7 @@ clean:
 	rm -f sample pdcrt.o libpdcrt.a
 
 sample.c: main.lua
-	$(LUA) main.lua > sample.c
+	$(LUA) main.lua -Vso sample.c
 
 sample: sample.c libpdcrt.a
 	$(CC) $(CFLAGS) sample.c $(CLIBS) -o sample

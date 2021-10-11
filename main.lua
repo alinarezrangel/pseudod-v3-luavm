@@ -1,6 +1,23 @@
 local re = require "re"
 local v = require "fennelview"
 
+local VER = {1, 0, 0}
+
+local log = {
+   min = 2
+}
+
+function log.log(level, fmt, ...)
+   if level >= log.min then
+      print(fmt:format(...))
+   end
+end
+
+function log.dbg(fmt, ...) log.log(0, "[DBG] " .. fmt, ...) end
+function log.info(fmt, ...) log.log(1, "[INFO] " .. fmt, ...) end
+function log.warn(fmt, ...) log.log(2, "[WARN] " .. fmt, ...) end
+function log.error(fmt, ...) log.log(3, "[ERROR] " .. fmt, ...) end
+
 local grammar = [==[
 
 program <- {| '' -> 'program' ws version (rs platform)? (rs section)* ws |} {}
@@ -206,7 +223,9 @@ local function processconstpool(cpool)
       local c = cpool[i]
       assert(c[1] == "constant", "expected constant declaration")
       local id = processoparg(c[2])
-      assert(pool[id] == nil, "cannot redefine constant " .. tostring(id))
+      if pool[id] ~= nil then
+         log.warn("redefined constant %d", id)
+      end
       pool[id] = {
          type = c[3],
          value = processoparg(c[4]),
@@ -483,6 +502,79 @@ function toc.compprocdeclrs(emit, state)
 end
 
 
+local function checklocals(tp, body)
+   local base = 0
+   if tp == "proc" then
+      for i = 1, #body.params do
+         assert(body.params[i][2] == (i - 1), "non-increasing parameter ID")
+      end
+      base = #body.params
+   end
+   for i = 1, #body.locals do
+      assert(body.locals[i][2] == (i + base - 1), "non-increasing local ID")
+   end
+end
+
+local function main(input, config)
+   local r = re.compile(grammar)
+   log.info("compiling the file")
+   local secs = sectionstotable(assert(re.match(input, r), "could not parse bytecode"))
+   log.info("done compiling")
+   assert(tonumber(secs.version[1]) == VER[1], "major version must be 1")
+   assert(tonumber(secs.version[2]) <= VER[2], "minor version must be 0 or less")
+   log.info("validated the version")
+   if secs.procedures_section then
+      local P = {}
+      for i = 1, #secs.procedures_section do
+         local r = prepproc(secs.procedures_section[i])
+         if P[r.id] ~= nil then
+            log.warn("duplicate procedure with id #%d", r.id)
+         end
+         P[r.id] = r
+      end
+      secs.procedures_section = P
+   else
+      log.warn("no procedure section")
+   end
+   log.info("extracted procedures")
+   local code = processcode(codetotable(assert(secs.code_section, "code section not provided")))
+   log.info("processed code")
+   local state = {
+      version = secs.version,
+      procedures = secs.procedures_section,
+      constants = processconstpool(secs.constant_pool_section),
+      code = code,
+   }
+   checklocals("code", state.code)
+   for id, body in pairs(state.procedures) do
+      checklocals("proc", body)
+   end
+   log.info("generated state")
+   local emit = toc.makeemitter()
+   emit:include("pdcrt.h")
+   log.dbg("emitted prelude")
+   toc.compprocdeclrs(emit, state)
+   log.dbg("emitted proc. declrs.")
+   toc.compcode(emit, state)
+   log.dbg("emitted code")
+   toc.compprocs(emit, state)
+   log.dbg("emitted procs.")
+   log.info("assembled everything")
+   return emit:emittedstmts()
+end
+
+
+local function readall(filename)
+   local handle <close> = io.open(filename, "r")
+   return handle:read("a")
+end
+
+local function writeto(filename, contents)
+   local handle <close> = io.open(filename, "wb")
+   handle:write(contents)
+end
+
+
 local sample = [=[
 
 PDVM 1.0
@@ -507,6 +599,8 @@ SECTION "code"
 ENDSECTION
 
 SECTION "constant pool"
+  #1 STRING "hola"
+#1 BIGINT 9538375
 ENDSECTION
 
 SECTION "procedures"
@@ -552,30 +646,93 @@ ENDSECTION
 
 ]=]
 
-local r = re.compile(grammar)
-local secs = sectionstotable(assert(re.match(sample, r), "could not parse bytecode"))
-assert(secs.version[1] == "1", "major version must be 1")
-assert(tonumber(secs.version[2]) <= 0, "minor version must be 0 or less")
-if secs.procedures_section then
-   local P = {}
-   for i = 1, #secs.procedures_section do
-      local r = prepproc(secs.procedures_section[i])
-      P[r.id] = r
+local function makeparsecli(opts)
+   local function parser(cli)
+      local i = 1
+      local r = {
+         OPTS = opts,
+      }
+      while i <= #cli do
+         local a = cli[i]
+         if a == "-" or a:sub(1, 1) ~= "-" then
+            break
+         end
+         local ended = false
+         for j = 2, #a do
+            if a:sub(j, j) == "-" then
+               ended = true
+            else
+               for n = 1, #opts do
+                  local o = opts[n]
+                  if a:sub(j, j) == o[1] then
+                     r[o[2]] = {}
+                     table.move(cli, i + 1, i + o[3], 1, r[o[2]])
+                     if o[3] == 0 then
+                        r[o[2]] = true
+                     elseif o[3] == 1 then
+                        r[o[2]] = r[o[2]][1]
+                     end
+                     i = i + o[3]
+                     break
+                  end
+               end
+            end
+         end
+         i = i + 1
+         if ended then
+            break
+         end
+      end
+      table.move(cli, i, #cli, 1, r)
+      return r
    end
-   secs.procedures_section = P
+   return parser
 end
-local code = processcode(codetotable(assert(secs.code_section, "code section not provided")))
-local state = {
-   version = secs.version,
-   procedures = secs.procedures_section,
-   constants = processconstpool(secs.constant_pool_section),
-   code = code,
+
+local parser = makeparsecli {
+   {"o", "output", 1, "Archivo en el cual guardar la salida."},
+   {"h", "help", 0, "Muestra esta ayuda y termina."},
+   {"v", "version", 0, "Muestra la versión del ensamblador"},
+   {"V", "verbose", 0, "Muestra salida adicional."},
+   {"s", "sample", 0, "Compila el programa de prueba."},
 }
---pv(secs)
---pv(state)
-local emit = toc.makeemitter()
-emit:include("pdcrt.h")
-toc.compprocdeclrs(emit, state)
-toc.compcode(emit, state)
-toc.compprocs(emit, state)
-print(emit:emittedstmts())
+local res = parser {...}
+
+if res.help then
+   print(([[Ensamblador de la máquina virtual de PseudoD.
+
+Uso: lua5.4 main.lua [opts...] archivos...
+
+Este programa solo acepta opciones cortas (como `-h` o `-v`), las cuales
+tienen que estar antes de los argumentos. Las opciones se pueden combinar.
+]]):format())
+   print((" % 8s  % 15s  %s"):format("Opción", "Núm. argumentos", "Descripción"))
+   for i = 1, #res.OPTS do
+      local opt = res.OPTS[i]
+      print(("% 8s  % 15d  %s"):format("-"..opt[1], opt[3], opt[4]))
+   end
+   os.exit(true, true)
+end
+
+if res.version then
+   print(("%d.%d.%d"):format(VER[1], VER[2], VER[3]))
+   os.exit(true, true)
+end
+
+if res.verbose then
+   log.min = 0
+end
+
+local config = {}
+local compiled
+if res.sample then
+   compiled = main(sample, config)
+else
+   assert(type(res[1]) == "string", "se esperaba un archivo de entrada")
+   compiled = main(readall(res[1]), config)
+end
+if res.output then
+   writeto(res.output, compiled)
+else
+   print(compiled)
+end
