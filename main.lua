@@ -18,6 +18,37 @@ function log.info(fmt, ...) log.log(1, "[INFO] " .. fmt, ...) end
 function log.warn(fmt, ...) log.log(2, "[WARN] " .. fmt, ...) end
 function log.error(fmt, ...) log.log(3, "[ERROR] " .. fmt, ...) end
 
+local WARNINGS = {
+   {"increasing-locals", "inc-locals", {"increasing_locals"},
+    "Advierte de cuando los índices de las locales no están en órden ascendente."},
+   {"redefined-constant", "redef-const", {"redefined_constant"},
+    "Advierte cuando se redefina una constante."},
+   {"procedure-doesnt-exists", "undef-proc", {"procedure_doesnt_exists"},
+    "Advierte cuando se refiera a un procedimiento que no exísta."},
+   {"redefined-procedure", "redef-proc", {"redefined_procedure"},
+    "Advierte cuando se redefina un procedimiento."},
+   {"no-procedure-section", "no-proc-sec", {"no_procedure_section"},
+    "Advierte si no hay sección de procedimientos."},
+   {"no-constants-section", "no-const-sec", {"no_constant_section"},
+    "Advierte si no hay sección de constantes."},
+   {"no-code-section", "no-code-sec", {"no_code_section"},
+    "Advierte si no hay sección de código."},
+   {"future", "future", {"future"},
+    "Advierte sobre cosas que van a cambiar en un futuro."},
+   {"useful", "useful", {"redefined_constant", "redefined_procedure", "procedure_doesnt_exists", "no_procedure_section", "no_code_section", "future"},
+    "Activa advertencias útiles durante el desarrollo."},
+   {"all", "all", {"increasing_locals", "redefined_constant", "redefined_procedure", "procedure_doesnt_exists", "no_procedure_section", "no_constant_section", "no_code_section"},
+    "Activa todas las advertencias."},
+}
+
+local enabledwarnings = {}
+
+local function warnabout(warn, fmt, ...)
+   if enabledwarnings[warn] then
+      log.warn(fmt, ...)
+   end
+end
+
 local grammar = [==[
 
 program <- {| '' -> 'program' ws version (rs platform)? (rs section)* ws |} {}
@@ -61,21 +92,26 @@ constant <- {| '' -> 'constant'
 codesec <- {| '' -> 'code_section'
               "SECTION" ws '"code"' code rs "ENDSECTION" |}
 opcode <- {| {OP} (rs oparg (ws "," ws oparg)*)? |}
-oparg <- flt / int / str
+oparg <- nil / envs / flt / int / str
+nil <- {| {:type: '' -> 'nil' :} 'NIL' |}
+envs <- {| {:type: '' -> 'env' :} { 'ESUP' / 'EACT' } |}
 
 code <- {| '' -> 'locals'  (rs local)* |}
         {| '' -> 'opcodes'  (rs opcode)* |}
-local <- {| {"LOCAL"} rs id |}
+local <- {| {"LOCAL"} rs (id / envs) |}
 
 OP <- "LCONST" / "ICONST" / "FCONST" / "CALL" / "SUM" / "SUB"
-    / "MUL" / "DIV" / "LSET" / "LGET" / "RETN" / "RET" / "DYNCALL"
-    / "ESET" / "EGET" / "MKENV" / "MKCLZ" / "MK0CLZ"
+    / "MUL" / "DIV" / "RETN" / "RET" / "DYNCALL"
+    / "MKENV" / "MKCLZC" / "MKCLZ" / "MK0CLZ"
+    / "IFRAME" / "EINIT" / "EFRAME" / "PRINTT"
+    / "LSETC" / "LGETC" / "LSET" / "LGET"
+    / "EGETC" / "ESETC" / "ESET" / "EGET"
 
 procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
 proc <- {| '' -> 'proc'
            "PROC" rs id {| '' -> 'params'  (rs param)* |} code rs "ENDPROC" |}
-param <- {| {"PARAM"} rs id |}
+param <- {| {"PARAM"} rs (id / envs) |}
 
 unknownsec <- "SECTION" ws str (ws token)* rs "SECTION"
 token <- str / [^%s"]+
@@ -114,6 +150,8 @@ local function escapecstr(str)
    return (string.gsub(str, "[^a-zA-Z0-9.+/^&$@ -]", repl))
 end
 
+local ESUP, EACT = {special = true, type = "ESUP"}, {special = true, type = "EACT"}
+
 local function processoparg(tbl)
    assert(type(tbl) == "table", "expected table")
    if tbl.int then
@@ -122,6 +160,14 @@ local function processoparg(tbl)
       return tonumber(tbl.flt)
    elseif tbl.id then
       return tonumber(tbl.id)
+   elseif tbl.type == "nil" then
+      return nil
+   elseif tbl.type == "env" then
+      if tbl[1] == "ESUP" then
+         return ESUP
+      else
+         return EACT
+      end
    else
       local escapes = {
          ["q"] = "\"",
@@ -224,7 +270,7 @@ local function processconstpool(cpool)
       assert(c[1] == "constant", "expected constant declaration")
       local id = processoparg(c[2])
       if pool[id] ~= nil then
-         log.warn("redefined constant %d", id)
+         warnabout("redefined_constant", "redefined constant %d", id)
       end
       pool[id] = {
          type = c[3],
@@ -255,24 +301,31 @@ local toc = {}
 
 local function schema(s)
    return function(op)
-      assert(#s == #op - 1)
+      local opi = 2
       for i = 1, #s do
          local c = string.sub(s, i, i)
-         local a = op[i + 1]
-         if c == "i" then
-            assert(math.type(a) == "integer", "expected integer")
-         elseif c == "f" then
-            assert(math.type(a) == "float", "expected float")
-         elseif c == "n" then
-            assert(type(a) == "number", "expected number")
-         elseif c == "u" then
-            assert(type(a) == "number" and a >= 0, "expected non-negative number")
-         elseif c == "s" then
-            assert(type(a) == "string", "expected string")
-         elseif c == "d" then
-            assert(math.type(a) == "integer" and a >= 0, "expected id")
-         else
-            error("unrecognized schema value")
+         if c ~= "?" then
+            local a = op[opi]
+            opi = opi + 1
+            local vnil = false
+            if i > 1 and string.sub(s, i - 1, i - 1) == "?" then
+               vnil = a == nil
+            end
+            if c == "i" then
+               assert(vnil or math.type(a) == "integer", "expected integer")
+            elseif c == "f" then
+               assert(vnil or math.type(a) == "float", "expected float")
+            elseif c == "n" then
+               assert(vnil or type(a) == "number", "expected number")
+            elseif c == "u" then
+               assert(vnil or (type(a) == "number" and a >= 0), "expected non-negative number")
+            elseif c == "s" then
+               assert(vnil or type(a) == "string", "expected string")
+            elseif c == "d" then
+               assert(vnil or (math.type(a) == "integer" and a >= 0) or (type(a) == "table" and (a.type == "ESUP" or a.type == "EACT")), "expected id")
+            else
+               error("unrecognized schema value")
+            end
          end
       end
    end
@@ -284,21 +337,51 @@ function toc.makeemitter()
    }
 
    function emit:_formatsingle(arg, spec)
+      local optional = false
+      if spec:sub(1, 1) == "?" then
+         spec = spec:sub(2)
+         optional = true
+      end
       if spec == "int" then
-         assert(math.type(arg) == "integer", "expected integer")
+         assert(not optional and math.type(arg) == "integer", "expected integer")
          -- Emit arg as a C integer. tostring() is not correct, but should do
          -- for now
          return tostring(arg)
       elseif spec == "flt" then
-         assert(math.type(arg) == "float", "expected float")
+         assert(not optional and math.type(arg) == "float", "expected float")
          -- Same caveat
          return tostring(arg)
       elseif spec == "idname" then
-         assert(math.type(arg) == "integer" and arg >= 0, "expected integer")
-         return "name_" .. tostring(arg)
+         local isspecial = false
+         if arg == ESUP or arg == EACT then
+            isspecial = true
+         end
+         assert(isspecial or math.type(arg) == "integer" and arg >= 0, "expected integer")
+         if arg == ESUP then
+            return "PDCRT_NAME_ESUP"
+         elseif arg == EACT then
+            return "PDCRT_NAME_EACT"
+         else
+            return "name_" .. tostring(arg)
+         end
       elseif spec == "idint" then
-         assert(math.type(arg) == "integer" and arg >= 0, "expected integer")
-         return tostring(arg)
+         local ornil, isspecial = false, false
+         if optional then
+            ornil = arg == nil
+         end
+         if arg == ESUP or arg == EACT then
+            isspecial = true
+         end
+         assert(ornil or isspecial or (math.type(arg) == "integer" and arg >= 0), "expected integer")
+         if arg == nil then
+            return "PDCRT_ID_NIL"
+         elseif arg == ESUP then
+            return "PDCRT_ID_ESUP"
+         elseif arg == EACT then
+            return "PDCRT_ID_EACT"
+         else
+            return tostring(arg)
+         end
       elseif spec == "strlit" then
          assert(type(arg) == "string", "expected string")
          return '"' .. escapecstr(arg) .. '"'
@@ -310,7 +393,7 @@ function toc.makeemitter()
    function emit:_basic(fmt, ...)
       local last = 1
       local res = {}
-      for prefixpos, argpos, spec, suffixpos in string.gmatch(fmt, "()«([0-9]+):(%w+)»()") do
+      for prefixpos, argpos, spec, suffixpos in string.gmatch(fmt, "()«([0-9]+):([?]*%w+)»()") do
          local prefix = string.sub(fmt, last, prefixpos - 1)
          last = suffixpos
          local arg = select(argpos, ...)
@@ -435,6 +518,11 @@ function toc.opcodes.MKCLZ(emit, state, op)
    emit:stmt("pdcrt_op_mkclz(marco, PDCRT_PROC_NAME(«1:idname»))", op[2])
 end
 
+toc.opschema.MKCLZC = schema "dduu"
+function toc.opcodes.MKCLZC(emit, state, op)
+   emit:stmt("pdcrt_op_mkclz(marco, «1:idint», PDCRT_PROC_NAME(«2:idname»), «3:int», «4:int»)", op[2], op[3], op[4], op[5])
+end
+
 toc.opschema.MK0CLZ = schema "d"
 function toc.opcodes.MK0CLZ(emit, state, op)
    emit:stmt("pdcrt_op_mk0clz(marco, PDCRT_PROC_NAME(«1:idname»))", op[2])
@@ -443,6 +531,46 @@ end
 toc.opschema.DYNCALL = schema "uu"
 function toc.opcodes.DYNCALL(emit, state, op)
    emit:stmt("pdcrt_op_dyncall(marco, «1:int», «2:int»)", op[2], op[3])
+end
+
+toc.opschema.IFRAME = schema "d?du"
+function toc.opcodes.IFRAME(emit, state, op)
+   emit:stmt("pdcrt_op_iframe(marco, PDCRT_GET_LVAR(«1:idint»), «2:?idint», «3:int»)", op[2], op[3], op[4])
+end
+
+toc.opschema.EINIT = schema "dud"
+function toc.opcodes.EINIT(emit, state, op)
+   emit:stmt("pdcrt_op_einit(marco, PDCRT_GET_LVAR(«1:idint»), «2:int», PDCRT_GET_LVAR(«3:idint»))", op[2], op[3], op[4])
+end
+
+toc.opschema.EFRAME = schema "d"
+function toc.opcodes.EFRAME(emit, state, op)
+   emit:stmt("pdcrt_op_eframe(marco, PDCRT_GET_LVAR(«1:idint»))", op[2])
+end
+
+toc.opschema.PRINTT = schema ""
+function toc.opcodes.PRINTT(emit, state, op)
+   emit:stmt("pdcrt_op_printt(marco)")
+end
+
+toc.opschema.LSETC = schema "duu"
+function toc.opcodes.LSETC(emit, state, op)
+   emit:stmt("pdcrt_op_lsetc(marco, «1:idint», «2:int», «3:int»)", op[2], op[3], op[4])
+end
+
+toc.opschema.LGETC = schema "duu"
+function toc.opcodes.LGETC(emit, state, op)
+   emit:stmt("pdcrt_op_lgetc(marco, «1:idint», «2:int», «3:int»)", op[2], op[3], op[4])
+end
+
+toc.opschema.ESETC = schema "duu"
+function toc.opcodes.ESETC(emit, state, op)
+   emit:stmt("pdcrt_op_lsetc(marco, «1:idint», «2:int», «3:int»)", op[2], op[3], op[4])
+end
+
+toc.opschema.EGETC = schema "duu"
+function toc.opcodes.EGETC(emit, state, op)
+   emit:stmt("pdcrt_op_lgetc(marco, «1:idint», «2:int», «3:int»)", op[2], op[3], op[4])
 end
 
 function toc.opcode(emit, state, op)
@@ -506,12 +634,16 @@ local function checklocals(tp, body)
    local base = 0
    if tp == "proc" then
       for i = 1, #body.params do
-         assert(body.params[i][2] == (i - 1), "non-increasing parameter ID")
+         if body.params[i][2] ~= (i - 1) then
+            warnabout("increasing_locals", "non-increasing parameter ID")
+         end
       end
       base = #body.params
    end
    for i = 1, #body.locals do
-      assert(body.locals[i][2] == (i + base - 1), "non-increasing local ID")
+      if body.locals[i][2] ~= (i + base - 1) then
+         warnabout("increasing_locals", "non-increasing local ID")
+      end
    end
 end
 
@@ -528,13 +660,13 @@ local function main(input, config)
       for i = 1, #secs.procedures_section do
          local r = prepproc(secs.procedures_section[i])
          if P[r.id] ~= nil then
-            log.warn("duplicate procedure with id #%d", r.id)
+            warnabout("redefined_procedure", "duplicate procedure with id #%d", r.id)
          end
          P[r.id] = r
       end
       secs.procedures_section = P
    else
-      log.warn("no procedure section")
+      warnabout("no_procedure_section", "no procedure section")
    end
    log.info("extracted procedures")
    local code = processcode(codetotable(assert(secs.code_section, "code section not provided")))
@@ -583,67 +715,93 @@ PLATFORM "pdcrt"
 SECTION "code"
   LOCAL 0
   LOCAL 1
-  ICONST 2
-  CALL 1, 1, 1
-  LSET 0
-  ICONST 3
-  LGET 0
-  DYNCALL 1, 1
-  LSET 1
-  ICONST 5
-  LGET 0
-  DYNCALL 1, 1
+  LOCAL 2
+  IFRAME 1, NIL, 2
   ICONST 0
+  LSET 2
+  EINIT 1, 0, 2
+  ICONST 1
+  LSET 2
+  EINIT 1, 1, 2
+  EFRAME 1
+  MKCLZ 1, 3, 0
   LGET 0
-  DYNCALL 1, 1
-ENDSECTION
-
-SECTION "constant pool"
-  #1 STRING "hola"
-#1 BIGINT 9538375
+  DYNCALL 0, 1
+  PRINTT
 ENDSECTION
 
 SECTION "procedures"
-  PROC 1 ;; 1 -- 1
+  PROC 6
+    PARAM ESUP
     PARAM 0
-    LOCAL 1
-    MKENV 2
-    LSET 1
+    IFRAME EACT, ESUP, 0
+    EFRAME EACT
     LGET 0
-    ESET 1, 0
-    LGET 1
-    MKCLZ 4
-    RETN 1
+    LSETC EACT, 1, 1
+    LGET 0
+    LSETC EACT, 2, 0
+    EGETC EACT, 1, 2
+    DYNCALL 0, 1
+    PRINTT
   ENDPROC
 
-  PROC 4 ;; e+1 -- 1
+  PROC 3
+    PARAM ESUP
     PARAM 0
     PARAM 1
     LOCAL 2
-    EGET 0, 0
-    LGET 1
-    SUM
-    LSET 2
-    LGET 2
-    ESET 0, 0
-    LGET 2
-    RETN 1
+    IFRAME EACT, ESUP, 3
+    EINIT EACT, 1, 1
+    EINIT EACT, 2, 2
+    EFRAME EACT
+    MKCLZC EACT, 6, 0, 2
+    LGET 0
+    LSETC EACT, 1, 0
+    EGETC EACT, 0, 2
+    DYNCALL 0, 1
+    PRINTT
   ENDPROC
 ENDSECTION
 
-;; SECTION "exports"
-;;   EXPORT PROC 2 NAMED "hello_world" (CCONV "C")
-;;   EXPORT CODE NAMED "my_main" (CCONV "C")
-;; ENDSECTION
+SECTION "constant pool"
+  #0 STRING "module"
+ENDSECTION
 
-;; SECTION "externs"
-;;   EXTERN PROC 2 NAMED "print" (CCONV "C")
-;; ENDSECTION
+]=]
 
-;; SECTION "FFI"
-;;   IMPORT PROC 3 NAMED "sin" (CCONV "C") TYPED (c_double -> c_double)
-;; ENDSECTION
-
+_ = [=[
+#0	proc	6
+		#0	0
+	#0		[12] PARAM	ESUP
+	#1		[12] PARAM	0
+	#2		[29] IFRAME	EACT	ESUP
+	#3		[30] EFRAME	EACT
+	#4		[5] LGET	0
+	#5		[6] LSETC	EACT	1	1
+	#6		[5] LGET	0
+	#7		[6] LSETC	EACT	2	0
+	#8		[21] EGETC	EACT	1	2
+	#9		[28] DYNCALL	0	1
+	#10		[16] PRINTT
+	end
+#1	proc	3
+		#0	0
+		#1	1
+	#0		[12] PARAM	ESUP
+	#1		[12] PARAM	0
+	#2		[12] PARAM	1
+	#3		[11] LOCAL	2
+	#4		[29] IFRAME	EACT	ESUP
+	#5		[23] EINIT	EACT	1	1
+	#6		[23] EINIT	EACT	2	2
+	#7		[30] EFRAME	EACT
+	#8		[18] MKCLZC	EACT	6	0	2
+	#9		[5] LGET	0
+	#10		[6] LSETC	EACT	1	0
+	#11		[21] EGETC	EACT	0	2
+	#12		[28] DYNCALL	0	1
+	#13		[16] PRINTT
+	end
 ]=]
 
 local function makeparsecli(opts)
@@ -695,6 +853,7 @@ local parser = makeparsecli {
    {"v", "version", 0, "Muestra la versión del ensamblador"},
    {"V", "verbose", 0, "Muestra salida adicional."},
    {"s", "sample", 0, "Compila el programa de prueba."},
+   {"W", "warning", 1, "Activa la advertencia especificada."},
 }
 local res = parser {...}
 
@@ -705,6 +864,7 @@ Uso: lua5.4 main.lua [opts...] archivos...
 
 Este programa solo acepta opciones cortas (como `-h` o `-v`), las cuales
 tienen que estar antes de los argumentos. Las opciones se pueden combinar.
+Puedes separar las opciones de los argumentos con `--`.
 ]]):format())
    print((" % 8s  % 15s  %s"):format("Opción", "Núm. argumentos", "Descripción"))
    for i = 1, #res.OPTS do
@@ -721,6 +881,20 @@ end
 
 if res.verbose then
    log.min = 0
+end
+
+if res.warning then
+   local s = {}
+   for w in string.gmatch(res.warning, "(%w+)") do
+      for i = 1, #WARNINGS do
+         local W = WARNINGS[i]
+         if W[1] == w or W[2] == w then
+            for j = 1, #W[3] do
+               enabledwarnings[W[3][j]] = true
+            end
+         end
+      end
+   end
 end
 
 local config = {}
