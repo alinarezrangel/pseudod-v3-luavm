@@ -120,7 +120,7 @@ local <- {| {"LOCAL"} rs (id / envs) |}
 OP <- "LCONST" / "ICONST" / "FCONST" / "CALL" / "SUM" / "SUB"
     / "MUL" / "DIV" / "RETN" / "RET" / "DYNCALL"
     / "MKENV" / "MKCLZC" / "MKCLZ" / "MK0CLZ"
-    / "IFRAME" / "EINIT" / "EFRAME" / "PRINTT"
+    / "OPNFRM" / "EINIT" / "CLSFRM" / "PRINTT"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
     / "EGETC" / "ESETC" / "ESET" / "EGET"
 
@@ -316,33 +316,48 @@ end
 
 local toc = {}
 
+local schemagrammar = [=[
+
+schema <- {| (ws arg (ws ',' ws arg)*)? ws !. |}
+s <- %s
+ws <- s*
+arg <- {| {mod?} {type} {name?} |}
+mod <- '?'
+type <- [LPFCEUI]
+name <- [a-z][a-z0-9]*
+
+]=]
+
+local schemare = re.compile(schemagrammar)
+
 local function schema(s)
+   local ss = assert(re.match(s, schemare), ("could not parse schema %q"):format(s))
    return function(op)
-      local opi = 2
-      for i = 1, #s do
-         local c = string.sub(s, i, i)
-         if c ~= "?" then
-            local a = op[opi]
-            opi = opi + 1
-            local vnil = false
-            if i > 1 and string.sub(s, i - 1, i - 1) == "?" then
-               vnil = a == nil
-            end
-            if c == "i" then
-               assert(vnil or math.type(a) == "integer", "expected integer")
-            elseif c == "f" then
-               assert(vnil or math.type(a) == "float", "expected float")
-            elseif c == "n" then
-               assert(vnil or type(a) == "number", "expected number")
-            elseif c == "u" then
-               assert(vnil or (type(a) == "number" and a >= 0), "expected non-negative number")
-            elseif c == "s" then
-               assert(vnil or type(a) == "string", "expected string")
-            elseif c == "d" then
-               assert(vnil or (math.type(a) == "integer" and a >= 0) or (type(a) == "table" and (a.type == "ESUP" or a.type == "EACT")), "expected id")
+      assert(#op - 1 == #ss, "unexpected number of arguments to opcode " .. op[1])
+      for i = 1, #ss do
+         local sel = ss[i]
+         local oel = op[i + 1]
+         if sel[1] ~= "?" or oel ~= nil then
+            if sel[2] == "L" then
+               assert(math.type(oel) == "integer" and oel >= 0, "expected local index")
+            elseif sel[2] == "E" then
+               assert((type(oel) == "table" and (oel.type == "ESUP" or oel.type == "EACT")) or (math.type(oel) == "integer" and oel >= 0), "expected env. local index")
+            elseif sel[2] == "U" then
+               assert(math.type(oel) == "integer" and oel >= 0, "expected non-negative local")
+            elseif sel[2] == "P" then
+               assert(math.type(oel) == "integer" and oel >= 0, "expected procedure index")
+            elseif sel[2] == "C" then
+               assert(math.type(oel) == "integer" and oel >= 0, "expected constant index")
+            elseif sel[2] == "I" then
+               assert(math.type(oel) == "integer", "expected integer")
+            elseif sel[2] == "F" then
+               assert(math.type(oel) == "float", "expected float")
             else
-               error("unrecognized schema value")
+               error("unreachable")
             end
+         end
+         if sel[3] then
+            op[sel[2] .. sel[3]] = oel
          end
       end
    end
@@ -368,7 +383,7 @@ function toc.makeemitter()
          assert(not optional and math.type(arg) == "float", "expected float")
          -- Same caveat
          return tostring(arg)
-      elseif spec == "idname" then
+      elseif spec == "localname" then
          local isspecial = false
          if arg == ESUP or arg == EACT then
             isspecial = true
@@ -381,7 +396,7 @@ function toc.makeemitter()
          else
             return "name_" .. tostring(arg)
          end
-      elseif spec == "idint" then
+      elseif spec == "localid" then
          local ornil, isspecial = false, false
          if optional then
             ornil = arg == nil
@@ -399,6 +414,12 @@ function toc.makeemitter()
          else
             return tostring(arg)
          end
+      elseif spec == "procid" then
+         assert(math.type(arg) == "integer" and arg >= 0, "expected integer")
+         return tostring(arg)
+      elseif spec == "procname" then
+         assert(math.type(arg) == "integer" and arg >= 0, "expected integer")
+         return ("PDCRT_PROC_NAME(name_%s)"):format(tostring(arg))
       elseif spec == "strlit" then
          assert(type(arg) == "string", "expected string")
          return '"' .. escapecstr(arg) .. '"'
@@ -456,19 +477,19 @@ end
 toc.opcodes = {}
 toc.opschema = {}
 
-toc.opschema.ICONST = schema "i"
+toc.opschema.ICONST = schema "Ix"
 function toc.opcodes.ICONST(emit, state, op)
-   emit:stmt("pdcrt_op_iconst(marco, «1:int»)", op[2])
+   emit:stmt("pdcrt_op_iconst(marco, «1:int»)", op.Ix)
 end
 
-toc.opschema.LCONST = schema "d"
+toc.opschema.LCONST = schema "Cx"
 function toc.opcodes.LCONST(emit, state, op)
    local c = state.constants[op[2]]
    local t, v = c.type, c.value
    if t == "string" then
-      emit:stmt("pdcrt_op_lconst_string(marco, «2:strlit»)", op[2], v)
+      emit:stmt("pdcrt_op_lconst_string(marco, «2:strlit»)", op.Cx, v)
    else
-      emit:stmt("pdcrt_op_lconst_int(marco, «2:int»)", op[2], v)
+      emit:stmt("pdcrt_op_lconst_int(marco, «2:int»)", op.Cx, v)
    end
 end
 
@@ -492,102 +513,69 @@ function toc.opcodes.DIV(emit, state, op)
    emit:stmt("pdcrt_op_div(marco)")
 end
 
-toc.opschema.CALL = schema "duu"
-function toc.opcodes.CALL(emit, state, op)
-   emit:stmt("pdcrt_op_call(marco, PDCRT_PROC_NAME(«1:idname»), «2:int», «3:int»)", op[2], op[3], op[4])
-end
-
-toc.opschema.LGET = schema "d"
-function toc.opcodes.LGET(emit, state, op)
-   emit:stmt("pdcrt_op_lget(marco, PDCRT_GET_LVAR(«1:idint»))", op[2])
-end
-
-toc.opschema.LSET = schema "d"
+toc.opschema.LSET = schema "Lx"
 function toc.opcodes.LSET(emit, state, op)
-   emit:stmt("PDCRT_SET_LVAR(«1:idint», pdcrt_op_lset(marco))", op[2])
+   emit:stmt("pdcrt_op_lset(marco, «1:localid»)", op.Lx)
 end
 
-toc.opschema.RETN = schema "u"
-function toc.opcodes.RETN(emit, state, op)
-   emit:stmt("pdcrt_op_retn(marco, «1:int»)", op[2])
-   assert(state.in_procedure, "RETN can only appear inside a procedure")
-   emit:stmt("PDCRT_PROC_POSTLUDE(«1:idname»)", state.current_proc.id)
-   emit:stmt("return pdcrt_real_return(marco)")
+toc.opschema.LGET = schema "Lx"
+function toc.opcodes.LGET(emit, state, op)
+   emit:stmt("pdcrt_op_lget(marco, «1:localid»)", op.Lx)
 end
 
-toc.opschema.MKENV = schema "u"
-function toc.opcodes.MKENV(emit, state, op)
-   emit:stmt("pdcrt_op_mkenv(marco, «1:int»)", op[2])
+toc.opschema.LSETC = schema "Ex, Ua, Ui"
+function toc.opcodes.LSETC(emit, state, op)
+   emit:stmt("pdcrt_op_lsetc(marco, «1:localid», «2:int», «3:int»)", op.Ex, op.Ua, op.Ui)
 end
 
-toc.opschema.ESET = schema "du"
-function toc.opcodes.ESET(emit, state, op)
-   emit:stmt("pdcrt_op_eset(marco, PDCRT_GET_LVAR(«1:idint»), «2:int»)", op[2], op[3])
+toc.opschema.LGETC = schema "Ex, Ua, Ui"
+function toc.opcodes.LGETC(emit, state, op)
+   emit:stmt("pdcrt_op_lgetc(marco, «1:localid», «2:int», «3:int»)", op.Ex, op.Ua, op.Ui)
 end
 
-toc.opschema.EGET = schema "du"
-function toc.opcodes.EGET(emit, state, op)
-   emit:stmt("pdcrt_op_eget(marco, PDCRT_GET_LVAR(«1:idint»), «2:int»)", op[2], op[3])
+toc.opschema.OPNFRM = schema "Ex, ?Ey, Ux"
+function toc.opcodes.OPNFRM(emit, state, op)
+   emit:stmt("pdcrt_op_open_frame(marco, «1:localid», «2:?localid», «3:int»)", op.Ex, op.Ey, op.Ux)
 end
 
-toc.opschema.MKCLZ = schema "d"
-function toc.opcodes.MKCLZ(emit, state, op)
-   emit:stmt("pdcrt_op_mkclz(marco, PDCRT_PROC_NAME(«1:idname»))", op[2])
-end
-
-toc.opschema.MKCLZC = schema "dduu"
-function toc.opcodes.MKCLZC(emit, state, op)
-   emit:stmt("pdcrt_op_mkclz(marco, «1:idint», PDCRT_PROC_NAME(«2:idname»), «3:int», «4:int»)", op[2], op[3], op[4], op[5])
-end
-
-toc.opschema.MK0CLZ = schema "d"
-function toc.opcodes.MK0CLZ(emit, state, op)
-   emit:stmt("pdcrt_op_mk0clz(marco, PDCRT_PROC_NAME(«1:idname»))", op[2])
-end
-
-toc.opschema.DYNCALL = schema "uu"
-function toc.opcodes.DYNCALL(emit, state, op)
-   emit:stmt("pdcrt_op_dyncall(marco, «1:int», «2:int»)", op[2], op[3])
-end
-
-toc.opschema.IFRAME = schema "d?du"
-function toc.opcodes.IFRAME(emit, state, op)
-   emit:stmt("pdcrt_op_iframe(marco, PDCRT_GET_LVAR(«1:idint»), «2:?idint», «3:int»)", op[2], op[3], op[4])
-end
-
-toc.opschema.EINIT = schema "dud"
+toc.opschema.EINIT = schema "Ex, Ui, Lx"
 function toc.opcodes.EINIT(emit, state, op)
-   emit:stmt("pdcrt_op_einit(marco, PDCRT_GET_LVAR(«1:idint»), «2:int», PDCRT_GET_LVAR(«3:idint»))", op[2], op[3], op[4])
+   emit:stmt("pdcrt_op_einit(marco, «1:localid», «2:int», «3:int»)", op.Ex, op.Ui, op.Lx)
 end
 
-toc.opschema.EFRAME = schema "d"
-function toc.opcodes.EFRAME(emit, state, op)
-   emit:stmt("pdcrt_op_eframe(marco, PDCRT_GET_LVAR(«1:idint»))", op[2])
+toc.opschema.CLSFRM = schema "Ex"
+function toc.opcodes.CLSFRM(emit, state, op)
+   emit:stmt("pdcrt_op_close_frame(marco, «1:localid»)", op.Ex)
+end
+
+toc.opschema.MKCLZ = schema "Ex, Px, Lx"
+function toc.opcodes.MKCLZ(emit, state, op)
+   emit:stmt("pdcrt_op_mkclz(marco, «1:localid», «2:procname», «3:localid»)", op.Ex, op.Px, op.Lx)
+end
+
+toc.opschema.MKCLZC = schema "Ex, Px, Ey, Ua, Ui"
+function toc.opcodes.MKCLZC(emit, state, op)
+   emit:stmt("pdcrt_op_mkclzc(marco, «1:localid», &«2:procname», «3:localid», «4:int», «5:int»)", op.Ex, op.Px, op.Ey, op.Ua, op.Ui)
+end
+
+toc.opschema.MK0CLZ = schema "Px, Lx"
+function toc.opcodes.MK0CLZ(emit, state, op)
+   emit:stmt("pdcrt_op_mkclz(marco, &«1:procname», «2:localid»)", op.Px, op.Lx)
+end
+
+toc.opschema.MK0CLZC = schema "Px, Ex, Ua, Ui"
+function toc.opcodes.MK0CLZC(emit, state, op)
+   emit:stmt("pdcrt_op_mkclzc(marco, &«1:procname», «2:localid», «3:int», «4:int»)", op.Px, op.Ex, op.Ua, op.Ui)
+end
+
+toc.opschema.DYNCALL = schema "Ux, Uy"
+function toc.opcodes.DYNCALL(emit, state, op)
+   emit:stmt("pdcrt_op_dyncall(marco, «1:int», «2:int»)", op.Ux, op.Uy)
 end
 
 toc.opschema.PRINTT = schema ""
 function toc.opcodes.PRINTT(emit, state, op)
    emit:stmt("pdcrt_op_printt(marco)")
-end
-
-toc.opschema.LSETC = schema "duu"
-function toc.opcodes.LSETC(emit, state, op)
-   emit:stmt("pdcrt_op_lsetc(marco, «1:idint», «2:int», «3:int»)", op[2], op[3], op[4])
-end
-
-toc.opschema.LGETC = schema "duu"
-function toc.opcodes.LGETC(emit, state, op)
-   emit:stmt("pdcrt_op_lgetc(marco, «1:idint», «2:int», «3:int»)", op[2], op[3], op[4])
-end
-
-toc.opschema.ESETC = schema "duu"
-function toc.opcodes.ESETC(emit, state, op)
-   emit:stmt("pdcrt_op_lsetc(marco, «1:idint», «2:int», «3:int»)", op[2], op[3], op[4])
-end
-
-toc.opschema.EGETC = schema "duu"
-function toc.opcodes.EGETC(emit, state, op)
-   emit:stmt("pdcrt_op_lgetc(marco, «1:idint», «2:int», «3:int»)", op[2], op[3], op[4])
 end
 
 function toc.opcode(emit, state, op)
@@ -601,7 +589,7 @@ function toc.compcode(emit, state)
    emit:stmt("PDCRT_MAIN_PRELUDE(«1:int»)", #state.code.locals)
    for i = 1, #state.code.locals do
       local p = state.code.locals[i]
-      emit:stmt("PDCRT_LOCAL(«1:idint», «2:idint»)", p[2], p[2])
+      emit:stmt("PDCRT_LOCAL(«1:localid», «1:localname»)", p[2])
    end
    for i = 1, #state.code.opcodes do
       toc.opcode(emit, state, state.code.opcodes[i])
@@ -611,21 +599,21 @@ function toc.compcode(emit, state)
 end
 
 function toc.opproc(emit, state, proc)
-   emit:opentoplevel("PDCRT_PROC(«1:idname») {", proc.id)
-   emit:stmt("PDCRT_PROC_PRELUDE(«1:idname», «2:int»)", proc.id, #proc.params + #proc.locals)
+   emit:opentoplevel("PDCRT_PROC(«1:localname») {", proc.id)
+   emit:stmt("PDCRT_PROC_PRELUDE(«1:localname», «2:int»)", proc.id, #proc.params + #proc.locals)
    emit:stmt("PDCRT_ASSERT_PARAMS(«1:int»)", #proc.params)
    for i = 1, #proc.params do
       local p = proc.params[i]
-      emit:stmt("PDCRT_PARAM(«2:idint», «2:idname»)", p[2], p[2])
+      emit:stmt("PDCRT_PARAM(«1:localid», «1:localname»)", p[2])
    end
    for i = 1, #proc.locals do
       local p = proc.locals[i]
-      emit:stmt("PDCRT_LOCAL(«2:idint», «2:idname»)", p[2], p[2])
+      emit:stmt("PDCRT_LOCAL(«1:localid», «1:localname»)", p[2])
    end
    for i = 1, #proc.opcodes do
       toc.opcode(emit, state, proc.opcodes[i])
    end
-   emit:stmt("PDCRT_PROC_POSTLUDE(«1:idname»)", proc.id)
+   emit:stmt("PDCRT_PROC_POSTLUDE(«1:localname»)", proc.id)
    emit:stmt("return pdcrt_passthru_return(marco)")
    emit:closetoplevel("}")
 end
@@ -642,7 +630,7 @@ end
 
 function toc.compprocdeclrs(emit, state)
    for id, proc in pairs(state.procedures) do
-      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:idname»)", id)
+      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname»)", id)
    end
 end
 
@@ -733,14 +721,14 @@ SECTION "code"
   LOCAL 0
   LOCAL 1
   LOCAL 2
-  IFRAME 1, NIL, 2
+  OPNFRM 1, NIL, 2
   ICONST 0
   LSET 2
   EINIT 1, 0, 2
   ICONST 1
   LSET 2
   EINIT 1, 1, 2
-  EFRAME 1
+  CLSFRM 1
   MKCLZ 1, 3, 0
   LGET 0
   DYNCALL 0, 1
@@ -751,13 +739,13 @@ SECTION "procedures"
   PROC 6
     PARAM ESUP
     PARAM 0
-    IFRAME EACT, ESUP, 0
-    EFRAME EACT
+    OPNFRM EACT, ESUP, 0
+    CLSFRM EACT
     LGET 0
     LSETC EACT, 1, 1
     LGET 0
     LSETC EACT, 2, 0
-    EGETC EACT, 1, 2
+    LGETC EACT, 1, 2
     DYNCALL 0, 1
     PRINTT
   ENDPROC
@@ -767,14 +755,14 @@ SECTION "procedures"
     PARAM 0
     PARAM 1
     LOCAL 2
-    IFRAME EACT, ESUP, 3
+    OPNFRM EACT, ESUP, 3
     EINIT EACT, 1, 1
     EINIT EACT, 2, 2
-    EFRAME EACT
-    MKCLZC EACT, 6, 0, 2
+    CLSFRM EACT
+    MKCLZC EACT, 6, EACT, 0, 2
     LGET 0
     LSETC EACT, 1, 0
-    EGETC EACT, 0, 2
+    LGETC EACT, 0, 2
     DYNCALL 0, 1
     PRINTT
   ENDPROC
