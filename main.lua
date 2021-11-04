@@ -19,6 +19,7 @@ function log.warn(fmt, ...) log.log(2, "[WARN] " .. fmt, ...) end
 function log.error(fmt, ...) log.log(3, "[ERROR] " .. fmt, ...) end
 
 local WARNINGS = {
+   -- {nombre-largo, nombre-corto, {llaves-en-enabledwarnings...}, ayuda}
    {"increasing-locals", "inc-locals", {"increasing_locals"},
     "Advierte de cuando los índices de las locales no están en órden ascendente."},
    {"redefined-constant", "redef-const", {"redefined_constant"},
@@ -37,9 +38,25 @@ local WARNINGS = {
     "Advierte sobre cosas que van a cambiar en un futuro."},
    {"useful", "useful", {"redefined_constant", "redefined_procedure", "procedure_doesnt_exists", "no_procedure_section", "no_code_section", "future"},
     "Activa advertencias útiles durante el desarrollo."},
-   {"all", "all", {"increasing_locals", "redefined_constant", "redefined_procedure", "procedure_doesnt_exists", "no_procedure_section", "no_constant_section", "no_code_section"},
+   {"all", "all", {--[[ el código más adelante llena este campo ]]},
     "Activa todas las advertencias."},
 }
+
+do
+   local alli, allnames = 0, {}
+   for i = 1, #WARNINGS do
+      local W = WARNINGS[i]
+      if W[1] == "all" then
+         alli = i
+      else
+         for j = 1, #W[3] do
+            table.insert(allnames, W[3][j])
+         end
+      end
+   end
+   assert(alli > 0, "could not find index of <all> warning")
+   WARNINGS[alli][3] = allnames
+end
 
 local enabledwarnings = {}
 
@@ -853,7 +870,7 @@ local parser = makeparsecli {
    {"v", "version", 0, "Muestra la versión del ensamblador"},
    {"V", "verbose", 0, "Muestra salida adicional."},
    {"s", "sample", 0, "Compila el programa de prueba."},
-   {"W", "warning", 1, "Activa la advertencia especificada."},
+   {"W", "warning", 1, "Activa las advertencias especificadas (separadas por comas)."},
 }
 local res = parser {...}
 
@@ -870,6 +887,15 @@ Puedes separar las opciones de los argumentos con `--`.
    for i = 1, #res.OPTS do
       local opt = res.OPTS[i]
       print(("% 8s  % 15d  %s"):format("-"..opt[1], opt[3], opt[4]))
+   end
+   print(("\nAdvertencias:\n\n %- 27s  %- 17s"):format("Nom. largo", "Nom. corto"))
+   for i = 1, #WARNINGS do
+      local W = WARNINGS[i]
+      print((" %- 27s  %- 17s"):format(W[1], W[2]))
+      print("    " .. W[4])
+      if i ~= #WARNINGS then
+         print()
+      end
    end
    os.exit(true, true)
 end
