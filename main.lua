@@ -123,6 +123,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "CALL" / "SUM" / "SUB"
     / "OPNFRM" / "EINIT" / "CLSFRM" / "PRINTT"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
     / "EGETC" / "ESETC" / "ESET" / "EGET"
+    / "POP"
 
 procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
@@ -463,6 +464,10 @@ function toc.makeemitter()
       table.insert(self.statments, self:_basic("#include «1:strlit»", header))
    end
 
+   function emit:comment(comm)
+      table.insert(self.statments, self:_basic("/* «1:strlit» */", comm))
+   end
+
    function emit:emittedstmts()
       return table.concat(self.statments, "\n") .. "\n"
    end
@@ -493,6 +498,11 @@ function toc.opcodes.LCONST(emit, state, op)
    end
 end
 
+toc.opschema.POP = schema ""
+function toc.opcodes.POP(emit, state, op)
+   emit:stmt("pdcrt_op_pop(marco)")
+end
+
 toc.opschema.SUM = schema ""
 function toc.opcodes.SUM(emit, state, op)
    emit:stmt("pdcrt_op_sum(marco)")
@@ -515,67 +525,52 @@ end
 
 toc.opschema.LSET = schema "Lx"
 function toc.opcodes.LSET(emit, state, op)
-   emit:stmt("pdcrt_op_lset(marco, «1:localid»)", op.Lx)
+   emit:stmt("PDCRT_SET_LVAR(«1:localid», pdcrt_op_lset(marco))", op.Lx)
 end
 
 toc.opschema.LGET = schema "Lx"
 function toc.opcodes.LGET(emit, state, op)
-   emit:stmt("pdcrt_op_lget(marco, «1:localid»)", op.Lx)
+   emit:stmt("pdcrt_op_lget(marco, PDCRT_GET_LVAR(«1:localid»))", op.Lx)
 end
 
 toc.opschema.LSETC = schema "Ex, Ua, Ui"
 function toc.opcodes.LSETC(emit, state, op)
-   emit:stmt("pdcrt_op_lsetc(marco, «1:localid», «2:int», «3:int»)", op.Ex, op.Ua, op.Ui)
+   emit:stmt("pdcrt_op_lsetc(marco, PDCRT_GET_LVAR(«1:localid»), «2:int», «3:int»)", op.Ex, op.Ua, op.Ui)
 end
 
 toc.opschema.LGETC = schema "Ex, Ua, Ui"
 function toc.opcodes.LGETC(emit, state, op)
-   emit:stmt("pdcrt_op_lgetc(marco, «1:localid», «2:int», «3:int»)", op.Ex, op.Ua, op.Ui)
+   emit:stmt("pdcrt_op_lgetc(marco, PDCRT_GET_LVAR(«1:localid»), «2:int», «3:int»)", op.Ex, op.Ua, op.Ui)
 end
 
 toc.opschema.OPNFRM = schema "Ex, ?Ey, Ux"
 function toc.opcodes.OPNFRM(emit, state, op)
-   emit:stmt("pdcrt_op_open_frame(marco, «1:localid», «2:?localid», «3:int»)", op.Ex, op.Ey, op.Ux)
+   emit:stmt("PDCRT_SET_LVAR(«1:localid», pdcrt_op_open_frame(marco, «2:?localid», «3:int»))", op.Ex, op.Ey, op.Ux)
 end
 
 toc.opschema.EINIT = schema "Ex, Ui, Lx"
 function toc.opcodes.EINIT(emit, state, op)
-   emit:stmt("pdcrt_op_einit(marco, «1:localid», «2:int», «3:int»)", op.Ex, op.Ui, op.Lx)
+   emit:stmt("pdcrt_op_einit(marco, PDCRT_GET_LVAR(«1:localid»), «2:int», PDCRT_GET_LVAR(«3:localid»))", op.Ex, op.Ui, op.Lx)
 end
 
 toc.opschema.CLSFRM = schema "Ex"
 function toc.opcodes.CLSFRM(emit, state, op)
-   emit:stmt("pdcrt_op_close_frame(marco, «1:localid»)", op.Ex)
+   emit:stmt("pdcrt_op_close_frame(marco, PDCRT_GET_LVAR(«1:localid»))", op.Ex)
 end
 
-toc.opschema.MKCLZ = schema "Ex, Px, Lx"
+toc.opschema.MKCLZ = schema "Ex, Px"
 function toc.opcodes.MKCLZ(emit, state, op)
-   emit:stmt("pdcrt_op_mkclz(marco, «1:localid», «2:procname», «3:localid»)", op.Ex, op.Px, op.Lx)
+   emit:stmt("pdcrt_op_mkclz(marco, «1:localid», «2:procname»)", op.Ex, op.Px)
 end
 
-toc.opschema.MKCLZC = schema "Ex, Px, Ey, Ua, Ui"
-function toc.opcodes.MKCLZC(emit, state, op)
-   emit:stmt("pdcrt_op_mkclzc(marco, «1:localid», &«2:procname», «3:localid», «4:int», «5:int»)", op.Ex, op.Px, op.Ey, op.Ua, op.Ui)
-end
-
-toc.opschema.MK0CLZ = schema "Px, Lx"
+toc.opschema.MK0CLZ = schema "Px"
 function toc.opcodes.MK0CLZ(emit, state, op)
-   emit:stmt("pdcrt_op_mkclz(marco, &«1:procname», «2:localid»)", op.Px, op.Lx)
-end
-
-toc.opschema.MK0CLZC = schema "Px, Ex, Ua, Ui"
-function toc.opcodes.MK0CLZC(emit, state, op)
-   emit:stmt("pdcrt_op_mkclzc(marco, &«1:procname», «2:localid», «3:int», «4:int»)", op.Px, op.Ex, op.Ua, op.Ui)
+   emit:stmt("pdcrt_op_mk0clz(marco, «1:procname»)", op.Px)
 end
 
 toc.opschema.DYNCALL = schema "Ux, Uy"
 function toc.opcodes.DYNCALL(emit, state, op)
    emit:stmt("pdcrt_op_dyncall(marco, «1:int», «2:int»)", op.Ux, op.Uy)
-end
-
-toc.opschema.PRINTT = schema ""
-function toc.opcodes.PRINTT(emit, state, op)
-   emit:stmt("pdcrt_op_printt(marco)")
 end
 
 function toc.opcode(emit, state, op)
@@ -720,19 +715,21 @@ PLATFORM "pdcrt"
 SECTION "code"
   LOCAL 0
   LOCAL 1
-  LOCAL 2
-  OPNFRM 1, NIL, 2
+  OPNFRM EACT, NIL, 2
   ICONST 0
-  LSET 2
-  EINIT 1, 0, 2
+  LSET 1
+  EINIT EACT, 0, 1
   ICONST 1
-  LSET 2
-  EINIT 1, 1, 2
-  CLSFRM 1
-  MKCLZ 1, 3, 0
+  LSET 1
+  EINIT EACT, 1, 1
+  CLSFRM EACT
+  MKCLZ EACT, 3
+  LSET 0
+  ICONST 1
+  ICONST 2
   LGET 0
-  DYNCALL 0, 1
-  PRINTT
+  DYNCALL 2, 1
+  POP
 ENDSECTION
 
 SECTION "procedures"
@@ -745,9 +742,6 @@ SECTION "procedures"
     LSETC EACT, 1, 1
     LGET 0
     LSETC EACT, 2, 0
-    LGETC EACT, 1, 2
-    DYNCALL 0, 1
-    PRINTT
   ENDPROC
 
   PROC 3
@@ -759,12 +753,14 @@ SECTION "procedures"
     EINIT EACT, 1, 1
     EINIT EACT, 2, 2
     CLSFRM EACT
-    MKCLZC EACT, 6, EACT, 0, 2
+    MKCLZ EACT, 6
+    LSETC EACT, 0, 2
     LGET 0
     LSETC EACT, 1, 0
+    ICONST 0
+    ICONST 1
     LGETC EACT, 0, 2
-    DYNCALL 0, 1
-    PRINTT
+    DYNCALL 1, 1
   ENDPROC
 ENDSECTION
 
@@ -775,37 +771,45 @@ ENDSECTION
 ]=]
 
 _ = [=[
+===== Code:
+#0		[10] MKCLZ	EACT	3
+#1		[12] LSET	2
+#2		[13] LGET	2
+#3		[18] DYNCALL	0	1
+#4		[4] POP
+===== Declr:
 #0	proc	6
 		#0	0
-	#0		[12] PARAM	ESUP
-	#1		[12] PARAM	0
-	#2		[29] IFRAME	EACT	ESUP
-	#3		[30] EFRAME	EACT
-	#4		[5] LGET	0
-	#5		[6] LSETC	EACT	1	1
-	#6		[5] LGET	0
-	#7		[6] LSETC	EACT	2	0
-	#8		[21] EGETC	EACT	1	2
-	#9		[28] DYNCALL	0	1
-	#10		[16] PRINTT
+	#0		[9] PARAM	ESUP
+	#1		[9] PARAM	0
+	#2		[20] OPNFRM	EACT	ESUP	0
+	#3		[21] CLSFRM	EACT
+	#4		[13] LGET	0
+	#5		[16] LSETC	EACT	1	1
+	#6		[13] LGET	0
+	#7		[16] LSETC	EACT	2	0
+	#8		[17] LGETC	EACT	1	2
+	#9		[18] DYNCALL	0	1
+	#10		[4] POP
 	end
 #1	proc	3
 		#0	0
 		#1	1
-	#0		[12] PARAM	ESUP
-	#1		[12] PARAM	0
-	#2		[12] PARAM	1
-	#3		[11] LOCAL	2
-	#4		[29] IFRAME	EACT	ESUP
-	#5		[23] EINIT	EACT	1	1
-	#6		[23] EINIT	EACT	2	2
-	#7		[30] EFRAME	EACT
-	#8		[18] MKCLZC	EACT	6	0	2
-	#9		[5] LGET	0
-	#10		[6] LSETC	EACT	1	0
-	#11		[21] EGETC	EACT	0	2
-	#12		[28] DYNCALL	0	1
-	#13		[16] PRINTT
+	#0		[9] PARAM	ESUP
+	#1		[9] PARAM	0
+	#2		[9] PARAM	1
+	#3		[8] LOCAL	2
+	#4		[20] OPNFRM	EACT	ESUP	2
+	#5		[19] EINIT	EACT	1	1
+	#6		[19] EINIT	EACT	2	2
+	#7		[21] CLSFRM	EACT
+	#8		[10] MKCLZ	EACT	6
+	#9		[16] LSETC	EACT	0	2
+	#10		[13] LGET	0
+	#11		[16] LSETC	EACT	1	0
+	#12		[17] LGETC	EACT	0	2
+	#13		[18] DYNCALL	0	1
+	#14		[4] POP
 	end
 ]=]
 

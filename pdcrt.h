@@ -130,11 +130,21 @@ typedef struct pdcrt_marco
     PDCRT_NULL struct pdcrt_marco* marco_anterior;
 } pdcrt_marco;
 
+typedef long pdcrt_local_index;
+
 pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_t num_locales, PDCRT_NULL pdcrt_marco* marco_anterior);
 void pdcrt_deinic_marco(pdcrt_marco* marco);
-void pdcrt_fijar_local(pdcrt_marco* marco, size_t n, pdcrt_objeto obj);
-pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, size_t n);
+void pdcrt_fijar_local(pdcrt_marco* marco, pdcrt_local_index n, pdcrt_objeto obj);
+pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
 
+
+#define PDCRT_ID_EACT -1
+#define PDCRT_ID_ESUP -2
+#define PDCRT_ID_NIL -3
+#define PDCRT_NAME_EACT pdcrt_special_eact
+#define PDCRT_NAME_ESUP pdcrt_special_esup
+#define PDCRT_NAME_NIL pdcrt_special_nil
+#define PDCRT_NUM_LOCALES_ESP 2
 
 #define PDCRT_MAIN()                            \
     int main(int argc, char* argv[])
@@ -175,8 +185,8 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, size_t n);
 
 #define PDCRT_LOCAL(idx, name)                              \
     pdcrt_fijar_local(marco, idx, pdcrt_objeto_entero(0))
-#define PDCRT_SET_LVAR(idx, val)                                    \
-    pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
+#define PDCRT_SET_LVAR(idx, val)                \
+    pdcrt_fijar_local(marco, idx, val)
 #define PDCRT_GET_LVAR(idx)                     \
     pdcrt_obtener_local(marco, idx)
 
@@ -199,13 +209,13 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, size_t n);
         pdcrt_depurar_contexto(ctx, "P2 " #name);                       \
     }                                                                   \
     while(0)
-#define PDCRT_ASSERT_PARAMS(nparams)       \
+#define PDCRT_ASSERT_PARAMS(nparams)            \
     pdcrt_assert_params(marco, nparams)
 #define PDCRT_PARAM(idx, param)                        \
     pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
-#define PDCRT_PROC_POSTLUDE(name)          \
+#define PDCRT_PROC_POSTLUDE(name)               \
     do {} while(0)
-#define PDCRT_PROC_NAME(name)              \
+#define PDCRT_PROC_NAME(name)                   \
     &pdproc_##name
 #define PDCRT_DECLARE_PROC(name)                \
     PDCRT_PROC(name);
@@ -215,17 +225,30 @@ void pdcrt_op_sum(pdcrt_marco* marco);
 void pdcrt_op_sub(pdcrt_marco* marco);
 void pdcrt_op_mul(pdcrt_marco* marco);
 void pdcrt_op_div(pdcrt_marco* marco);
+void pdcrt_op_pop(pdcrt_marco* marco);
+
 pdcrt_objeto pdcrt_op_lset(pdcrt_marco* marco);
 void pdcrt_op_lget(pdcrt_marco* marco, pdcrt_objeto v);
+
 void pdcrt_op_mkenv(pdcrt_marco* marco, size_t tam);
-void pdcrt_op_eset(pdcrt_marco* marco, pdcrt_objeto env, size_t i);
-void pdcrt_op_eget(pdcrt_marco* marco, pdcrt_objeto env, size_t i);
-void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_proc_t proc);
+void pdcrt_op_eset(pdcrt_marco* marco, pdcrt_objeto env, pdcrt_local_index i);
+void pdcrt_op_eget(pdcrt_marco* marco, pdcrt_objeto env, pdcrt_local_index i);
+void pdcrt_op_lsetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind);
+void pdcrt_op_lgetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind);
+
+pdcrt_objeto pdcrt_op_open_frame(pdcrt_marco* marco, PDCRT_NULL pdcrt_local_index padreidx, size_t tam);
+void pdcrt_op_einit(pdcrt_marco* marco, pdcrt_objeto env, size_t i, pdcrt_objeto local);
+void pdcrt_op_close_frame(pdcrt_marco* marco, pdcrt_objeto env);
+
+void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc);
 void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc);
+
+void pdcrt_assert_params(pdcrt_marco* marco, int nparams);
+
 void pdcrt_op_dyncall(pdcrt_marco* marco, int acepta, int devuelve);
 void pdcrt_op_call(pdcrt_marco* marco, pdcrt_proc_t proc, int acepta, int devuelve);
+
 void pdcrt_op_retn(pdcrt_marco* marco, int n);
-void pdcrt_assert_params(pdcrt_marco* marco, int nparams);
 int pdcrt_real_return(pdcrt_marco* marco);
 int pdcrt_passthru_return(pdcrt_marco* marco);
 

@@ -79,7 +79,7 @@ pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc
 {
     obj->tag = PDCRT_TOBJ_CLOSURE;
     obj->value.c.proc = proc;
-    return pdcrt_aloj_env(&obj->value.c.env, alojador, env_size);
+    return pdcrt_aloj_env(&obj->value.c.env, alojador, env_size + PDCRT_NUM_LOCALES_ESP);
 }
 
 pdcrt_error pdcrt_inic_pila(pdcrt_pila* pila, pdcrt_alojador alojador)
@@ -346,14 +346,15 @@ void* pdcrt_realojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam_actua
 
 pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_t num_locales, PDCRT_NULL pdcrt_marco* marco_anterior)
 {
-    marco->locales = pdcrt_alojar(contexto, sizeof(pdcrt_objeto) * num_locales);
+    size_t num_real_de_locales = num_locales + PDCRT_NUM_LOCALES_ESP;
+    marco->locales = pdcrt_alojar(contexto, sizeof(pdcrt_objeto) * num_real_de_locales);
     if(!marco->locales)
     {
         return PDCRT_ENOMEM;
     }
     marco->contexto = contexto;
     marco->marco_anterior = marco_anterior;
-    marco->num_locales = num_locales;
+    marco->num_locales = num_real_de_locales;
     return PDCRT_OK;
 }
 
@@ -363,14 +364,16 @@ void pdcrt_deinic_marco(pdcrt_marco* marco)
     marco->num_locales = 0;
 }
 
-void pdcrt_fijar_local(pdcrt_marco* marco, size_t n, pdcrt_objeto obj)
+void pdcrt_fijar_local(pdcrt_marco* marco, pdcrt_local_index n, pdcrt_objeto obj)
 {
-    marco->locales[n] = obj;
+    assert(n != PDCRT_ID_NIL);
+    marco->locales[n + PDCRT_NUM_LOCALES_ESP] = obj;
 }
 
-pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, size_t n)
+pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n)
 {
-    return marco->locales[n];
+    assert(n != PDCRT_ID_NIL);
+    return marco->locales[n + PDCRT_NUM_LOCALES_ESP];
 }
 
 
@@ -428,6 +431,11 @@ void pdcrt_op_div(pdcrt_marco* marco)
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(a.value.i / b.value.i)));
 }
 
+void pdcrt_op_pop(pdcrt_marco* marco)
+{
+    pdcrt_sacar_de_pila(&marco->contexto->pila);
+}
+
 pdcrt_objeto pdcrt_op_lset(pdcrt_marco* marco)
 {
     return pdcrt_sacar_de_pila(&marco->contexto->pila);
@@ -447,29 +455,87 @@ void pdcrt_op_mkenv(pdcrt_marco* marco, size_t tam)
 
 static pdcrt_objeto* pdcrt_mover_al_monton(pdcrt_contexto* ctx, pdcrt_objeto obj)
 {
-    assert(obj.tag != PDCRT_TOBJ_CLOSURE);
+    //assert(obj.tag != PDCRT_TOBJ_CLOSURE);
     pdcrt_objeto* objm = pdcrt_alojar(ctx, sizeof(pdcrt_objeto));
     assert(objm);
     *objm = obj;
     return objm;
 }
 
-void pdcrt_op_eset(pdcrt_marco* marco, pdcrt_objeto env, size_t i)
+void pdcrt_op_eset(pdcrt_marco* marco, pdcrt_objeto env, pdcrt_local_index i)
 {
     pdcrt_objeto cima = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
-    env.value.c.env->env[i] = pdcrt_mover_al_monton(marco->contexto, cima);
+    env.value.c.env->env[i + PDCRT_NUM_LOCALES_ESP] = pdcrt_mover_al_monton(marco->contexto, cima);
 }
 
-void pdcrt_op_eget(pdcrt_marco* marco, pdcrt_objeto env, size_t i)
+void pdcrt_op_eget(pdcrt_marco* marco, pdcrt_objeto env, pdcrt_local_index i)
 {
     pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
-    pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, *env.value.c.env->env[i]);
+    pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, *env.value.c.env->env[i + PDCRT_NUM_LOCALES_ESP]);
 }
 
-void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_proc_t proc)
+void pdcrt_op_lsetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind)
 {
-    pdcrt_objeto cima = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    for(size_t i = 0; i < alt; i++)
+    {
+        pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
+        env = *env.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
+    }
+    pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
+    *env.value.c.env->env[((pdcrt_local_index) ind) + PDCRT_NUM_LOCALES_ESP] = obj;
+}
+
+void pdcrt_op_lgetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind)
+{
+    for(size_t i = 0; i < alt; i++)
+    {
+        pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
+        env = *env.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
+    }
+    pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, *env.value.c.env->env[((pdcrt_local_index) ind) + PDCRT_NUM_LOCALES_ESP]));
+}
+
+pdcrt_objeto pdcrt_op_open_frame(pdcrt_marco* marco, PDCRT_NULL pdcrt_local_index padreidx, size_t tam)
+{
+    pdcrt_objeto padre;
+    if(padreidx == PDCRT_ID_NIL)
+    {
+        padre = pdcrt_objeto_entero(0);
+    }
+    else
+    {
+        padre = pdcrt_obtener_local(marco, padreidx);
+    }
+    pdcrt_objeto env;
+    no_falla(pdcrt_objeto_aloj_closure(marco->contexto->alojador, NULL, tam, &env));
+    for(size_t i = 0; i < env.value.c.env->env_size; i++)
+    {
+        env.value.c.env->env[i] = pdcrt_mover_al_monton(marco->contexto, pdcrt_objeto_entero(0));
+    }
+    env.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP] = pdcrt_mover_al_monton(marco->contexto, padre);
+    return env;
+}
+
+void pdcrt_op_einit(pdcrt_marco* marco, pdcrt_objeto env, size_t i, pdcrt_objeto local)
+{
+    (void) marco;
+    pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
+    env.value.c.env->env[i + 1] = pdcrt_mover_al_monton(marco->contexto, local);
+}
+
+void pdcrt_op_close_frame(pdcrt_marco* marco, pdcrt_objeto env)
+{
+    // nada que hacer.
+    (void) marco;
+    (void) env;
+}
+
+void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc)
+{
+    pdcrt_objeto cima = pdcrt_obtener_local(marco, env);
     pdcrt_objeto_debe_tener_tipo(cima, PDCRT_TOBJ_CLOSURE);
     pdcrt_objeto nuevo_env;
     no_falla(pdcrt_objeto_aloj_closure(marco->contexto->alojador, proc, cima.value.c.env->env_size, &nuevo_env));
@@ -487,6 +553,33 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
     clz.value.c.proc = proc;
     no_falla(pdcrt_aloj_env(&clz.value.c.env, marco->contexto->alojador, 0));
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
+}
+
+void pdcrt_assert_params(pdcrt_marco* marco, int nparams)
+{
+    pdcrt_depurar_contexto(marco->contexto, "P1 assert_params");
+    pdcrt_objeto marca = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    if(marca.tag != PDCRT_TOBJ_MARCA_DE_PILA)
+    {
+        fprintf(stderr, "Se esperaba una marca de pila pero se obtuvo un %s\n", pdcrt_tipo_como_texto(marca.tag));
+        abort();
+    }
+    if(marco->contexto->pila.num_elementos < (size_t)nparams)
+    {
+        fprintf(stderr, "Se esperaban al menos %d elementos.\n", nparams);
+        abort();
+    }
+    for(size_t i = marco->contexto->pila.num_elementos - nparams; i < marco->contexto->pila.num_elementos; i++)
+    {
+        pdcrt_objeto obj = marco->contexto->pila.elementos[i];
+        if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA)
+        {
+            fprintf(stderr, "Faltaron elementos en el marco de llamada\n");
+            abort();
+        }
+    }
+    pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, nparams, marca);
+    pdcrt_depurar_contexto(marco->contexto, "P2 assert_params");
 }
 
 void pdcrt_op_dyncall(pdcrt_marco* marco, int acepta, int devuelve)
@@ -519,33 +612,6 @@ void pdcrt_op_retn(pdcrt_marco* marco, int n)
     pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, n);
     pdcrt_objeto_debe_tener_tipo(marca, PDCRT_TOBJ_MARCA_DE_PILA);
     pdcrt_depurar_contexto(marco->contexto, "P2 retn");
-}
-
-void pdcrt_assert_params(pdcrt_marco* marco, int nparams)
-{
-    pdcrt_depurar_contexto(marco->contexto, "P1 assert_params");
-    pdcrt_objeto marca = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    if(marca.tag != PDCRT_TOBJ_MARCA_DE_PILA)
-    {
-        fprintf(stderr, "Se esperaba una marca de pila pero se obtuvo un %s\n", pdcrt_tipo_como_texto(marca.tag));
-        abort();
-    }
-    if(marco->contexto->pila.num_elementos < (size_t)nparams)
-    {
-        fprintf(stderr, "Se esperaban al menos %d elementos.\n", nparams);
-        abort();
-    }
-    for(size_t i = marco->contexto->pila.num_elementos - nparams; i < marco->contexto->pila.num_elementos; i++)
-    {
-        pdcrt_objeto obj = marco->contexto->pila.elementos[i];
-        if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA)
-        {
-            fprintf(stderr, "Faltaron elementos en el marco de llamada\n");
-            abort();
-        }
-    }
-    pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, nparams, marca);
-    pdcrt_depurar_contexto(marco->contexto, "P2 assert_params");
 }
 
 int pdcrt_real_return(pdcrt_marco* marco)
