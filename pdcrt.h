@@ -189,6 +189,8 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
     pdcrt_fijar_local(marco, idx, val)
 #define PDCRT_GET_LVAR(idx)                     \
     pdcrt_obtener_local(marco, idx)
+#define PDCRT_LABEL(idx)                        \
+        pdcrt_label_##idx
 
 #define PDCRT_PROC(name)                                                \
     int pdproc_##name(pdcrt_marco* name##marco_anterior, int name##nargs, int name##nrets) // {}
@@ -251,5 +253,7 @@ void pdcrt_op_call(pdcrt_marco* marco, pdcrt_proc_t proc, int acepta, int devuel
 void pdcrt_op_retn(pdcrt_marco* marco, int n);
 int pdcrt_real_return(pdcrt_marco* marco);
 int pdcrt_passthru_return(pdcrt_marco* marco);
+
+bool pdcrt_op_choose(pdcrt_marco* marco);
 
 #endif /* PDCRT_H */

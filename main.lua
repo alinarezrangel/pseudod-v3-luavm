@@ -123,7 +123,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "CALL" / "SUM" / "SUB"
     / "OPNFRM" / "EINIT" / "CLSFRM" / "PRINTT"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
     / "EGETC" / "ESETC" / "ESET" / "EGET"
-    / "POP"
+    / "POP" / "CHOOSE" / "JMP" / "NAME"
 
 procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
@@ -133,6 +133,8 @@ param <- {| {"PARAM"} rs (id / envs) |}
 
 unknownsec <- "SECTION" ws str (ws token)* rs "SECTION"
 token <- str / [^%s"]+
+
+-- Grammar end.
 
 ]==]
 
@@ -324,7 +326,7 @@ s <- %s
 ws <- s*
 arg <- {| {mod?} {type} {name?} |}
 mod <- '?'
-type <- [LPFCEUI]
+type <- [LPFCTEUI]
 name <- [a-z][a-z0-9]*
 
 ]=]
@@ -349,6 +351,8 @@ local function schema(s)
                assert(math.type(oel) == "integer" and oel >= 0, "expected procedure index")
             elseif sel[2] == "C" then
                assert(math.type(oel) == "integer" and oel >= 0, "expected constant index")
+            elseif sel[2] == "T" then
+               assert(math.type(oel) == "integer" and oel >= 0, "expected target index")
             elseif sel[2] == "I" then
                assert(math.type(oel) == "integer", "expected integer")
             elseif sel[2] == "F" then
@@ -421,6 +425,9 @@ function toc.makeemitter()
       elseif spec == "procname" then
          assert(math.type(arg) == "integer" and arg >= 0, "expected integer")
          return ("PDCRT_PROC_NAME(name_%s)"):format(tostring(arg))
+      elseif spec == "labelid" then
+         assert(math.type(arg) == "integer" and arg >= 0, "expected label")
+         return tostring(arg)
       elseif spec == "strlit" then
          assert(type(arg) == "string", "expected string")
          return '"' .. escapecstr(arg) .. '"'
@@ -573,6 +580,23 @@ function toc.opcodes.DYNCALL(emit, state, op)
    emit:stmt("pdcrt_op_dyncall(marco, «1:int», «2:int»)", op.Ux, op.Uy)
 end
 
+toc.opschema.CHOOSE = schema "Tx, Ty"
+function toc.opcodes.CHOOSE(emit, state, op)
+   emit:stmt("if(pdcrt_op_choose(marco)) { goto PDCRT_LABEL(«1:labelid»); } else { goto PDCRT_LABEL(«2:labelid»); }", op.Tx, op.Ty)
+end
+
+toc.opschema.NAME = schema "Tx"
+function toc.opcodes.NAME(emit, state, op)
+   emit:stmt("PDCRT_LABEL(«1:labelid»):", op.Tx)
+end
+
+toc.opschema.JMP = schema "Tx"
+function toc.opcodes.JMP(emit, state, op)
+   emit:stmt("goto PDCRT_LABEL(«1:labelid»)", op.Tx)
+end
+
+-- Opcodes end.
+
 function toc.opcode(emit, state, op)
    local errm = "opcode ".. op[1] .. " not implemented"
    assert(toc.opschema[op[1]], errm)(op)
@@ -713,23 +737,14 @@ PDVM 1.0
 PLATFORM "pdcrt"
 
 SECTION "code"
-  LOCAL 0
-  LOCAL 1
-  OPNFRM EACT, NIL, 2
-  ICONST 0
-  LSET 1
-  EINIT EACT, 0, 1
   ICONST 1
-  LSET 1
-  EINIT EACT, 1, 1
-  CLSFRM EACT
-  MKCLZ EACT, 3
-  LSET 0
-  ICONST 1
+  CHOOSE 0, 1
+  NAME 0
   ICONST 2
-  LGET 0
-  DYNCALL 2, 1
-  POP
+  JMP 2
+  NAME 1
+  ICONST 4
+  NAME 2
 ENDSECTION
 
 SECTION "procedures"
@@ -743,25 +758,6 @@ SECTION "procedures"
     LGET 0
     LSETC EACT, 2, 0
   ENDPROC
-
-  PROC 3
-    PARAM ESUP
-    PARAM 0
-    PARAM 1
-    LOCAL 2
-    OPNFRM EACT, ESUP, 3
-    EINIT EACT, 1, 1
-    EINIT EACT, 2, 2
-    CLSFRM EACT
-    MKCLZ EACT, 6
-    LSETC EACT, 0, 2
-    LGET 0
-    LSETC EACT, 1, 0
-    ICONST 0
-    ICONST 1
-    LGETC EACT, 0, 2
-    DYNCALL 1, 1
-  ENDPROC
 ENDSECTION
 
 SECTION "constant pool"
@@ -769,6 +765,8 @@ SECTION "constant pool"
 ENDSECTION
 
 ]=]
+
+-- Sample end.
 
 _ = [=[
 ===== Code:

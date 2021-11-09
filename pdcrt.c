@@ -360,6 +360,7 @@ pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_
 
 void pdcrt_deinic_marco(pdcrt_marco* marco)
 {
+    pdcrt_depurar_contexto(marco->contexto, "Deinic marco");
     pdcrt_dealojar(marco->contexto, marco->locales, sizeof(pdcrt_objeto) * marco->num_locales);
     marco->num_locales = 0;
 }
@@ -625,4 +626,11 @@ int pdcrt_passthru_return(pdcrt_marco* marco)
     (void) marco;
     puts("[Advertencia] Retorno \"passthru\".");
     return 0;
+}
+
+bool pdcrt_op_choose(pdcrt_marco* marco)
+{
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_ENTERO);
+    return obj.value.i;
 }
