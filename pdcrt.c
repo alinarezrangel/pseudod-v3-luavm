@@ -425,85 +425,57 @@ void pdcrt_op_iconst(pdcrt_marco* marco, int c)
 // Los operadores están invertidos en éstas funciones porque el órden de los
 // objetos a y b también fué invertido por la pila.
 
+#define PDCRT_OP(binop)                                                 \
+    pdcrt_objeto a, b;                                                  \
+    a = pdcrt_sacar_de_pila(&marco->contexto->pila);                    \
+    b = pdcrt_sacar_de_pila(&marco->contexto->pila);                    \
+    pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);                 \
+    pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);                 \
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila,              \
+                                   marco->contexto->alojador,           \
+                                   pdcrt_objeto_entero(b.value.i binop a.value.i)));
+
 void pdcrt_op_sum(pdcrt_marco* marco)
 {
-    pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
-    pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(b.value.i + a.value.i)));
+    PDCRT_OP(+)
 }
 
 void pdcrt_op_sub(pdcrt_marco* marco)
 {
-    pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
-    pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(b.value.i - a.value.i)));
+    PDCRT_OP(-)
 }
 
 void pdcrt_op_mul(pdcrt_marco* marco)
 {
-    pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
-    pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(b.value.i * a.value.i)));
+    PDCRT_OP(*)
 }
 
 void pdcrt_op_div(pdcrt_marco* marco)
 {
-    pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
-    pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(b.value.i / a.value.i)));
+    PDCRT_OP(/)
 }
 
 void pdcrt_op_gt(pdcrt_marco* marco)
 {
-    pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
-    pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(a.value.i < b.value.i)));
+    PDCRT_OP(>)
 }
 
 void pdcrt_op_ge(pdcrt_marco* marco)
 {
-    pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
-    pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(a.value.i <= b.value.i)));
+    PDCRT_OP(>=)
 }
 
 void pdcrt_op_lt(pdcrt_marco* marco)
 {
-    pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
-    pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(a.value.i > b.value.i)));
+    PDCRT_OP(<)
 }
 
 void pdcrt_op_le(pdcrt_marco* marco)
 {
-    pdcrt_objeto a, b;
-    a = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    b = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(a, PDCRT_TOBJ_ENTERO);
-    pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(a.value.i >= b.value.i)));
+    PDCRT_OP(<=)
 }
+
+#undef PDCRT_OP
 
 void pdcrt_op_pop(pdcrt_marco* marco)
 {
@@ -717,7 +689,6 @@ void pdcrt_op_rot(pdcrt_marco* marco, int n)
     }
     else
     {
-        pdcrt_depurar_contexto(marco->contexto, "ROT PREV");
         assert(n > 0);
         pdcrt_pila* pila = &marco->contexto->pila;
         assert(pila->num_elementos > (size_t)n);
@@ -730,7 +701,6 @@ void pdcrt_op_rot(pdcrt_marco* marco, int n)
         }
         // Restaura el elemento guardado
         pila->elementos[pila->num_elementos - 1] = obj;
-        pdcrt_depurar_contexto(marco->contexto, "ROT NEXT");
     }
 }
 
