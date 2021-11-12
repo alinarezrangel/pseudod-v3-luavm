@@ -7,9 +7,16 @@ implementación (sin terminar) de dicha máquina virtual.
 
 ## Dependencias ##
 
-- Lua 5.4.
-- GCC 9 o superior (en teoría cualquier compilador con soporte de C18 debería
-  funcionar).
+- [Lua 5.4][lua].
+- [GCC][gcc] 9 o superior (en teoría cualquier compilador con soporte de C18
+  debería funcionar).
+- [Fennel][fennel] (por el módulo `fennelview`).
+- [LPeg][lpeg].
+
+[fennel]: https://fennel-lang.org/
+[lua]: https://www.lua.org/
+[gcc]: https://gcc.gnu.org/
+[lpeg]: http://www.inf.puc-rio.br/~roberto/lpeg/
 
 ## Compilar ##
 
