@@ -847,49 +847,6 @@ ENDSECTION
 
 -- Sample end.
 
-_ = [=[
-===== Code:
-#0		[10] MKCLZ	EACT	3
-#1		[12] LSET	2
-#2		[13] LGET	2
-#3		[18] DYNCALL	0	1
-#4		[4] POP
-===== Declr:
-#0	proc	6
-		#0	0
-	#0		[9] PARAM	ESUP
-	#1		[9] PARAM	0
-	#2		[20] OPNFRM	EACT	ESUP	0
-	#3		[21] CLSFRM	EACT
-	#4		[13] LGET	0
-	#5		[16] LSETC	EACT	1	1
-	#6		[13] LGET	0
-	#7		[16] LSETC	EACT	2	0
-	#8		[17] LGETC	EACT	1	2
-	#9		[18] DYNCALL	0	1
-	#10		[4] POP
-	end
-#1	proc	3
-		#0	0
-		#1	1
-	#0		[9] PARAM	ESUP
-	#1		[9] PARAM	0
-	#2		[9] PARAM	1
-	#3		[8] LOCAL	2
-	#4		[20] OPNFRM	EACT	ESUP	2
-	#5		[19] EINIT	EACT	1	1
-	#6		[19] EINIT	EACT	2	2
-	#7		[21] CLSFRM	EACT
-	#8		[10] MKCLZ	EACT	6
-	#9		[16] LSETC	EACT	0	2
-	#10		[13] LGET	0
-	#11		[16] LSETC	EACT	1	0
-	#12		[17] LGETC	EACT	0	2
-	#13		[18] DYNCALL	0	1
-	#14		[4] POP
-	end
-]=]
-
 local function makeparsecli(opts)
    local function parser(cli)
       local i = 1
