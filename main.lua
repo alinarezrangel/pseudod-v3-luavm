@@ -117,13 +117,14 @@ code <- {| '' -> 'locals'  (rs local)* |}
         {| '' -> 'opcodes'  (rs opcode)* |}
 local <- {| {"LOCAL"} rs (id / envs) |}
 
-OP <- "LCONST" / "ICONST" / "FCONST" / "CALL" / "SUM" / "SUB"
-    / "MUL" / "DIV" / "RETN" / "RET" / "DYNCALL"
-    / "MKENV" / "MKCLZC" / "MKCLZ" / "MK0CLZ"
-    / "OPNFRM" / "EINIT" / "CLSFRM" / "PRINTT"
+OP <- "LCONST" / "ICONST" / "FCONST" / "SUM" / "SUB"
+    / "MUL" / "DIV" / "RETN" / "DYNCALL"
+    / "MKCLZ" / "MK0CLZ"
+    / "OPNFRM" / "EINIT" / "CLSFRM"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
-    / "EGETC" / "ESETC" / "ESET" / "EGET"
     / "POP" / "CHOOSE" / "JMP" / "NAME"
+    / "MTRUE" / "CMPEQ" / "CMPNEQ" / "NOT"
+    / "ROT" / "GT" / "LT" / "GE" / "LE"
 
 procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
@@ -530,6 +531,26 @@ function toc.opcodes.DIV(emit, state, op)
    emit:stmt("pdcrt_op_div(marco)")
 end
 
+toc.opschema.GT = schema ""
+function toc.opcodes.GT(emit, state, op)
+   emit:stmt("pdcrt_op_gt(marco)")
+end
+
+toc.opschema.LT = schema ""
+function toc.opcodes.LT(emit, state, op)
+   emit:stmt("pdcrt_op_lt(marco)")
+end
+
+toc.opschema.GE = schema ""
+function toc.opcodes.GE(emit, state, op)
+   emit:stmt("pdcrt_op_ge(marco)")
+end
+
+toc.opschema.LE = schema ""
+function toc.opcodes.LE(emit, state, op)
+   emit:stmt("pdcrt_op_le(marco)")
+end
+
 toc.opschema.LSET = schema "Lx"
 function toc.opcodes.LSET(emit, state, op)
    emit:stmt("PDCRT_SET_LVAR(«1:localid», pdcrt_op_lset(marco))", op.Lx)
@@ -593,6 +614,42 @@ end
 toc.opschema.JMP = schema "Tx"
 function toc.opcodes.JMP(emit, state, op)
    emit:stmt("goto PDCRT_LABEL(«1:labelid»)", op.Tx)
+end
+
+toc.opschema.ROT = schema "Ia"
+function toc.opcodes.ROT(emit, state, op)
+   emit:stmt("pdcrt_op_rot(marco, «1:int»)", op.Ia)
+end
+
+toc.opschema.RETN = schema "Ua"
+function toc.opcodes.RETN(emit, state, op)
+   emit:stmt("pdcrt_op_retn(marco, «1:int»)", op.Ua)
+   emit:stmt("PDCRT_RETURN()")
+end
+
+toc.opschema.NOT = schema ""
+function toc.opcodes.NOT(emit, state, op)
+   emit:stmt("pdcrt_op_not(marco)")
+end
+
+toc.opschema.MTRUE = schema ""
+function toc.opcodes.MTRUE(emit, state, op)
+   emit:stmt("pdcrt_op_mtrue(marco)")
+end
+
+toc.opschema.CMPEQ = schema ""
+function toc.opcodes.CMPEQ(emit, state, op)
+   emit:stmt("pdcrt_op_cmp(marco, PDCRT_CMP_EQ)")
+end
+
+toc.opschema.CMPNEQ = schema ""
+function toc.opcodes.CMPNEQ(emit, state, op)
+   emit:stmt("pdcrt_op_cmp(marco, PDCRT_CMP_NEQ)")
+end
+
+toc.opschema.MSG = schema "Cx"
+function toc.opcodes.MSG(emit, state, op)
+   emit:stmt("pdcrt_op_msg(marco, «1:constid»)", op.Cx)
 end
 
 -- Opcodes end.
@@ -737,26 +794,48 @@ PDVM 1.0
 PLATFORM "pdcrt"
 
 SECTION "code"
-  ICONST 1
-  CHOOSE 0, 1
-  NAME 0
-  ICONST 2
-  JMP 2
-  NAME 1
-  ICONST 4
-  NAME 2
+  LOCAL 0
+  OPNFRM EACT, NIL, 1
+  EINIT EACT, 0, 0
+  CLSFRM EACT
+  MKCLZ EACT, 1
+  LSETC EACT, 0, 0
+  LGETC EACT, 0, 0
+  ICONST 13
+  ROT 1
+  DYNCALL 1, 1
 ENDSECTION
 
 SECTION "procedures"
-  PROC 6
+  PROC 1
     PARAM ESUP
     PARAM 0
     OPNFRM EACT, ESUP, 0
     CLSFRM EACT
     LGET 0
-    LSETC EACT, 1, 1
-    LGET 0
-    LSETC EACT, 2, 0
+    ICONST 2
+    LT
+    CHOOSE 1, 2
+    NAME 1
+      ICONST 1
+      RETN 1
+      JMP 3
+    NAME 2
+      LGETC EACT, 1, 0
+      LGET 0
+      ICONST 1
+      SUB
+      ROT 1
+      DYNCALL 1, 1
+      LGETC EACT, 1, 0
+      LGET 0
+      ICONST 2
+      SUB
+      ROT 1
+      DYNCALL 1, 1
+      SUM
+      RETN 1
+    NAME 3
   ENDPROC
 ENDSECTION
 

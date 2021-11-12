@@ -86,6 +86,9 @@ pdcrt_objeto pdcrt_objeto_float(float v);
 pdcrt_objeto pdcrt_objeto_marca_de_pila(void);
 pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc, size_t env_size, PDCRT_OUT pdcrt_objeto* out);
 
+bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b);
+bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b);
+
 typedef struct pdcrt_pila
 {
     PDCRT_ARR(capacidad) pdcrt_objeto* elementos;
@@ -149,6 +152,8 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
 #define PDCRT_MAIN()                            \
     int main(int argc, char* argv[])
 
+#define PDCRT_RETURN() goto pdcrt_return_point
+
 #define PDCRT_MAIN_PRELUDE(nlocals)                                     \
     pdcrt_contexto ctx_real;                                            \
     pdcrt_error pderrno;                                                \
@@ -173,14 +178,15 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
     }                                                                   \
     do {} while(0)
 
-#define PDCRT_MAIN_POSTLUDE()                   \
-    do                                          \
-    {                                           \
-        pdcrt_deinic_marco(&marco_real);        \
-        pdcrt_deinic_contexto(ctx, aloj);       \
-        pdcrt_dealoj_alojador_de_arena(aloj);   \
-        exit(EXIT_SUCCESS);                     \
-    }                                           \
+#define PDCRT_MAIN_POSTLUDE()                       \
+    pdcrt_return_point:                             \
+    do                                              \
+    {                                               \
+        pdcrt_deinic_marco(&marco_real);            \
+        pdcrt_deinic_contexto(ctx, aloj);           \
+        pdcrt_dealoj_alojador_de_arena(aloj);       \
+        exit(EXIT_SUCCESS);                         \
+    }                                               \
     while(0)
 
 #define PDCRT_LOCAL(idx, name)                              \
@@ -216,17 +222,23 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
 #define PDCRT_PARAM(idx, param)                        \
     pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
 #define PDCRT_PROC_POSTLUDE(name)               \
-    do {} while(0)
+    pdcrt_return_point: do {} while(0)
 #define PDCRT_PROC_NAME(name)                   \
     &pdproc_##name
 #define PDCRT_DECLARE_PROC(name)                \
     PDCRT_PROC(name);
 
 void pdcrt_op_iconst(pdcrt_marco* marco, int c);
+
 void pdcrt_op_sum(pdcrt_marco* marco);
 void pdcrt_op_sub(pdcrt_marco* marco);
 void pdcrt_op_mul(pdcrt_marco* marco);
 void pdcrt_op_div(pdcrt_marco* marco);
+void pdcrt_op_gt(pdcrt_marco* marco);
+void pdcrt_op_ge(pdcrt_marco* marco);
+void pdcrt_op_lt(pdcrt_marco* marco);
+void pdcrt_op_le(pdcrt_marco* marco);
+
 void pdcrt_op_pop(pdcrt_marco* marco);
 
 pdcrt_objeto pdcrt_op_lset(pdcrt_marco* marco);
@@ -255,5 +267,18 @@ int pdcrt_real_return(pdcrt_marco* marco);
 int pdcrt_passthru_return(pdcrt_marco* marco);
 
 bool pdcrt_op_choose(pdcrt_marco* marco);
+
+void pdcrt_op_rot(pdcrt_marco* marco, int n);
+
+typedef enum pdcrt_cmp
+{
+    PDCRT_CMP_EQ,
+    PDCRT_CMP_NEQ,
+    PDCRT_CMP_REFEQ
+} pdcrt_cmp;
+
+void pdcrt_op_cmp(pdcrt_marco* marco, pdcrt_cmp cmp);
+void pdcrt_op_not(pdcrt_marco* marco);
+void pdcrt_op_mtrue(pdcrt_marco* marco);
 
 #endif /* PDCRT_H */
