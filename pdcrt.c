@@ -489,7 +489,8 @@ pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_
 
 void pdcrt_deinic_marco(pdcrt_marco* marco)
 {
-    pdcrt_depurar_contexto(marco->contexto, "Deinic marco");
+    if(marco->contexto->rastrear_marcos)
+        pdcrt_depurar_contexto(marco->contexto, "Deinic marco");
     pdcrt_dealojar(marco->contexto, marco->locales, sizeof(pdcrt_objeto) * marco->num_locales);
     marco->num_locales = 0;
 }
