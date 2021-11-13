@@ -1,6 +1,6 @@
 LUA=lua5.4
 CC=gcc
-CFLAGS=-std=c18 -Wall -g -O0 -fsanitize=address -fsanitize=undefined
+CFLAGS=-std=c18 -Wall -g -O0 -fsanitize=address -fsanitize=undefined -march=native
 CLIBS=-L. -lpdcrt
 
 
