@@ -108,6 +108,7 @@ typedef struct pdcrt_contexto
 {
     pdcrt_pila pila;
     pdcrt_alojador alojador;
+    bool rastrear_marcos;
 } pdcrt_contexto;
 
 pdcrt_alojador pdcrt_alojador_de_malloc(void);
@@ -124,6 +125,8 @@ void* pdcrt_realojar(pdcrt_contexto* ctx, PDCRT_NULL void* ptr, size_t tam_actua
 void* pdcrt_alojar_simple(pdcrt_alojador alojador, size_t tam);
 void pdcrt_dealojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam);
 void* pdcrt_realojar_simple(pdcrt_alojador alojador, PDCRT_NULL void* ptr, size_t tam_actual, size_t tam_nuevo);
+
+void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[]);
 
 typedef struct pdcrt_marco
 {
@@ -171,6 +174,7 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
         puts(pdcrt_perror(pderrno));                                    \
         exit(EXIT_FAILURE);                                             \
     }                                                                   \
+    pdcrt_procesar_cli(ctx, argc, argv);                                \
     if((pderrno = pdcrt_inic_marco(&marco_real, ctx, nlocals, NULL)))   \
     {                                                                   \
         puts(pdcrt_perror(pderrno));                                    \
@@ -179,7 +183,6 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
     do {} while(0)
 
 #define PDCRT_MAIN_POSTLUDE()                       \
-    pdcrt_return_point:                             \
     do                                              \
     {                                               \
         pdcrt_deinic_marco(&marco_real);            \
@@ -212,9 +215,11 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
             puts(pdcrt_perror(pderrno));                                \
             exit(EXIT_FAILURE);                                         \
         }                                                               \
-        pdcrt_depurar_contexto(ctx, "P1 " #name);                       \
+        if(marco->contexto->rastrear_marcos)                            \
+            pdcrt_depurar_contexto(ctx, "P1 " #name);                   \
         pdcrt_empujar_en_pila(&ctx->pila, ctx->alojador, pdcrt_objeto_marca_de_pila()); \
-        pdcrt_depurar_contexto(ctx, "P2 " #name);                       \
+        if(marco->contexto->rastrear_marcos)                            \
+            pdcrt_depurar_contexto(ctx, "P2 " #name);                   \
     }                                                                   \
     while(0)
 #define PDCRT_ASSERT_PARAMS(nparams)            \
@@ -280,5 +285,8 @@ typedef enum pdcrt_cmp
 void pdcrt_op_cmp(pdcrt_marco* marco, pdcrt_cmp cmp);
 void pdcrt_op_not(pdcrt_marco* marco);
 void pdcrt_op_mtrue(pdcrt_marco* marco);
+
+void pdcrt_op_prn(pdcrt_marco* marco);
+void pdcrt_op_nl(pdcrt_marco* marco);
 
 #endif /* PDCRT_H */

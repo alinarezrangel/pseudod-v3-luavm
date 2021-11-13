@@ -1,6 +1,7 @@
 #include "pdcrt.h"
 
 #include <assert.h>
+#include <string.h>
 
 
 const char* pdcrt_perror(pdcrt_error err)
@@ -374,6 +375,104 @@ void* pdcrt_realojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam_actua
     return alojador.alojar(alojador.datos, ptr, tam_actual, tam_nuevo);
 }
 
+// Perdón. (https://www.chiark.greenend.org.uk/~sgtatham/coroutines.html)
+#define PDCRT_CORO_BEGIN                        \
+    static int coro_state = 0;                  \
+    switch(coro_state)                          \
+    { case 0:
+#define PDCRT_CORO_END }
+#define PDCRT_CORO_LYIELD(i, x)                 \
+    do { coro_state = i; return x; case i:; } while(0)
+#define PDCRT_CORO_YIELD(x) PDCRT_CORO_LYIELD(__LINE__, x)
+
+// Co-rutina (cofunción?): solo se puede llamar una vez.
+static int pdcrt_getopt(int argc, char* argv[], const char* opts, char** optarg, int* optind)
+{
+    static char op;
+    static char* arg;
+    static int len, i;
+    PDCRT_CORO_BEGIN;
+    while(*optind < argc)
+    {
+        if(argv[*optind][0] != '-')
+        {
+            // Argumento posicional.
+            break;
+        }
+        if(argv[*optind][1] == 0)
+        {
+            // El argumento "-" cuenta como posicional.
+            break;
+        }
+        else if(argv[*optind][1] == '-')
+        {
+            // "--" termina las opciones
+            *optind += 1;
+            break;
+        }
+        // Opciones cortas: -abc...
+        arg = argv[(*optind)++];
+        len = strlen(arg);
+        for(i = 1; i < len; i++)
+        {
+            op = arg[i];
+            // Busca op en opts.
+            int j;
+            for(j = 0; opts[j] != 0 && opts[j] != op; j++);
+            if(opts[j] == 0)
+            {
+                // op no es una opción válida.
+                optind += 1;
+                PDCRT_CORO_YIELD('?');
+                continue;
+            }
+            else if(opts[j + 1] == ':')
+            {
+                // Pide un argumento
+                assert(*optind < argc);
+                *optarg = argv[(*optind)++];
+            }
+            PDCRT_CORO_YIELD(op);
+        }
+    }
+    PDCRT_CORO_END;
+    return -1;
+}
+
+void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[])
+{
+    ctx->rastrear_marcos = false;
+    int opt, optind = 1, mostrarAyuda = 0;
+    char* optarg = NULL;
+    while((opt = pdcrt_getopt(argc, argv, "t:h", &optarg, &optind)) != -1)
+    {
+        switch(opt)
+        {
+        case 'h':
+            mostrarAyuda = 1;
+            break;
+        case 't':
+            ctx->rastrear_marcos = atoi(optarg) == 1;
+            break;
+        default:
+            assert(0 && u8"opción sin reconocer");
+        }
+    }
+    if(optind != argc)
+    {
+        puts("Argumentos adicionales inesperados.\nUso: programa [opciones...]\nUsa la opción -h para más ayuda.");
+        exit(1);
+    }
+    if(mostrarAyuda)
+    {
+        puts("Uso: programa [opciones...] [argumentos...]\n\n"
+             "Opciones soportadas:\n"
+             "  -t N   Registra las llamadas a funciones si N = 1. No lo hagas si N = 0.\n"
+             "  -h     Muestra esta ayuda y termina.");
+        exit(1);
+    }
+}
+
 pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_t num_locales, PDCRT_NULL pdcrt_marco* marco_anterior)
 {
     size_t num_real_de_locales = num_locales + PDCRT_NUM_LOCALES_ESP;
@@ -603,7 +702,8 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
 
 void pdcrt_assert_params(pdcrt_marco* marco, int nparams)
 {
-    pdcrt_depurar_contexto(marco->contexto, "P1 assert_params");
+    if(marco->contexto->rastrear_marcos)
+        pdcrt_depurar_contexto(marco->contexto, "P1 assert_params");
     pdcrt_objeto marca = pdcrt_sacar_de_pila(&marco->contexto->pila);
     if(marca.tag != PDCRT_TOBJ_MARCA_DE_PILA)
     {
@@ -625,7 +725,8 @@ void pdcrt_assert_params(pdcrt_marco* marco, int nparams)
         }
     }
     pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, nparams, marca);
-    pdcrt_depurar_contexto(marco->contexto, "P2 assert_params");
+    if(marco->contexto->rastrear_marcos)
+        pdcrt_depurar_contexto(marco->contexto, "P2 assert_params");
 }
 
 void pdcrt_op_dyncall(pdcrt_marco* marco, int acepta, int devuelve)
@@ -638,14 +739,15 @@ void pdcrt_op_dyncall(pdcrt_marco* marco, int acepta, int devuelve)
 
 void pdcrt_op_call(pdcrt_marco* marco, pdcrt_proc_t proc, int acepta, int devuelve)
 {
-    pdcrt_depurar_contexto(marco->contexto, "precall");
+    if(marco->contexto->rastrear_marcos)
+        pdcrt_depurar_contexto(marco->contexto, "precall");
     (*proc)(marco, acepta, devuelve);
-    pdcrt_depurar_contexto(marco->contexto, "postcall");
+    if(marco->contexto->rastrear_marcos)
+        pdcrt_depurar_contexto(marco->contexto, "postcall");
 }
 
 void pdcrt_op_retn(pdcrt_marco* marco, int n)
 {
-    pdcrt_depurar_contexto(marco->contexto, "P1 retn");
     for(size_t i = marco->contexto->pila.num_elementos - n; i < marco->contexto->pila.num_elementos; i++)
     {
         pdcrt_objeto obj = marco->contexto->pila.elementos[i];
@@ -657,7 +759,6 @@ void pdcrt_op_retn(pdcrt_marco* marco, int n)
     }
     pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, n);
     pdcrt_objeto_debe_tener_tipo(marca, PDCRT_TOBJ_MARCA_DE_PILA);
-    pdcrt_depurar_contexto(marco->contexto, "P2 retn");
 }
 
 int pdcrt_real_return(pdcrt_marco* marco)
@@ -669,7 +770,6 @@ int pdcrt_real_return(pdcrt_marco* marco)
 int pdcrt_passthru_return(pdcrt_marco* marco)
 {
     (void) marco;
-    puts("[Advertencia] Retorno \"passthru\".");
     return 0;
 }
 
@@ -735,4 +835,26 @@ void pdcrt_op_mtrue(pdcrt_marco* marco)
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_ENTERO);
     assert(obj.value.i != 0);
+}
+
+void pdcrt_op_prn(pdcrt_marco* marco)
+{
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    switch(obj.tag)
+    {
+    case PDCRT_TOBJ_ENTERO:
+        printf("%d", obj.value.i);
+        break;
+    case PDCRT_TOBJ_FLOAT:
+        printf("%f", obj.value.f);
+        break;
+    default:
+        assert(0 && "cannot prn obj");
+    }
+}
+
+void pdcrt_op_nl(pdcrt_marco* marco)
+{
+    (void) marco;
+    printf("\n");
 }

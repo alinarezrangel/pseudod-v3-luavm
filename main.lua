@@ -125,6 +125,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "SUM" / "SUB"
     / "POP" / "CHOOSE" / "JMP" / "NAME"
     / "MTRUE" / "CMPEQ" / "CMPNEQ" / "NOT"
     / "ROT" / "GT" / "LT" / "GE" / "LE"
+    / "PRN" / "NL"
 
 procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
@@ -506,6 +507,16 @@ function toc.opcodes.LCONST(emit, state, op)
    end
 end
 
+toc.opschema.PRN = schema ""
+function toc.opcodes.PRN(emit, state, op)
+   emit:stmt("pdcrt_op_prn(marco)")
+end
+
+toc.opschema.NL = schema ""
+function toc.opcodes.NL(emit, state, op)
+   emit:stmt("pdcrt_op_nl(marco)")
+end
+
 toc.opschema.POP = schema ""
 function toc.opcodes.POP(emit, state, op)
    emit:stmt("pdcrt_op_pop(marco)")
@@ -804,6 +815,8 @@ SECTION "code"
   ICONST 13
   ROT 1
   DYNCALL 1, 1
+  PRN
+  NL
 ENDSECTION
 
 SECTION "procedures"
