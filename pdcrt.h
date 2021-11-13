@@ -43,19 +43,12 @@ struct pdcrt_marco;
 
 typedef int (*pdcrt_proc_t)(struct pdcrt_marco* marco, int args, int rets);
 
-typedef struct pdcrt_env
-{
-    size_t env_size;
-    PDCRT_ARR(env_size) struct pdcrt_objeto* env[];
-} pdcrt_env;
-
-pdcrt_error pdcrt_aloj_env(PDCRT_OUT pdcrt_env** env, pdcrt_alojador alojador, size_t env_size);
-void pdcrt_dealoj_env(pdcrt_env* env, pdcrt_alojador alojador);
+struct pdcrt_env;
 
 typedef struct pdcrt_closure
 {
     pdcrt_proc_t proc;
-    pdcrt_env* env;
+    struct pdcrt_env* env;
 } pdcrt_closure;
 
 typedef struct pdcrt_objeto
@@ -76,6 +69,15 @@ typedef struct pdcrt_objeto
 } pdcrt_objeto;
 
 typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
+
+typedef struct pdcrt_env
+{
+    size_t env_size;
+    PDCRT_ARR(env_size) pdcrt_objeto env[];
+} pdcrt_env;
+
+pdcrt_error pdcrt_aloj_env(PDCRT_OUT pdcrt_env** env, pdcrt_alojador alojador, size_t env_size);
+void pdcrt_dealoj_env(pdcrt_env* env, pdcrt_alojador alojador);
 
 const char* pdcrt_tipo_como_texto(pdcrt_tipo_de_objeto tipo);
 
