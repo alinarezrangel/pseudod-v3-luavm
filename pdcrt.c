@@ -597,26 +597,6 @@ void pdcrt_op_lget(pdcrt_marco* marco, pdcrt_objeto v)
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, v));
 }
 
-void pdcrt_op_mkenv(pdcrt_marco* marco, size_t tam)
-{
-    pdcrt_objeto env;
-    no_falla(pdcrt_objeto_aloj_closure(marco->contexto->alojador, NULL, tam, &env));
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, env));
-}
-
-void pdcrt_op_eset(pdcrt_marco* marco, pdcrt_objeto env, pdcrt_local_index i)
-{
-    pdcrt_objeto cima = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
-    env.value.c.env->env[i + PDCRT_NUM_LOCALES_ESP] = cima;
-}
-
-void pdcrt_op_eget(pdcrt_marco* marco, pdcrt_objeto env, pdcrt_local_index i)
-{
-    pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
-    pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, env.value.c.env->env[i + PDCRT_NUM_LOCALES_ESP]);
-}
-
 void pdcrt_op_lsetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind)
 {
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);

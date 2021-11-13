@@ -251,9 +251,6 @@ void pdcrt_op_pop(pdcrt_marco* marco);
 pdcrt_objeto pdcrt_op_lset(pdcrt_marco* marco);
 void pdcrt_op_lget(pdcrt_marco* marco, pdcrt_objeto v);
 
-void pdcrt_op_mkenv(pdcrt_marco* marco, size_t tam);
-void pdcrt_op_eset(pdcrt_marco* marco, pdcrt_objeto env, pdcrt_local_index i);
-void pdcrt_op_eget(pdcrt_marco* marco, pdcrt_objeto env, pdcrt_local_index i);
 void pdcrt_op_lsetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind);
 void pdcrt_op_lgetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind);
 
