@@ -282,6 +282,12 @@ static void* pdcrt_alojador_de_malloc_impl(void* datos_del_usuario, void* ptr, s
     }
 }
 
+void pdcrt_inic_constantes(pdcrt_constantes* consts)
+{
+    consts->textos = NULL;
+    consts->num_textos = 0;
+}
+
 pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto)
 {
     if(idx < consts->num_textos)
@@ -391,8 +397,7 @@ pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
     }
     ctx->alojador = alojador;
     ctx->rastrear_marcos = false;
-    ctx->constantes.num_textos = 0;
-    ctx->constantes.textos = NULL;
+    pdcrt_inic_constantes(&ctx->constantes);
     return PDCRT_OK;
 }
 

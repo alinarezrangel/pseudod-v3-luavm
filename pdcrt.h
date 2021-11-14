@@ -139,6 +139,7 @@ typedef struct pdcrt_constantes
     PDCRT_ARR(num_textos) pdcrt_texto** textos;
 } pdcrt_constantes;
 
+void pdcrt_inic_constantes(pdcrt_constantes* consts);
 pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto);
 
 typedef struct pdcrt_contexto
