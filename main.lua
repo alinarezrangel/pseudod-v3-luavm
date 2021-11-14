@@ -501,7 +501,7 @@ function toc.opcodes.LCONST(emit, state, op)
    local c = state.constants[op[2]]
    local t, v = c.type, c.value
    if t == "string" then
-      emit:stmt("pdcrt_op_lconst_string(marco, «2:strlit»)", op.Cx, v)
+      emit:stmt("pdcrt_op_lconst(marco, «1:int»)", op.Cx)
    else
       emit:stmt("pdcrt_op_lconst_int(marco, «2:int»)", op.Cx, v)
    end
@@ -671,9 +671,22 @@ function toc.opcode(emit, state, op)
    return assert(toc.opcodes[op[1]], errm)(emit, state, op)
 end
 
+function toc.compconsts(emit, state)
+   for i, c in pairs(state.constants) do
+      if c.type == "string" then
+         emit:stmt("PDCRT_REGISTRAR_TXTLIT(«1:int», «2:strlit»)", i, c.value)
+      else
+         error("not implemented constant type " .. c.type)
+      end
+   end
+end
+
 function toc.compcode(emit, state)
    emit:opentoplevel("PDCRT_MAIN() {")
    emit:stmt("PDCRT_MAIN_PRELUDE(«1:int»)", #state.code.locals)
+   log.dbg("starting to emit consts inside code")
+   toc.compconsts(emit, state)
+   log.dbg("emitted consts.")
    for i = 1, #state.code.locals do
       local p = state.code.locals[i]
       emit:stmt("PDCRT_LOCAL(«1:localid», «1:localname»)", p[2])
@@ -809,6 +822,9 @@ SECTION "code"
   OPNFRM EACT, NIL, 1
   EINIT EACT, 0, 0
   CLSFRM EACT
+  LCONST 0
+  PRN
+  NL
   MKCLZ EACT, 1
   LSETC EACT, 0, 0
   LGETC EACT, 0, 0

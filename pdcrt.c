@@ -1,7 +1,7 @@
 #include "pdcrt.h"
 
 #include <assert.h>
-#include <string.h>
+#include <math.h>
 
 
 const char* pdcrt_perror(pdcrt_error err)
@@ -31,6 +31,43 @@ pdcrt_error pdcrt_aloj_env(pdcrt_env** env, pdcrt_alojador alojador, size_t env_
 void pdcrt_dealoj_env(pdcrt_env* env, pdcrt_alojador alojador)
 {
     pdcrt_dealojar_simple(alojador, env, sizeof(pdcrt_env) + sizeof(pdcrt_objeto) * env->env_size);
+}
+
+pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, size_t lon)
+{
+    *texto = pdcrt_alojar_simple(alojador, sizeof(pdcrt_texto));
+    if(*texto == NULL)
+    {
+        return PDCRT_ENOMEM;
+    }
+    (*texto)->contenido = pdcrt_alojar_simple(alojador, sizeof(char) * lon);
+    if((*texto)->contenido == NULL)
+    {
+        pdcrt_dealojar_simple(alojador, *texto, sizeof(pdcrt_texto));
+        return PDCRT_ENOMEM;
+    }
+    (*texto)->longitud = lon;
+    return PDCRT_OK;
+}
+
+pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, const char* cstr)
+{
+    pdcrt_error errc = pdcrt_aloj_texto(texto, alojador, strlen(cstr));
+    if(errc != PDCRT_OK)
+    {
+        return errc;
+    }
+    for(size_t i = 0; cstr[i] != '\0'; i++)
+    {
+        (*texto)->contenido[i] = cstr[i];
+    }
+    return PDCRT_OK;
+}
+
+void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto)
+{
+    pdcrt_dealojar_simple(alojador, texto->contenido, sizeof(char) * texto->longitud);
+    pdcrt_dealojar_simple(alojador, texto, sizeof(pdcrt_texto));
 }
 
 const char* pdcrt_tipo_como_texto(pdcrt_tipo_de_objeto tipo)
@@ -83,6 +120,18 @@ pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc
     return pdcrt_aloj_env(&obj->value.c.env, alojador, env_size + PDCRT_NUM_LOCALES_ESP);
 }
 
+pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t lon)
+{
+    obj->tag = PDCRT_TOBJ_TEXTO;
+    return pdcrt_aloj_texto(&obj->value.t, alojador, lon);
+}
+
+pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, const char* cstr)
+{
+    obj->tag = PDCRT_TOBJ_TEXTO;
+    return pdcrt_aloj_texto_desde_c(&obj->value.t, alojador, cstr);
+}
+
 bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b)
 {
     if(a.tag != b.tag)
@@ -101,6 +150,15 @@ bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b)
             return true;
         case PDCRT_TOBJ_CLOSURE:
             return (a.value.c.proc == b.value.c.proc) && (a.value.c.env == b.value.c.env);
+        case PDCRT_TOBJ_TEXTO:
+            if(a.value.t->longitud != b.value.t->longitud)
+                return false;
+            for(size_t i = 0; i < a.value.t->longitud; i++)
+            {
+                if(a.value.t->contenido[i] != b.value.t->contenido[i])
+                    return false;
+            }
+            return true;
         default:
             assert(0);
         }
@@ -109,8 +167,17 @@ bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b)
 
 bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b)
 {
-    // Por ahora no hay objetos que tengan igualdades diferentes.
-    return pdcrt_objeto_iguales(a, b);
+    if(a.tag != b.tag)
+    {
+        return false;
+    }
+    switch(a.tag)
+    {
+    case PDCRT_TOBJ_TEXTO:
+        return a.value.t == b.value.t;
+    default:
+        return pdcrt_objeto_iguales(a, b);
+    }
 }
 
 pdcrt_error pdcrt_inic_pila(pdcrt_pila* pila, pdcrt_alojador alojador)
@@ -215,6 +282,22 @@ static void* pdcrt_alojador_de_malloc_impl(void* datos_del_usuario, void* ptr, s
     }
 }
 
+pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto)
+{
+    if(idx < consts->num_textos)
+    {
+        consts->textos[idx] = texto;
+    }
+    else
+    {
+        consts->textos = pdcrt_realojar_simple(alojador, consts->textos, consts->num_textos * sizeof(pdcrt_texto*), (consts->num_textos + 1) * sizeof(pdcrt_texto*));
+        assert(consts->textos != NULL);
+        consts->num_textos += 1;
+        consts->textos[idx] = texto;
+    }
+    return PDCRT_OK;
+}
+
 pdcrt_alojador pdcrt_alojador_de_malloc(void)
 {
     return (pdcrt_alojador){ .alojar = &pdcrt_alojador_de_malloc_impl, .datos = NULL };
@@ -307,6 +390,9 @@ pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
         return pderrno;
     }
     ctx->alojador = alojador;
+    ctx->rastrear_marcos = false;
+    ctx->constantes.num_textos = 0;
+    ctx->constantes.textos = NULL;
     return PDCRT_OK;
 }
 
@@ -350,7 +436,7 @@ void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra)
     }
 }
 
-void* pdcrt_alojar(pdcrt_contexto* ctx, size_t tam)
+PDCRT_NULL void* pdcrt_alojar(pdcrt_contexto* ctx, size_t tam)
 {
     return pdcrt_alojar_simple(ctx->alojador, tam);
 }
@@ -360,12 +446,12 @@ void pdcrt_dealojar(pdcrt_contexto* ctx, void* ptr, size_t tam)
     return pdcrt_dealojar_simple(ctx->alojador, ptr, tam);
 }
 
-void* pdcrt_realojar(pdcrt_contexto* ctx, void* ptr, size_t tam_actual, size_t tam_nuevo)
+PDCRT_NULL void* pdcrt_realojar(pdcrt_contexto* ctx, void* ptr, size_t tam_actual, size_t tam_nuevo)
 {
     return pdcrt_realojar_simple(ctx->alojador, ptr, tam_actual, tam_nuevo);
 }
 
-void* pdcrt_alojar_simple(pdcrt_alojador alojador, size_t tam)
+PDCRT_NULL void* pdcrt_alojar_simple(pdcrt_alojador alojador, size_t tam)
 {
     return alojador.alojar(alojador.datos, NULL, 0, tam);
 }
@@ -525,6 +611,14 @@ static void no_falla(pdcrt_error err)
 void pdcrt_op_iconst(pdcrt_marco* marco, int c)
 {
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(c)));
+}
+
+void pdcrt_op_lconst(pdcrt_marco* marco, int c)
+{
+    pdcrt_objeto txt;
+    txt.tag = PDCRT_TOBJ_TEXTO;
+    txt.value.t = marco->contexto->constantes.textos[c];
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, txt));
 }
 
 // Los operadores están invertidos en éstas funciones porque el órden de los
@@ -822,6 +916,12 @@ void pdcrt_op_prn(pdcrt_marco* marco)
         break;
     case PDCRT_TOBJ_FLOAT:
         printf("%f", obj.value.f);
+        break;
+    case PDCRT_TOBJ_TEXTO:
+        for(size_t i = 0; i < obj.value.t->longitud; i++)
+        {
+            printf("%c", obj.value.t->contenido[i]);
+        }
         break;
     default:
         assert(0 && "cannot prn obj");

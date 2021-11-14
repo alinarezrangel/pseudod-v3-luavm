@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 // Marca un puntero que puede ser nulo
 #define PDCRT_NULL
@@ -51,6 +52,20 @@ typedef struct pdcrt_closure
     struct pdcrt_env* env;
 } pdcrt_closure;
 
+typedef void* pdcrt_code_addr;
+
+typedef struct pdcrt_impl_obj
+{
+    pdcrt_code_addr recv;
+    struct pdcrt_env* attrs;
+} pdcrt_impl_obj;
+
+typedef struct pdcrt_texto
+{
+    PDCRT_ARR(longitud) char* contenido;
+    size_t longitud;
+} pdcrt_texto;
+
 typedef struct pdcrt_objeto
 {
     enum pdcrt_tipo_de_objeto
@@ -58,17 +73,22 @@ typedef struct pdcrt_objeto
         PDCRT_TOBJ_ENTERO = 0,
         PDCRT_TOBJ_FLOAT = 1,
         PDCRT_TOBJ_MARCA_DE_PILA = 2,
-        PDCRT_TOBJ_CLOSURE = 3
+        PDCRT_TOBJ_CLOSURE = 3,
+        PDCRT_TOBJ_TEXTO = 4
     } tag;
     union
     {
         int i;
         float f;
         pdcrt_closure c;
+        pdcrt_impl_obj o;
+        pdcrt_texto* t;
     } value;
 } pdcrt_objeto;
 
 typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
+
+typedef int pdcrt_receptor_de_mensajes_f(struct pdcrt_marco* marco, struct pdcrt_impl_obj* yo, pdcrt_objeto msg, int args, int rets);
 
 typedef struct pdcrt_env
 {
@@ -79,6 +99,10 @@ typedef struct pdcrt_env
 pdcrt_error pdcrt_aloj_env(PDCRT_OUT pdcrt_env** env, pdcrt_alojador alojador, size_t env_size);
 void pdcrt_dealoj_env(pdcrt_env* env, pdcrt_alojador alojador);
 
+pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, size_t lon);
+pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, const char* cstr);
+void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto);
+
 const char* pdcrt_tipo_como_texto(pdcrt_tipo_de_objeto tipo);
 
 void pdcrt_objeto_debe_tener_tipo(pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo);
@@ -87,6 +111,9 @@ pdcrt_objeto pdcrt_objeto_entero(int v);
 pdcrt_objeto pdcrt_objeto_float(float v);
 pdcrt_objeto pdcrt_objeto_marca_de_pila(void);
 pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc, size_t env_size, PDCRT_OUT pdcrt_objeto* out);
+pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t lon);
+pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t lon);
+pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, const char* cstr);
 
 bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b);
 bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b);
@@ -106,10 +133,19 @@ pdcrt_objeto pdcrt_cima_de_pila(pdcrt_pila* pila);
 pdcrt_objeto pdcrt_eliminar_elemento_en_pila(pdcrt_pila* pila, size_t n);
 void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, size_t n, pdcrt_objeto obj);
 
+typedef struct pdcrt_constantes
+{
+    size_t num_textos;
+    PDCRT_ARR(num_textos) pdcrt_texto** textos;
+} pdcrt_constantes;
+
+pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto);
+
 typedef struct pdcrt_contexto
 {
     pdcrt_pila pila;
     pdcrt_alojador alojador;
+    pdcrt_constantes constantes;
     bool rastrear_marcos;
 } pdcrt_contexto;
 
@@ -121,12 +157,12 @@ pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador);
 void pdcrt_deinic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador);
 void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra);
 
-void* pdcrt_alojar(pdcrt_contexto* ctx, size_t tam);
+PDCRT_NULL void* pdcrt_alojar(pdcrt_contexto* ctx, size_t tam);
 void pdcrt_dealojar(pdcrt_contexto* ctx, void* ptr, size_t tam);
-void* pdcrt_realojar(pdcrt_contexto* ctx, PDCRT_NULL void* ptr, size_t tam_actual, size_t tam_nuevo);
-void* pdcrt_alojar_simple(pdcrt_alojador alojador, size_t tam);
+PDCRT_NULL void* pdcrt_realojar(pdcrt_contexto* ctx, PDCRT_NULL void* ptr, size_t tam_actual, size_t tam_nuevo);
+PDCRT_NULL void* pdcrt_alojar_simple(pdcrt_alojador alojador, size_t tam);
 void pdcrt_dealojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam);
-void* pdcrt_realojar_simple(pdcrt_alojador alojador, PDCRT_NULL void* ptr, size_t tam_actual, size_t tam_nuevo);
+PDCRT_NULL void* pdcrt_realojar_simple(pdcrt_alojador alojador, PDCRT_NULL void* ptr, size_t tam_actual, size_t tam_nuevo);
 
 void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[]);
 
@@ -194,6 +230,16 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
     }                                               \
     while(0)
 
+#define PDCRT_REGISTRAR_TXTLIT(id, lit)                                 \
+    do                                                                  \
+    {                                                                   \
+        pdcrt_texto* txt;                                               \
+        const char* str = (lit);                                        \
+        pdcrt_aloj_texto_desde_c(&txt, aloj, str);                      \
+        pdcrt_registrar_constante_textual(aloj, &ctx->constantes, id, txt); \
+    }                                                                   \
+    while(0)
+
 #define PDCRT_LOCAL(idx, name)                              \
     pdcrt_fijar_local(marco, idx, pdcrt_objeto_entero(0))
 #define PDCRT_SET_LVAR(idx, val)                \
@@ -236,6 +282,7 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
     PDCRT_PROC(name);
 
 void pdcrt_op_iconst(pdcrt_marco* marco, int c);
+void pdcrt_op_lconst(pdcrt_marco* marco, int c);
 
 void pdcrt_op_sum(pdcrt_marco* marco);
 void pdcrt_op_sub(pdcrt_marco* marco);
