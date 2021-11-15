@@ -14,255 +14,17 @@ const char* pdcrt_perror(pdcrt_error err)
     return errores[err];
 }
 
-pdcrt_error pdcrt_aloj_env(pdcrt_env** env, pdcrt_alojador alojador, size_t env_size)
+static void no_falla(pdcrt_error err)
 {
-    *env = pdcrt_alojar_simple(alojador, sizeof(pdcrt_env) + sizeof(pdcrt_objeto) * env_size);
-    if(!env)
+    if(err != PDCRT_OK)
     {
-        return PDCRT_ENOMEM;
-    }
-    else
-    {
-        (*env)->env_size = env_size;
-        return PDCRT_OK;
-    }
-}
-
-void pdcrt_dealoj_env(pdcrt_env* env, pdcrt_alojador alojador)
-{
-    pdcrt_dealojar_simple(alojador, env, sizeof(pdcrt_env) + sizeof(pdcrt_objeto) * env->env_size);
-}
-
-pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, size_t lon)
-{
-    *texto = pdcrt_alojar_simple(alojador, sizeof(pdcrt_texto));
-    if(*texto == NULL)
-    {
-        return PDCRT_ENOMEM;
-    }
-    (*texto)->contenido = pdcrt_alojar_simple(alojador, sizeof(char) * lon);
-    if((*texto)->contenido == NULL)
-    {
-        pdcrt_dealojar_simple(alojador, *texto, sizeof(pdcrt_texto));
-        return PDCRT_ENOMEM;
-    }
-    (*texto)->longitud = lon;
-    return PDCRT_OK;
-}
-
-pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, const char* cstr)
-{
-    pdcrt_error errc = pdcrt_aloj_texto(texto, alojador, strlen(cstr));
-    if(errc != PDCRT_OK)
-    {
-        return errc;
-    }
-    for(size_t i = 0; cstr[i] != '\0'; i++)
-    {
-        (*texto)->contenido[i] = cstr[i];
-    }
-    return PDCRT_OK;
-}
-
-void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto)
-{
-    pdcrt_dealojar_simple(alojador, texto->contenido, sizeof(char) * texto->longitud);
-    pdcrt_dealojar_simple(alojador, texto, sizeof(pdcrt_texto));
-}
-
-const char* pdcrt_tipo_como_texto(pdcrt_tipo_de_objeto tipo)
-{
-    static const char* const tipos[] =
-        { u8"Entero",
-          u8"Float",
-          u8"Marca de pila",
-          u8"Closure (función)"
-        };
-    return tipos[tipo];
-}
-
-void pdcrt_objeto_debe_tener_tipo(pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo)
-{
-    if(obj.tag != tipo)
-    {
-        fprintf(stderr, u8"Objeto de tipo %s debía tener tipo %s\n", pdcrt_tipo_como_texto(obj.tag), pdcrt_tipo_como_texto(tipo));
+        fprintf(stderr, "Error (que no debia fallar): %s\n", pdcrt_perror(err));
         abort();
     }
 }
 
-pdcrt_objeto pdcrt_objeto_entero(int v)
-{
-    pdcrt_objeto obj;
-    obj.tag = PDCRT_TOBJ_ENTERO;
-    obj.value.i = v;
-    return obj;
-}
 
-pdcrt_objeto pdcrt_objeto_float(float v)
-{
-    pdcrt_objeto obj;
-    obj.tag = PDCRT_TOBJ_FLOAT;
-    obj.value.f = v;
-    return obj;
-}
-
-pdcrt_objeto pdcrt_objeto_marca_de_pila(void)
-{
-    pdcrt_objeto obj;
-    obj.tag = PDCRT_TOBJ_MARCA_DE_PILA;
-    return obj;
-}
-
-pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc, size_t env_size, pdcrt_objeto* obj)
-{
-    obj->tag = PDCRT_TOBJ_CLOSURE;
-    obj->value.c.proc = proc;
-    return pdcrt_aloj_env(&obj->value.c.env, alojador, env_size + PDCRT_NUM_LOCALES_ESP);
-}
-
-pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t lon)
-{
-    obj->tag = PDCRT_TOBJ_TEXTO;
-    return pdcrt_aloj_texto(&obj->value.t, alojador, lon);
-}
-
-pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, const char* cstr)
-{
-    obj->tag = PDCRT_TOBJ_TEXTO;
-    return pdcrt_aloj_texto_desde_c(&obj->value.t, alojador, cstr);
-}
-
-bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b)
-{
-    if(a.tag != b.tag)
-    {
-        return false;
-    }
-    else
-    {
-        switch(a.tag)
-        {
-        case PDCRT_TOBJ_ENTERO:
-            return a.value.i == b.value.i;
-        case PDCRT_TOBJ_FLOAT:
-            return a.value.f == b.value.f;
-        case PDCRT_TOBJ_MARCA_DE_PILA:
-            return true;
-        case PDCRT_TOBJ_CLOSURE:
-            return (a.value.c.proc == b.value.c.proc) && (a.value.c.env == b.value.c.env);
-        case PDCRT_TOBJ_TEXTO:
-            if(a.value.t->longitud != b.value.t->longitud)
-                return false;
-            for(size_t i = 0; i < a.value.t->longitud; i++)
-            {
-                if(a.value.t->contenido[i] != b.value.t->contenido[i])
-                    return false;
-            }
-            return true;
-        default:
-            assert(0);
-        }
-    }
-}
-
-bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b)
-{
-    if(a.tag != b.tag)
-    {
-        return false;
-    }
-    switch(a.tag)
-    {
-    case PDCRT_TOBJ_TEXTO:
-        return a.value.t == b.value.t;
-    default:
-        return pdcrt_objeto_iguales(a, b);
-    }
-}
-
-pdcrt_error pdcrt_inic_pila(pdcrt_pila* pila, pdcrt_alojador alojador)
-{
-    pila->capacidad = 1;
-    pila->num_elementos = 0;
-    pila->elementos = pdcrt_alojar_simple(alojador, sizeof(pdcrt_objeto) * pila->capacidad);
-    if(!pila->elementos)
-    {
-        pila->capacidad = 0;
-        return PDCRT_ENOMEM;
-    }
-    else
-    {
-        return PDCRT_OK;
-    }
-}
-
-void pdcrt_deinic_pila(pdcrt_pila* pila, pdcrt_alojador alojador)
-{
-    pila->capacidad = 0;
-    pila->num_elementos = 0;
-    pdcrt_dealojar_simple(alojador, pila->elementos, sizeof(pdcrt_objeto) * pila->capacidad);
-}
-
-pdcrt_error pdcrt_empujar_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, pdcrt_objeto val)
-{
-    if(pila->num_elementos >= pila->capacidad)
-    {
-        size_t nuevacap = pila->capacidad * 2;
-        pdcrt_objeto* nuevosels = pdcrt_realojar_simple(alojador, pila->elementos, pila->capacidad * sizeof(pdcrt_objeto), nuevacap * sizeof(pdcrt_objeto));
-        if(!nuevosels)
-        {
-            return PDCRT_ENOMEM;
-        }
-        else
-        {
-            pila->elementos = nuevosels;
-            pila->capacidad = nuevacap;
-        }
-    }
-    assert(pila->num_elementos < pila->capacidad);
-    pila->elementos[pila->num_elementos++] = val;
-    return PDCRT_OK;
-}
-
-pdcrt_objeto pdcrt_sacar_de_pila(pdcrt_pila* pila)
-{
-    return pila->elementos[--pila->num_elementos];
-}
-
-pdcrt_objeto pdcrt_cima_de_pila(pdcrt_pila* pila)
-{
-    return pila->elementos[pila->num_elementos - 1];
-}
-
-pdcrt_objeto pdcrt_eliminar_elemento_en_pila(pdcrt_pila* pila, size_t n)
-{
-    // Si pila->num_elementos == 0, entonces el (pila->num_elementos - 1) abajo
-    // calcula 0 - 1 pero con size_t, que no tiene signo. El resultado es que
-    // el número *underflows*.
-    //
-    // Como igual no puedes eliminar un elemento de una pila vacía, es mejor
-    // solo hacer un assert.
-    assert(pila->num_elementos > 0);
-    size_t I = pila->num_elementos - n - 1;
-    pdcrt_objeto r = pila->elementos[I];
-    for(size_t i = I; i < (pila->num_elementos - 1); i++)
-    {
-        pila->elementos[i] = pila->elementos[i + 1];
-    }
-    pila->num_elementos--;
-    return r;
-}
-
-void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, size_t n, pdcrt_objeto obj)
-{
-    pdcrt_empujar_en_pila(pila, alojador, pdcrt_objeto_entero(0));
-    size_t I = pila->num_elementos - n - 1;
-    for(size_t i = pila->num_elementos - 1; i > I; i--)
-    {
-        pila->elementos[i] = pila->elementos[i - 1];
-    }
-    pila->elementos[I] = obj;
-}
+// Los alojadores predeterminados:
 
 static void* pdcrt_alojador_de_malloc_impl(void* datos_del_usuario, void* ptr, size_t tam_viejo, size_t tam_nuevo)
 {
@@ -280,28 +42,6 @@ static void* pdcrt_alojador_de_malloc_impl(void* datos_del_usuario, void* ptr, s
     {
         return realloc(ptr, tam_nuevo);
     }
-}
-
-void pdcrt_inic_constantes(pdcrt_constantes* consts)
-{
-    consts->textos = NULL;
-    consts->num_textos = 0;
-}
-
-pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto)
-{
-    if(idx < consts->num_textos)
-    {
-        consts->textos[idx] = texto;
-    }
-    else
-    {
-        consts->textos = pdcrt_realojar_simple(alojador, consts->textos, consts->num_textos * sizeof(pdcrt_texto*), (consts->num_textos + 1) * sizeof(pdcrt_texto*));
-        assert(consts->textos != NULL);
-        consts->num_textos += 1;
-        consts->textos[idx] = texto;
-    }
-    return PDCRT_OK;
 }
 
 pdcrt_alojador pdcrt_alojador_de_malloc(void)
@@ -388,6 +128,329 @@ void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj)
     free(arena);
 }
 
+
+// Operaciones del alojador:
+
+PDCRT_NULL void* pdcrt_alojar_simple(pdcrt_alojador alojador, size_t tam)
+{
+    return alojador.alojar(alojador.datos, NULL, 0, tam);
+}
+
+void pdcrt_dealojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam)
+{
+    (void) alojador.alojar(alojador.datos, ptr, tam, 0);
+}
+
+void* pdcrt_realojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam_actual, size_t tam_nuevo)
+{
+    return alojador.alojar(alojador.datos, ptr, tam_actual, tam_nuevo);
+}
+
+
+// Textos:
+
+pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, size_t lon)
+{
+    *texto = pdcrt_alojar_simple(alojador, sizeof(pdcrt_texto));
+    if(*texto == NULL)
+    {
+        return PDCRT_ENOMEM;
+    }
+    (*texto)->contenido = pdcrt_alojar_simple(alojador, sizeof(char) * lon);
+    if((*texto)->contenido == NULL)
+    {
+        pdcrt_dealojar_simple(alojador, *texto, sizeof(pdcrt_texto));
+        return PDCRT_ENOMEM;
+    }
+    (*texto)->longitud = lon;
+    return PDCRT_OK;
+}
+
+pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, const char* cstr)
+{
+    pdcrt_error errc = pdcrt_aloj_texto(texto, alojador, strlen(cstr));
+    if(errc != PDCRT_OK)
+    {
+        return errc;
+    }
+    for(size_t i = 0; cstr[i] != '\0'; i++)
+    {
+        (*texto)->contenido[i] = cstr[i];
+    }
+    return PDCRT_OK;
+}
+
+void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto)
+{
+    pdcrt_dealojar_simple(alojador, texto->contenido, sizeof(char) * texto->longitud);
+    pdcrt_dealojar_simple(alojador, texto, sizeof(pdcrt_texto));
+}
+
+
+// Entornos:
+
+pdcrt_error pdcrt_aloj_env(pdcrt_env** env, pdcrt_alojador alojador, size_t env_size)
+{
+    *env = pdcrt_alojar_simple(alojador, sizeof(pdcrt_env) + sizeof(pdcrt_objeto) * env_size);
+    if(!env)
+    {
+        return PDCRT_ENOMEM;
+    }
+    else
+    {
+        (*env)->env_size = env_size;
+        return PDCRT_OK;
+    }
+}
+
+void pdcrt_dealoj_env(pdcrt_env* env, pdcrt_alojador alojador)
+{
+    pdcrt_dealojar_simple(alojador, env, sizeof(pdcrt_env) + sizeof(pdcrt_objeto) * env->env_size);
+}
+
+
+// Objetos:
+
+const char* pdcrt_tipo_como_texto(pdcrt_tipo_de_objeto tipo)
+{
+    static const char* const tipos[] =
+        { u8"Entero",
+          u8"Float",
+          u8"Marca de pila",
+          u8"Closure (función)"
+        };
+    return tipos[tipo];
+}
+
+void pdcrt_objeto_debe_tener_tipo(pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo)
+{
+    if(obj.tag != tipo)
+    {
+        fprintf(stderr, u8"Objeto de tipo %s debía tener tipo %s\n", pdcrt_tipo_como_texto(obj.tag), pdcrt_tipo_como_texto(tipo));
+        abort();
+    }
+}
+
+pdcrt_objeto pdcrt_objeto_entero(int v)
+{
+    pdcrt_objeto obj;
+    obj.tag = PDCRT_TOBJ_ENTERO;
+    obj.value.i = v;
+    return obj;
+}
+
+pdcrt_objeto pdcrt_objeto_float(float v)
+{
+    pdcrt_objeto obj;
+    obj.tag = PDCRT_TOBJ_FLOAT;
+    obj.value.f = v;
+    return obj;
+}
+
+pdcrt_objeto pdcrt_objeto_marca_de_pila(void)
+{
+    pdcrt_objeto obj;
+    obj.tag = PDCRT_TOBJ_MARCA_DE_PILA;
+    return obj;
+}
+
+pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc, size_t env_size, pdcrt_objeto* obj)
+{
+    obj->tag = PDCRT_TOBJ_CLOSURE;
+    obj->value.c.proc = proc;
+    return pdcrt_aloj_env(&obj->value.c.env, alojador, env_size + PDCRT_NUM_LOCALES_ESP);
+}
+
+pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t lon)
+{
+    obj->tag = PDCRT_TOBJ_TEXTO;
+    return pdcrt_aloj_texto(&obj->value.t, alojador, lon);
+}
+
+pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, const char* cstr)
+{
+    obj->tag = PDCRT_TOBJ_TEXTO;
+    return pdcrt_aloj_texto_desde_c(&obj->value.t, alojador, cstr);
+}
+
+
+// Igualdad:
+
+bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b)
+{
+    if(a.tag != b.tag)
+    {
+        return false;
+    }
+    else
+    {
+        switch(a.tag)
+        {
+        case PDCRT_TOBJ_ENTERO:
+            return a.value.i == b.value.i;
+        case PDCRT_TOBJ_FLOAT:
+            return a.value.f == b.value.f;
+        case PDCRT_TOBJ_MARCA_DE_PILA:
+            return true;
+        case PDCRT_TOBJ_CLOSURE:
+            return (a.value.c.proc == b.value.c.proc) && (a.value.c.env == b.value.c.env);
+        case PDCRT_TOBJ_TEXTO:
+            if(a.value.t->longitud != b.value.t->longitud)
+                return false;
+            for(size_t i = 0; i < a.value.t->longitud; i++)
+            {
+                if(a.value.t->contenido[i] != b.value.t->contenido[i])
+                    return false;
+            }
+            return true;
+        default:
+            assert(0);
+        }
+    }
+}
+
+bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b)
+{
+    if(a.tag != b.tag)
+    {
+        return false;
+    }
+    switch(a.tag)
+    {
+    case PDCRT_TOBJ_TEXTO:
+        return a.value.t == b.value.t;
+    default:
+        return pdcrt_objeto_iguales(a, b);
+    }
+}
+
+
+// Pila:
+
+pdcrt_error pdcrt_inic_pila(pdcrt_pila* pila, pdcrt_alojador alojador)
+{
+    pila->capacidad = 1;
+    pila->num_elementos = 0;
+    pila->elementos = pdcrt_alojar_simple(alojador, sizeof(pdcrt_objeto) * pila->capacidad);
+    if(!pila->elementos)
+    {
+        pila->capacidad = 0;
+        return PDCRT_ENOMEM;
+    }
+    else
+    {
+        return PDCRT_OK;
+    }
+}
+
+void pdcrt_deinic_pila(pdcrt_pila* pila, pdcrt_alojador alojador)
+{
+    pila->capacidad = 0;
+    pila->num_elementos = 0;
+    pdcrt_dealojar_simple(alojador, pila->elementos, sizeof(pdcrt_objeto) * pila->capacidad);
+}
+
+pdcrt_error pdcrt_empujar_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, pdcrt_objeto val)
+{
+    if(pila->num_elementos >= pila->capacidad)
+    {
+        size_t nuevacap = pila->capacidad * 2;
+        pdcrt_objeto* nuevosels = pdcrt_realojar_simple(alojador, pila->elementos, pila->capacidad * sizeof(pdcrt_objeto), nuevacap * sizeof(pdcrt_objeto));
+        if(!nuevosels)
+        {
+            return PDCRT_ENOMEM;
+        }
+        else
+        {
+            pila->elementos = nuevosels;
+            pila->capacidad = nuevacap;
+        }
+    }
+    assert(pila->num_elementos < pila->capacidad);
+    pila->elementos[pila->num_elementos++] = val;
+    return PDCRT_OK;
+}
+
+pdcrt_objeto pdcrt_sacar_de_pila(pdcrt_pila* pila)
+{
+    return pila->elementos[--pila->num_elementos];
+}
+
+pdcrt_objeto pdcrt_cima_de_pila(pdcrt_pila* pila)
+{
+    return pila->elementos[pila->num_elementos - 1];
+}
+
+pdcrt_objeto pdcrt_eliminar_elemento_en_pila(pdcrt_pila* pila, size_t n)
+{
+    assert(pila->num_elementos > 0);
+    size_t I = pila->num_elementos - n - 1;
+    pdcrt_objeto r = pila->elementos[I];
+    for(size_t i = I; i < (pila->num_elementos - 1); i++)
+    {
+        pila->elementos[i] = pila->elementos[i + 1];
+    }
+    pila->num_elementos--;
+    return r;
+}
+
+void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, size_t n, pdcrt_objeto obj)
+{
+    pdcrt_empujar_en_pila(pila, alojador, pdcrt_objeto_entero(0));
+    size_t I = pila->num_elementos - n - 1;
+    for(size_t i = pila->num_elementos - 1; i > I; i--)
+    {
+        pila->elementos[i] = pila->elementos[i - 1];
+    }
+    pila->elementos[I] = obj;
+}
+
+
+// Constantes:
+
+void pdcrt_inic_constantes(pdcrt_constantes* consts)
+{
+    consts->textos = NULL;
+    consts->num_textos = 0;
+}
+
+pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto)
+{
+    if(idx < consts->num_textos)
+    {
+        consts->textos[idx] = texto;
+    }
+    else
+    {
+        consts->textos = pdcrt_realojar_simple(alojador, consts->textos, consts->num_textos * sizeof(pdcrt_texto*), (consts->num_textos + 1) * sizeof(pdcrt_texto*));
+        assert(consts->textos != NULL);
+        consts->num_textos += 1;
+        consts->textos[idx] = texto;
+    }
+    return PDCRT_OK;
+}
+
+
+// Alojador en contexto:
+
+PDCRT_NULL void* pdcrt_alojar(pdcrt_contexto* ctx, size_t tam)
+{
+    return pdcrt_alojar_simple(ctx->alojador, tam);
+}
+
+void pdcrt_dealojar(pdcrt_contexto* ctx, void* ptr, size_t tam)
+{
+    return pdcrt_dealojar_simple(ctx->alojador, ptr, tam);
+}
+
+PDCRT_NULL void* pdcrt_realojar(pdcrt_contexto* ctx, void* ptr, size_t tam_actual, size_t tam_nuevo)
+{
+    return pdcrt_realojar_simple(ctx->alojador, ptr, tam_actual, tam_nuevo);
+}
+
+
+// Contexto:
+
 pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
 {
     pdcrt_error pderrno;
@@ -441,37 +504,10 @@ void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra)
     }
 }
 
-PDCRT_NULL void* pdcrt_alojar(pdcrt_contexto* ctx, size_t tam)
-{
-    return pdcrt_alojar_simple(ctx->alojador, tam);
-}
 
-void pdcrt_dealojar(pdcrt_contexto* ctx, void* ptr, size_t tam)
-{
-    return pdcrt_dealojar_simple(ctx->alojador, ptr, tam);
-}
+// Procesar el CLI:
 
-PDCRT_NULL void* pdcrt_realojar(pdcrt_contexto* ctx, void* ptr, size_t tam_actual, size_t tam_nuevo)
-{
-    return pdcrt_realojar_simple(ctx->alojador, ptr, tam_actual, tam_nuevo);
-}
-
-PDCRT_NULL void* pdcrt_alojar_simple(pdcrt_alojador alojador, size_t tam)
-{
-    return alojador.alojar(alojador.datos, NULL, 0, tam);
-}
-
-void pdcrt_dealojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam)
-{
-    (void) alojador.alojar(alojador.datos, ptr, tam, 0);
-}
-
-void* pdcrt_realojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam_actual, size_t tam_nuevo)
-{
-    return alojador.alojar(alojador.datos, ptr, tam_actual, tam_nuevo);
-}
-
-// Perdón. (https://www.chiark.greenend.org.uk/~sgtatham/coroutines.html)
+// Perdón. (<https://www.chiark.greenend.org.uk/~sgtatham/coroutines.html>)
 #define PDCRT_CORO_BEGIN                        \
     static int coro_state = 0;                  \
     switch(coro_state)                          \
@@ -569,6 +605,9 @@ void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[])
     }
 }
 
+
+// Marcos:
+
 pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_t num_locales, PDCRT_NULL pdcrt_marco* marco_anterior)
 {
     size_t num_real_de_locales = num_locales + PDCRT_NUM_LOCALES_ESP;
@@ -604,14 +643,7 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n)
 }
 
 
-static void no_falla(pdcrt_error err)
-{
-    if(err != PDCRT_OK)
-    {
-        fprintf(stderr, "Error (que no debia fallar): %s\n", pdcrt_perror(err));
-        abort();
-    }
-}
+// Opcodes:
 
 void pdcrt_op_iconst(pdcrt_marco* marco, int c)
 {
@@ -626,7 +658,7 @@ void pdcrt_op_lconst(pdcrt_marco* marco, int c)
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, txt));
 }
 
-// Los operadores están invertidos en éstas funciones porque el órden de los
+// Los operandos están invertidos en éstas funciones porque el órden de los
 // objetos a y b también fué invertido por la pila.
 
 #define PDCRT_OP(binop)                                                 \
