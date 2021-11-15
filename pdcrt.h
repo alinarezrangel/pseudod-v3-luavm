@@ -55,21 +55,21 @@ const char* pdcrt_perror(pdcrt_error err);
 // `ptr` debe ser copiado a su nueva dirección. Devuelve `NULL` si no se pudo
 // alojar la memoria, en cuyo caso se asume que `ptr` aún es válido.
 //
-// 3. `alojador(DT, ptr, tam, 0)`: Dealoja `ptr`. Equivalente a `free(ptr)`. Su
-// valor de retorno es ignorado.
+// 3. `alojador(DT, ptr, tam, 0)`: Desaloja `ptr`. Equivalente a
+// `free(ptr)`. Su valor de retorno es ignorado.
 //
 // Este sistema permite representar toda la API `malloc`/`realloc`/`free` como
 // una única función. Nota como a diferencia de estas funciones los usuarios de
 // `pdcrt_func_alojar` mantienen en todo momento registro del tamaño actual del
-// area, lo que te permite ahorrar espacio en metadatos.
+// área, lo que te permite ahorrar espacio en metadatos.
 //
 // En vez de llamar manualmente a `pdcrt_func_alojar`, deberías usar las
 // funciones `pdcrt_alojar_simple`, `pdcrt_dealojar_simple` y
 // `pdcrt_realojar_simple`.
 //
-// P.S. Además de mantener el tamaño actual de todas las areas alojadas, pdcrt
+// P.S. Además de mantener el tamaño actual de todas las áreas alojadas, pdcrt
 // debería también mantener un sistema de run-time-type-information (RTTI) para
-// permitir al proveedor de memoria optimizar ciertos patrónes. Actualmente
+// permitir al proveedor de memoria optimizar ciertos patrones. Actualmente
 // estoy trabajando en diseñar dicha extensión.
 //
 // También notarás como todas las llamadas a `alojador` tienen este argumento
@@ -127,7 +127,7 @@ typedef int (*pdcrt_proc_t)(struct pdcrt_marco* marco, int args, int rets);
 // dentro del `pdcrt_env*`).
 //
 // El comentario de `pdcrt_objeto` tiene más información, pero es muy
-// importante que `env` séa un puntero ya que los valores del entorno son
+// importante que `env` sea un puntero ya que los valores del entorno son
 // mutables.
 typedef struct pdcrt_closure
 {
@@ -187,18 +187,18 @@ void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto);
 // agregarle un campo a este que no sea un puntero es equivalente a si en vez
 // de pasar un puntero a `T` pasases el `T` mismo. El código será equivalente
 // si y solo si nunca modificas `T` ya que las modificaciones a punteros son
-// visibles para todos los demás que poséan también un puntero al mismo objeto,
+// visibles para todos los demás que posean también un puntero al mismo objeto,
 // mientras que modificar un valor en la pila solo te permitirá ver los cambios
-// a tí.
+// a ti.
 //
 // Por esto es que `pdcrt_objeto` contiene campos para un entero y un double:
-// en PseudoD los números son inmutables así que no importa si están a travez
+// en PseudoD los números son inmutables así que no importa si están a través
 // de un puntero o no. Ahora, podrás preguntarte porqué `pdcrt_closure`, que es
-// mutable, no está a travez de un puntero. La respuesta es que la única parte
+// mutable, no está a través de un puntero. La respuesta es que la única parte
 // mutable de `pdcrt_closure` el su `pdcrt_env`. Y de hecho, `pdcrt_env` está a
-// travez de un puntero en `pdcrt_closure`.
+// través de un puntero en `pdcrt_closure`.
 //
-// Otro motivo por el cual los valores en `pdcrt_objeto` están a travez de
+// Otro motivo por el cual los valores en `pdcrt_objeto` están a través de
 // punteros es para "desduplicar" los datos: `pdcrt_texto` es inmutable pero la
 // lista de constantes textuales es compartida, si el programa crea 10
 // referencias al texto `"hola"` entonces estas son 10 referencias al mismo
@@ -251,7 +251,7 @@ typedef struct pdcrt_env
 // Locales especiales.
 //
 // Algunas variables locales de PseudoD son especiales porque se definen en el
-// bytecode como que deben ser distíntas de todas las locales numéricas. Para
+// bytecode como que deben ser distintas de todas las locales numéricas. Para
 // esto, actualmente estoy usando números negativos. Ya que no es posible en C
 // crear un arreglo con índices de -2 a N, el "offset" `PDCRT_NUM_LOCALES_ESP`
 // es agregado a todos los accesos tanto de los entornos (`pdcrt_env`) como de
@@ -307,7 +307,7 @@ pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador 
 pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, const char* cstr);
 
 // Las siguientes funciones implementan los conceptos de igualdad/desigualdad
-// de PseudoD. Te recomiento que veas el "Reporte del lenguaje de programación
+// de PseudoD. Te recomiendo que veas el "Reporte del lenguaje de programación
 // PseudoD", sección "¿Qué es la Igualdad?" para los detalles.
 
 // Determina si dos objetos tienen el mismo valor.
@@ -434,7 +434,7 @@ void pdcrt_fijar_local(pdcrt_marco* marco, pdcrt_local_index n, pdcrt_objeto obj
 pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
 
 
-// Las siguientes macros solo exísten para el compilador. Los usuarios de pdcrt
+// Las siguientes macros solo existen para el compilador. Los usuarios de pdcrt
 // nunca deberían usarlas.
 
 #define PDCRT_MAIN()                            \
