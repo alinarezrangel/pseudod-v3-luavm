@@ -1301,3 +1301,10 @@ void pdcrt_op_nl(pdcrt_marco* marco)
     (void) marco;
     printf("\n");
 }
+
+void pdcrt_op_msg(pdcrt_marco* marco, int cid, int args, int rets)
+{
+    pdcrt_objeto mensaje = pdcrt_objeto_desde_texto(marco->contexto->constantes.textos[cid]);
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    PDCRT_ENVIAR_MENSAJE(marco, obj, mensaje, args, rets);
+}

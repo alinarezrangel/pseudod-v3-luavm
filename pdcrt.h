@@ -713,4 +713,6 @@ void pdcrt_op_mtrue(pdcrt_marco* marco);
 void pdcrt_op_prn(pdcrt_marco* marco);
 void pdcrt_op_nl(pdcrt_marco* marco);
 
+void pdcrt_op_msg(pdcrt_marco* marco, int cid, int args, int rets);
+
 #endif /* PDCRT_H */

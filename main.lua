@@ -658,9 +658,9 @@ function toc.opcodes.CMPNEQ(emit, state, op)
    emit:stmt("pdcrt_op_cmp(marco, PDCRT_CMP_NEQ)")
 end
 
-toc.opschema.MSG = schema "Cx"
+toc.opschema.MSG = schema "Cx, Ua, Ub"
 function toc.opcodes.MSG(emit, state, op)
-   emit:stmt("pdcrt_op_msg(marco, «1:constid»)", op.Cx)
+   emit:stmt("pdcrt_op_msg(marco, «1:constid», «2:int», «3:int»)", op.Cx, op.Ua, op.Ub)
 end
 
 -- Opcodes end.
