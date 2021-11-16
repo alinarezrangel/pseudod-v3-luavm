@@ -464,6 +464,7 @@ typedef struct pdcrt_constantes
     pdcrt_texto* operador_igualA;
     pdcrt_texto* msj_igualA;
     pdcrt_texto* msj_clonar;
+    pdcrt_texto* msj_llamar;
 } pdcrt_constantes;
 
 // Inicializa la lista de constantes.

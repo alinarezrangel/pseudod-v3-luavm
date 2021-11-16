@@ -714,6 +714,7 @@ pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_const
     consts->operador_igualA = NULL;
     consts->msj_igualA = NULL;
     consts->msj_clonar = NULL;
+    consts->msj_llamar = NULL;
     PDCRT_INIC_CONST_TXT(operador_mas, "operador_+");
     PDCRT_INIC_CONST_TXT(operador_menos, "operador_-");
     PDCRT_INIC_CONST_TXT(operador_por, "operador_*");
@@ -725,6 +726,7 @@ pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_const
     PDCRT_INIC_CONST_TXT(operador_igualA, "operador_=");
     PDCRT_INIC_CONST_TXT(msj_igualA, "igualA");
     PDCRT_INIC_CONST_TXT(msj_clonar, "clonar");
+    PDCRT_INIC_CONST_TXT(msj_llamar, "llamar");
 error:
     PDCRT_DEINIC_CONST_TXT(operador_mas);
     PDCRT_DEINIC_CONST_TXT(operador_menos);
@@ -737,6 +739,7 @@ error:
     PDCRT_DEINIC_CONST_TXT(operador_igualA);
     PDCRT_DEINIC_CONST_TXT(msj_igualA);
     PDCRT_DEINIC_CONST_TXT(msj_clonar);
+    PDCRT_DEINIC_CONST_TXT(msj_llamar);
 
 #undef PDCRT_DEINIC_CONST_TXT
 #undef PDCRT_INIC_CONST_TXT
@@ -1174,8 +1177,7 @@ void pdcrt_op_dyncall(pdcrt_marco* marco, int acepta, int devuelve)
 {
     pdcrt_objeto cima = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(cima, PDCRT_TOBJ_CLOSURE);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, cima));
-    (*cima.value.c.proc)(marco, acepta + 1, devuelve);
+    PDCRT_ENVIAR_MENSAJE(marco, cima, pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar), acepta, devuelve);
 }
 
 void pdcrt_op_call(pdcrt_marco* marco, pdcrt_proc_t proc, int acepta, int devuelve)
