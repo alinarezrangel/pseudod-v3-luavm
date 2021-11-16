@@ -997,7 +997,7 @@ void pdcrt_op_lconst(pdcrt_marco* marco, int c)
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, txt));
 }
 
-#define PDCRT_OP(binop)                                                 \
+#define PDCRT_OP(marco, binop)                                          \
     pdcrt_objeto a, b, msj;                                             \
     a = pdcrt_sacar_de_pila(&marco->contexto->pila);                    \
     b = pdcrt_sacar_de_pila(&marco->contexto->pila);                    \
@@ -1005,46 +1005,46 @@ void pdcrt_op_lconst(pdcrt_marco* marco, int c)
     pdcrt_objeto_debe_tener_tipo(b, PDCRT_TOBJ_ENTERO);                 \
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, a)); \
     msj = pdcrt_objeto_desde_texto(marco->contexto->constantes.binop); \
-    (*(pdcrt_recvmsj*)b.recv)(marco, b, msj, 1, 1);
+    PDCRT_ENVIAR_MENSAJE(marco, b, msj, 1, 1);
 
 void pdcrt_op_sum(pdcrt_marco* marco)
 {
-    PDCRT_OP(operador_mas);
+    PDCRT_OP(marco, operador_mas);
 }
 
 void pdcrt_op_sub(pdcrt_marco* marco)
 {
-    PDCRT_OP(operador_menos)
+    PDCRT_OP(marco, operador_menos);
 }
 
 void pdcrt_op_mul(pdcrt_marco* marco)
 {
-    PDCRT_OP(operador_por)
+    PDCRT_OP(marco, operador_por);
 }
 
 void pdcrt_op_div(pdcrt_marco* marco)
 {
-    PDCRT_OP(operador_entre)
+    PDCRT_OP(marco, operador_entre);
 }
 
 void pdcrt_op_gt(pdcrt_marco* marco)
 {
-    PDCRT_OP(operador_mayorQue)
+    PDCRT_OP(marco, operador_mayorQue);
 }
 
 void pdcrt_op_ge(pdcrt_marco* marco)
 {
-    PDCRT_OP(operador_mayorOIgualA)
+    PDCRT_OP(marco, operador_mayorOIgualA);
 }
 
 void pdcrt_op_lt(pdcrt_marco* marco)
 {
-    PDCRT_OP(operador_menorQue)
+    PDCRT_OP(marco, operador_menorQue);
 }
 
 void pdcrt_op_le(pdcrt_marco* marco)
 {
-    PDCRT_OP(operador_menorOIgualA)
+    PDCRT_OP(marco, operador_menorOIgualA);
 }
 
 #undef PDCRT_OP
