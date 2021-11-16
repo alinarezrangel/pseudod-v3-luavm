@@ -237,7 +237,7 @@ pdcrt_objeto pdcrt_objeto_entero(int v)
     pdcrt_objeto obj;
     obj.tag = PDCRT_TOBJ_ENTERO;
     obj.value.i = v;
-    obj.recv = &pdcrt_recv_numero;
+    obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_numero;
     return obj;
 }
 
@@ -246,7 +246,7 @@ pdcrt_objeto pdcrt_objeto_float(float v)
     pdcrt_objeto obj;
     obj.tag = PDCRT_TOBJ_FLOAT;
     obj.value.f = v;
-    obj.recv = &pdcrt_recv_numero;
+    obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_numero;
     return obj;
 }
 
@@ -254,7 +254,7 @@ pdcrt_objeto pdcrt_objeto_marca_de_pila(void)
 {
     pdcrt_objeto obj;
     obj.tag = PDCRT_TOBJ_MARCA_DE_PILA;
-    obj.recv = &pdcrt_recv_texto;
+    obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
     return obj;
 }
 
@@ -262,21 +262,21 @@ pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc
 {
     obj->tag = PDCRT_TOBJ_CLOSURE;
     obj->value.c.proc = proc;
-    obj->recv = &pdcrt_recv_texto;
+    obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
     return pdcrt_aloj_env(&obj->value.c.env, alojador, env_size + PDCRT_NUM_LOCALES_ESP);
 }
 
 pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t lon)
 {
     obj->tag = PDCRT_TOBJ_TEXTO;
-    obj->recv = &pdcrt_recv_texto;
+    obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
     return pdcrt_aloj_texto(&obj->value.t, alojador, lon);
 }
 
 pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, const char* cstr)
 {
     obj->tag = PDCRT_TOBJ_TEXTO;
-    obj->recv = &pdcrt_recv_texto;
+    obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
     return pdcrt_aloj_texto_desde_c(&obj->value.t, alojador, cstr);
 }
 
@@ -284,16 +284,16 @@ pdcrt_objeto pdcrt_objeto_desde_texto(pdcrt_texto* texto)
 {
     pdcrt_objeto obj;
     obj.tag = PDCRT_TOBJ_TEXTO;
-    obj.recv = &pdcrt_recv_texto;
+    obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
     obj.value.t = texto;
     return obj;
 }
 
-pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, pdcrt_receptor_de_mensajes_f recv, size_t num_attrs)
+pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, pdcrt_recvmsj recv, size_t num_attrs)
 {
     obj->tag = PDCRT_TOBJ_OBJETO;
     obj->value.o.recv = recv;
-    obj->recv = &pdcrt_recv_texto;
+    obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
     return pdcrt_aloj_env(&obj->value.o.attrs, alojador, num_attrs);
 }
 
@@ -790,6 +790,10 @@ static int pdcrt_getopt(int argc, char* argv[], const char* opts, char** optarg,
 
 void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[])
 {
+    static bool check = false;
+    assert(!check);
+    check = true;
+
     ctx->rastrear_marcos = false;
     int opt, optind = 1, mostrarAyuda = 0;
     char* optarg = NULL;
@@ -1006,7 +1010,7 @@ void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc
     nuevo_env.tag = PDCRT_TOBJ_CLOSURE;
     nuevo_env.value.c.env = cima.value.c.env;
     nuevo_env.value.c.proc = proc;
-    nuevo_env.recv = &pdcrt_recv_texto;
+    nuevo_env.recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, nuevo_env));
 }
 
@@ -1015,7 +1019,7 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
     pdcrt_objeto clz;
     clz.tag = PDCRT_TOBJ_CLOSURE;
     clz.value.c.proc = proc;
-    clz.recv = &pdcrt_recv_texto;
+    clz.recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
     no_falla(pdcrt_aloj_env(&clz.value.c.env, marco->contexto->alojador, 0));
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
 }

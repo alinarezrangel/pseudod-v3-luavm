@@ -135,11 +135,9 @@ typedef struct pdcrt_closure
     struct pdcrt_env* env;
 } pdcrt_closure;
 
-typedef void* pdcrt_code_addr;
-
 typedef struct pdcrt_impl_obj
 {
-    pdcrt_code_addr recv;
+    void* recv;
     struct pdcrt_env* attrs;
 } pdcrt_impl_obj;
 
@@ -166,6 +164,21 @@ pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador aloja
 pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, const char* cstr);
 // Desaloja un texto.
 void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto);
+
+// Un puntero a función.
+//
+// El estándar de C indica que los punteros a void y los punteros a función no
+// son inter-convertibles. Esto es debido a que C explícitamente soporta
+// arquitecturas en las que el *data-space* y el *code-space* son de distintos
+// tamaños (por ejemplo, algunos sistemas embebidos como los Arduino o los
+// PICs). POSIX prácticamente garantiza que `void*` y los punteros a función
+// son inter-convertibles pero ya que el estándar no lo indica, prefiero evitar
+// problemas con el optimizador.
+//
+// Para esto, utilizaré el tipo `pdcrt_funcion_generica` para representar un
+// puntero a función genérico, mientras que `void*` significará un puntero a
+// datos genérico.
+typedef void (*pdcrt_funcion_generica)(void);
 
 // El tipo `pdcrt_objeto`.
 //
@@ -206,6 +219,45 @@ void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto);
 //
 // Como consecuencia de todo esto, ten mucho cuidado si en algún momento creas
 // un puntero a `pdcrt_objeto`: esto es casi siempre erróneo.
+//
+// # Recibir mensajes #
+//
+// Los objetos pueden recibir mensajes. Notarás que a diferencia de otras
+// implementaciones de lenguajes orientados a objetos, no hay una función
+// "enviar_mensaje(obj, msj, ...)". Gracias a que PseudoD es un compilador y no
+// un intérprete, podemos compilar cada "receptor de mensajes" a su propia
+// función y al llamarlos como "obj.receptor(obj, msj, ...)" la cache de saltos
+// del procesador actuará como la "monomorfización de instrucciones" de una VM
+// tradicional.
+//
+// Para mantener la cache de saltos "limpia", hay que evitar:
+//
+// 1. Envío centralizado de mensajes: siempre escribe `obj.recv(...)`, no crees
+// una función que lo haga por ti. La macro `PDCRT_ENVIAR_MENSAJE` automatiza
+// parte de esto pero el hecho de que es una macro y no una función es muy
+// importante.
+//
+// 2. Funciones centralizadas para múltiples tipos: si tienes una función
+// `hacer_x_en_textos(pdcrt_objeto x)` y una `hacer_y_en_numeros(pdcrt_objeto
+// y)` la cache podrá especializar los saltos a `obj.recv` en estos en base al
+// tipo en tiempo de ejecución. Si en cambio tienes una única
+// `hacer_x_o_y(pdcrt_objeto x)` entonces la cache tendrá que ser compartida
+// para ambos tipos.
+//
+// Finalmente, todo este sistema de abusar la cache de saltos como un sistema
+// de monomorfización de opcodes es **teórico**. No he medido que tanto afecta
+// al código (¡Quizás afecta a los programas de forma negativa!). **Creo** que
+// va a funcionar en base a lo (poco) que sé de los CPUs modernos y al hecho de
+// que es básicamente una versión ligeramente más dinámica de un vtable (y sé
+// que los vtables si tienen las ventajas que he mencionado). Sin embargo, no
+// puedo asegurar que esto funciona hasta que no mida el rendimiento con y sin
+// este sistema de forma exhaustiva.
+//
+// Finalmente, debido a que el tipo de la función a la que `recv` apunta es
+// recursivo y C no permite esto, `recv` está declarado como un puntero a
+// `pdcrt_funcion_generica`, sin embargo, siempre debes convertirlo a un
+// puntero a `pdcrt_recvmsj` antes de usarlo. La macro `PDCRT_CONV_RECV` sirve
+// para esto.
 typedef struct pdcrt_objeto
 {
     enum pdcrt_tipo_de_objeto
@@ -225,13 +277,43 @@ typedef struct pdcrt_objeto
         pdcrt_impl_obj o;
         pdcrt_texto* t;
     } value;
-    void* recv;
+    pdcrt_funcion_generica recv;
 } pdcrt_objeto;
 
 typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
 
-typedef int pdcrt_recvmsj(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msg, int args, int rets);
-typedef int pdcrt_receptor_de_mensajes_f(struct pdcrt_marco* marco, struct pdcrt_impl_obj* yo, pdcrt_objeto msg, int args, int rets);
+// Tipo de las funciones que sirven para recibir mensajes.
+//
+// Algunas notas:
+//
+// 1. Nota como `msj`, el mensaje recibido, es un objeto y no un texto.
+//
+// 2. Tal como las funciones de las closures, estos receptores toman dos
+// parámetros `args` y `rets` indicando el número de argumentos a recibir (en
+// la pila) y el número de valores a devolver (también en la pila). El código
+// que llama a esta función asumirá que esta siempre consumirá `args` valores y
+// devolverá `rets`.
+//
+// 3. El valor de retorno aún no se está usando, pero en un futuro significará
+// lo mismo que en `pdcrt_proc_t`.
+typedef int pdcrt_recvmsj(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+
+// Convierte un puntero a una función genérica `pdcrt_funcion_generica` a un
+// puntero a una función que recibe mensajes `pdcrt_recvmsj`. La implementación
+// de esta macro es pública y puedes usarla libremente en tus programas.
+#define PDCRT_CONV_RECV(recv_gen) ((pdcrt_recvmsj*)(recv_gen))
+
+// Envía un mensaje a un objeto (macro de conveniencia).
+//
+// La implementación de esta macro es pública y puedes usarla libremente en tus
+// programas.
+//
+// Advertencia: esta macro expande `yo` varias veces.
+//
+// `marco`, `msj`, `args` y `rets` deben tener los mismos tipos que sus
+// respectivos parámetros en `pdcrt_recvmsj`. `yo` debe ser un `pdcrt_objeto`.
+#define PDCRT_ENVIAR_MENSAJE(marco, yo, msj, args, rets)    \
+    ((*PDCRT_CONV_RECV((yo).recv))((marco), (yo), (msj), (args), (rets)))
 
 // El entorno de una "closure".
 //
@@ -311,7 +393,7 @@ pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcr
 // Crea un objeto desde un texto.
 pdcrt_objeto pdcrt_objeto_desde_texto(pdcrt_texto* texto);
 // Aloja un objeto "real".
-pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, pdcrt_receptor_de_mensajes_f recv, size_t num_attrs);
+pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, pdcrt_recvmsj recv, size_t num_attrs);
 
 // Las siguientes funciones implementan los conceptos de igualdad/desigualdad
 // de PseudoD. Te recomiendo que veas el "Reporte del lenguaje de programación
