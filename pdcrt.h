@@ -214,7 +214,8 @@ typedef struct pdcrt_objeto
         PDCRT_TOBJ_FLOAT = 1,
         PDCRT_TOBJ_MARCA_DE_PILA = 2,
         PDCRT_TOBJ_CLOSURE = 3,
-        PDCRT_TOBJ_TEXTO = 4
+        PDCRT_TOBJ_TEXTO = 4,
+        PDCRT_TOBJ_OBJETO = 5
     } tag;
     union
     {
@@ -224,10 +225,12 @@ typedef struct pdcrt_objeto
         pdcrt_impl_obj o;
         pdcrt_texto* t;
     } value;
+    void* recv;
 } pdcrt_objeto;
 
 typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
 
+typedef int pdcrt_recvmsj(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msg, int args, int rets);
 typedef int pdcrt_receptor_de_mensajes_f(struct pdcrt_marco* marco, struct pdcrt_impl_obj* yo, pdcrt_objeto msg, int args, int rets);
 
 // El entorno de una "closure".
@@ -305,6 +308,10 @@ pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc
 pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t lon);
 // Aloja un objeto textual. Similar a `pdcrt_aloj_texto_desde_c`.
 pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, const char* cstr);
+// Crea un objeto desde un texto.
+pdcrt_objeto pdcrt_objeto_desde_texto(pdcrt_texto* texto);
+// Aloja un objeto "real".
+pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, pdcrt_receptor_de_mensajes_f recv, size_t num_attrs);
 
 // Las siguientes funciones implementan los conceptos de igualdad/desigualdad
 // de PseudoD. Te recomiendo que veas el "Reporte del lenguaje de programación
@@ -315,11 +322,18 @@ bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b);
 // Determina si `a` y `b` son el mismo objeto.
 bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b);
 
+
+// Receptores de mensajes:
+int pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msg, int args, int rets);
+int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msg, int args, int rets);
+int pdcrt_recv_procedimiento(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msg, int args, int rets);
+
+
 // La pila de valores.
 //
 // Implementada como un "arreglo dinámico" clásico (con
 // capacidad+tamaño+elementos para garantizar que agregar elementos a la pila
-// es O(1)), actualmente la capacidad de la pila nunca disminuye lo que
+// es O(1)). Actualmente la capacidad de la pila nunca disminuye lo que
 // significa que los programas en PseudoD no son muy eficientes con la memoria
 // por ahora.
 typedef struct pdcrt_pila
@@ -354,10 +368,22 @@ typedef struct pdcrt_constantes
 {
     size_t num_textos;
     PDCRT_ARR(num_textos) pdcrt_texto** textos;
+
+    pdcrt_texto* operador_mas;
+    pdcrt_texto* operador_menos;
+    pdcrt_texto* operador_por;
+    pdcrt_texto* operador_entre;
+    pdcrt_texto* operador_menorQue;
+    pdcrt_texto* operador_menorOIgualA;
+    pdcrt_texto* operador_mayorQue;
+    pdcrt_texto* operador_mayorOIgualA;
+    pdcrt_texto* operador_igualA;
+    pdcrt_texto* msj_igualA;
+    pdcrt_texto* msj_clonar;
 } pdcrt_constantes;
 
 // Inicializa la lista de constantes.
-void pdcrt_inic_constantes(pdcrt_constantes* consts);
+pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_constantes* consts);
 // Registra una constante textual en la lista. La lista es expandida en la
 // medida necesaria para que la operación funcione.
 pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto);
