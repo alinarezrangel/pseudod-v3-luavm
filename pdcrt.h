@@ -406,9 +406,11 @@ bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b);
 
 
 // Receptores de mensajes:
-int pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msg, int args, int rets);
-int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msg, int args, int rets);
-int pdcrt_recv_procedimiento(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msg, int args, int rets);
+
+int pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+int pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+int pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 
 // La pila de valores.
