@@ -23,6 +23,13 @@ implementación (sin terminar) de dicha máquina virtual.
 `make` debería crear un programa `sample` en el directorio actual. Este
 programa es el compilado del programa embebido en `main.lua`.
 
+La variable del makefile `RTOPTS` contiene algunas opciones del
+runtime. Actualmente las únicas existentes son:
+
+- `PDCRT_OPT_GNU` (valor predeterminado: `1`). Si el sistema para el que se
+  está compilando es un sistema GNU. Nota que el predeterminado es 1 y puede
+  que tengas que cambiarlo para compilar pdcrt en tu sistema operativo.
+
 ## Documentación ##
 
 Nada está documentado por ahora.
