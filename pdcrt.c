@@ -1252,17 +1252,11 @@ void pdcrt_op_cmp(pdcrt_marco* marco, pdcrt_cmp cmp)
     pdcrt_objeto a, b;
     a = pdcrt_sacar_de_pila(&marco->contexto->pila);
     b = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    if(cmp == PDCRT_CMP_EQ)
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, b));
+    PDCRT_ENVIAR_MENSAJE(marco, a, pdcrt_objeto_desde_texto(marco->contexto->constantes.operador_igualA), 1, 1);
+    if(cmp != PDCRT_CMP_EQ)
     {
-        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila,
-                                       marco->contexto->alojador,
-                                       pdcrt_objeto_entero(pdcrt_objeto_iguales(a, b))));
-    }
-    else
-    {
-        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila,
-                                       marco->contexto->alojador,
-                                       pdcrt_objeto_entero(!pdcrt_objeto_iguales(a, b))));
+        pdcrt_op_not(marco);
     }
 }
 
