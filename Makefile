@@ -1,6 +1,7 @@
 LUA=lua5.4
 CC=gcc
-CFLAGS=-std=c18 -Wall -g -O0 -fsanitize=address -fsanitize=undefined -march=native
+RTOPTS=-DPDCRT_OPT_GNU=1
+CFLAGS=-std=c18 -Wall -g -O0 -fsanitize=address -fsanitize=undefined -march=native $(RTOPTS)
 CLIBS=-L. -lpdcrt
 
 

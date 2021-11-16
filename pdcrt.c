@@ -3,6 +3,11 @@
 #include <assert.h>
 #include <math.h>
 
+#ifdef PDCRT_OPT_GNU
+#include <malloc.h>
+#define PDCRT_MALLOC_SIZE(ptr) malloc_usable_size(ptr)
+#endif
+
 
 const char* pdcrt_perror(pdcrt_error err)
 {
@@ -120,6 +125,24 @@ pdcrt_error pdcrt_aloj_alojador_de_arena(pdcrt_alojador* aloj)
 void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj)
 {
     pdcrt_alojador_de_arena* arena = aloj.datos;
+#ifdef PDCRT_MALLOC_SIZE
+    size_t total = 0, maxaloj = 0;
+    for(size_t i = 0; i < arena->num_punteros; i++)
+    {
+        size_t tam = PDCRT_MALLOC_SIZE(arena->punteros[i]);
+        total += tam;
+        if(tam > maxaloj)
+        {
+            maxaloj = tam;
+        }
+    }
+    printf(u8"Desalojando alojador de arena: %zd elementos, %zd bytes en total, máxima alojación de %zd bytes.\n", arena->num_punteros, total, maxaloj);
+    printf(u8"  Total de %zd bytes, %zd KiB, %zd MiB\n", total, total / 1024, (total / 1024) / 1024);
+    printf(u8"  Máxima alojación de %zd bytes, %zd KiB, %zd MiB\n", maxaloj, maxaloj / 1024, (maxaloj / 1024) / 1024);
+#else
+    printf(u8"Desalojando alojador de arena: %zd elementos\n", arena->num_punteros);
+    printf(u8"  Advertencia: no se pudo solicitar el tamaño en bytes de los elementos\n");
+#endif
     for(size_t i = 0; i < arena->num_punteros; i++)
     {
         free(arena->punteros[i]);
