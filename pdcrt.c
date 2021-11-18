@@ -127,6 +127,8 @@ void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj)
     pdcrt_alojador_de_arena* arena = aloj.datos;
 #ifdef PDCRT_MALLOC_SIZE
     size_t total = 0, maxaloj = 0;
+    int cant_alojaciones_por_desvstd[3] = {0, 0, 0};
+    double tamprom = 0, var = 0, desvstd = 0;
     for(size_t i = 0; i < arena->num_punteros; i++)
     {
         size_t tam = PDCRT_MALLOC_SIZE(arena->punteros[i]);
@@ -136,9 +138,37 @@ void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj)
             maxaloj = tam;
         }
     }
+    tamprom = ((double) total) / ((double) arena->num_punteros);
+    for(size_t i = 0; i < arena->num_punteros; i++)
+    {
+        size_t tam = PDCRT_MALLOC_SIZE(arena->punteros[i]);
+        var += (tam - tamprom) * (tam - tamprom);
+    }
+    var /= arena->num_punteros;
+    desvstd = sqrt(var);
+    for(size_t i = 0; i < arena->num_punteros; i++)
+    {
+        size_t tam = PDCRT_MALLOC_SIZE(arena->punteros[i]);
+        double delta = abs(((double) tam) - tamprom);
+        double ind = delta / desvstd;
+        if(ind <= 1)
+            cant_alojaciones_por_desvstd[0]++;
+        else if(ind <= 2)
+            cant_alojaciones_por_desvstd[1]++;
+        else
+            cant_alojaciones_por_desvstd[2]++;
+    }
     printf(u8"Desalojando alojador de arena: %zd elementos, %zd bytes en total, máxima alojación de %zd bytes.\n", arena->num_punteros, total, maxaloj);
     printf(u8"  Total de %zd bytes, %zd KiB, %zd MiB\n", total, total / 1024, (total / 1024) / 1024);
-    printf(u8"  Máxima alojación de %zd bytes, %zd KiB, %zd MiB\n", maxaloj, maxaloj / 1024, (maxaloj / 1024) / 1024);
+    printf(u8"  Máxima alojación de %zd bytes, %zd KiB, %zd MiB\n\n", maxaloj, maxaloj / 1024, (maxaloj / 1024) / 1024);
+
+    printf(u8"  Tamaño promedio: %.2F bytes / %zd bytes\n", tamprom, (size_t) tamprom);
+    printf(u8"  Varianza: %.2F bytes / %zd bytes\n", var, (size_t) var);
+    printf(u8"  Desviación estándar: %.2F bytes / %zd bytes\n\n", desvstd, (size_t) desvstd);
+
+    printf(u8"  %d alojaciones (%.2F%%) tienen 1 desv. std. o menos\n", cant_alojaciones_por_desvstd[0], 100 * (((double)cant_alojaciones_por_desvstd[0]) / ((double)arena->num_punteros)));
+    printf(u8"  %d alojaciones (%.2F%%) tienen más de 1 y menos de 2 desv. std.\n", cant_alojaciones_por_desvstd[1], 100 * (((double)cant_alojaciones_por_desvstd[1]) / ((double)arena->num_punteros)));
+    printf(u8"  %d alojaciones (%.2F%%) tienen más de 2 desv. std.\n", cant_alojaciones_por_desvstd[2], 100 * (((double)cant_alojaciones_por_desvstd[2]) / ((double)arena->num_punteros)));
 #else
     printf(u8"Desalojando alojador de arena: %zd elementos\n", arena->num_punteros);
     printf(u8"  Advertencia: no se pudo solicitar el tamaño en bytes de los elementos\n");
