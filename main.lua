@@ -73,7 +73,7 @@ program <- {| '' -> 'program' ws version (rs platform)? (rs section)* ws |} {}
 s <- %s / comment
 ws <- s*
 rs <- s+
-comment <- ";" [^%nl]*
+comment <- ";" [^%nl]* / "--" [^%nl]*
 
 str <- {| {:str: '"' {(escape / [^%nl"])*} '"' :} |}
 escape <- "\" ([qntr0b] / "u" [0-9a-fA-F]^10)
