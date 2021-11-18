@@ -1,0 +1,102 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+-- Funciones "is_even?" e "is_odd?" cortesía del ejemplo en C en la sección
+-- "Computer functions", "Basic examples" de Wikipedia
+-- (https://en.wikipedia.org/wiki/Mutual_recursion)
+
+SECTION "code"
+  LOCAL 0
+  LOCAL 1
+  OPNFRM EACT, NIL, 2
+  EINIT EACT, 0, 0
+  EINIT EACT, 1, 1
+  CLSFRM EACT
+  MKCLZ EACT, 0
+  LSETC EACT, 0, 0
+  MKCLZ EACT, 1
+  LSETC EACT, 0, 1
+
+  ICONST 5
+  LGETC EACT, 0, 0
+  DYNCALL 1, 1
+  PRN
+  NL
+
+  ICONST 7
+  LGETC EACT, 0, 1
+  DYNCALL 1, 1
+  PRN
+  NL
+
+  ICONST 2
+  LGETC EACT, 0, 0
+  DYNCALL 1, 1
+  PRN
+  NL
+
+  ICONST 8
+  LGETC EACT, 0, 1
+  DYNCALL 1, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+  PROC 0
+    PARAM ESUP
+    PARAM 0
+    OPNFRM EACT, ESUP, 0
+    CLSFRM EACT
+
+    LGET 0
+    ICONST 0
+    GE
+    MTRUE
+
+    LGET 0
+    ICONST 0
+    CMPEQ
+    CHOOSE 1, 2
+    NAME 1
+    ICONST 1
+    RETN 1
+    NAME 2
+    LGET 0
+    ICONST 1
+    SUB
+    LGETC EACT, 1, 1
+    DYNCALL 1, 1
+    RETN 1
+  ENDPROC
+
+  PROC 1
+    PARAM ESUP
+    PARAM 0
+    OPNFRM EACT, ESUP, 0
+    CLSFRM EACT
+
+    LGET 0
+    ICONST 0
+    GE
+    MTRUE
+
+    LGET 0
+    ICONST 0
+    CMPEQ
+    CHOOSE 1, 2
+    NAME 1
+    ICONST 0
+    RETN 1
+    NAME 2
+    LGET 0
+    ICONST 1
+    SUB
+    LGETC EACT, 1, 0
+    DYNCALL 1, 1
+    RETN 1
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+ENDSECTION

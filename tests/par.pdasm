@@ -1,0 +1,96 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  LOCAL 1
+  MK0CLZ 0
+  LSET 0
+  MK0CLZ 1
+  LSET 1
+  ICONST 5
+  LGET 0
+  DYNCALL 1, 1
+  PRN
+  NL
+  ICONST 8
+  LGET 1
+  DYNCALL 1, 1
+  PRN
+  NL
+  ICONST 2
+  LGET 0
+  DYNCALL 1, 1
+  PRN
+  NL
+  ICONST 11
+  LGET 1
+  DYNCALL 1, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+  PROC 0 -- EsPar: x
+    PARAM ESUP
+    PARAM 0
+
+    -- necesitas x >= 0
+    LGET 0
+    ICONST 0
+    GE
+    MTRUE
+
+    -- si x = 0
+    LGET 0
+    ICONST 0
+    CMPEQ
+    CHOOSE 1, 2
+    NAME 1
+    -- devolver 1
+    ICONST 1
+    RETN 1
+    NAME 2
+    -- devolver no EsPar: (x - 1)
+    LGET 0
+    ICONST 1
+    SUB
+    MK0CLZ 0
+    DYNCALL 1, 1
+    NOT
+    RETN 1
+  ENDPROC
+
+  PROC 1 -- EsImpar: x
+    PARAM ESUP
+    PARAM 0
+
+    -- necesitas x >= 1
+    LGET 0
+    ICONST 1
+    GE
+    MTRUE
+
+    -- si x = 1
+    LGET 0
+    ICONST 1
+    CMPEQ
+    CHOOSE 1, 2
+    NAME 1
+    -- devolver 1
+    ICONST 1
+    RETN 1
+    NAME 2
+    -- devolver no EsImpar: (x - 1)
+    LGET 0
+    ICONST 1
+    SUB
+    MK0CLZ 1
+    DYNCALL 1, 1
+    NOT
+    RETN 1
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+ENDSECTION
