@@ -740,16 +740,19 @@ local function checklocals(tp, body)
    local base = 0
    if tp == "proc" then
       for i = 1, #body.params do
-         if body.params[i][2] ~= (i - 1) then
-            warnabout("increasing_locals", "non-increasing parameter ID")
+         if type(body.params[i][2]) ~= "table" then
+            if body.params[i][2] ~= base then
+               warnabout("increasing_locals", "non-increasing parameter ID: %s", body.params[i][2])
+            end
+            base = base + 1
          end
       end
-      base = #body.params
    end
    for i = 1, #body.locals do
-      if body.locals[i][2] ~= (i + base - 1) then
-         warnabout("increasing_locals", "non-increasing local ID")
+      if body.locals[i][2] ~= base then
+         warnabout("increasing_locals", "non-increasing local ID: %s", body.locals[i][2])
       end
+      base = base + 1
    end
 end
 
