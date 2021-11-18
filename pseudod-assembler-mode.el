@@ -145,9 +145,9 @@ indentation (or a bigger indentation) then extra tabs are added."
 
 (defvar pseudod-assembler-mode-syntax-table
   (let ((st (make-syntax-table prog-mode-syntax-table)))
-    (modify-syntax-entry ?- ". 12")
-    (modify-syntax-entry ?\n ">")
-    (modify-syntax-entry ?\" "\"")
+    (modify-syntax-entry ?- ". 12" st)
+    (modify-syntax-entry ?\n ">" st)
+    (modify-syntax-entry ?\" "\"" st)
     (modify-syntax-entry ?, "." st)
     (modify-syntax-entry ?_ "w" st)
     st)
