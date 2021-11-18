@@ -246,6 +246,27 @@ void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto)
     pdcrt_dealojar_simple(alojador, texto, sizeof(pdcrt_texto));
 }
 
+static void pdcrt_escribir_texto(pdcrt_texto* texto)
+{
+    for(size_t i = 0; i < texto->longitud; i++)
+    {
+        printf("%c", texto->contenido[i]);
+    }
+}
+
+static void pdcrt_escribir_texto_max(pdcrt_texto* texto, size_t max)
+{
+    size_t i = 0;
+    for(; i < texto->longitud && (i + 3) < max; i++)
+    {
+        printf("%c", texto->contenido[i]);
+    }
+    if(i < texto->longitud)
+    {
+        printf("...");
+    }
+}
+
 
 // Entornos:
 
@@ -554,7 +575,7 @@ int pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto m
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
         return 0;
     }
-    else if((pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0) || (pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0))
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
     {
         assert((args == 1) && (rets == 1));
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
@@ -579,13 +600,59 @@ int pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto m
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(r)));
         return 0;
     }
-    /* else if(pdcrt_texto_cmp_lit(msj.value.t, "") == 0) */
-    /* { */
-    /*     // */
-    /* } */
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "piso") == 0)
+    {
+        assert((args == 0) && (rets == 1));
+        float r;
+        switch(yo.tag)
+        {
+        case PDCRT_TOBJ_ENTERO:
+            r = yo.value.i;
+            break;
+        case PDCRT_TOBJ_FLOAT:
+            r = yo.value.f;
+            break;
+        default:
+            assert(0);
+        }
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(floor(r))));
+        return 0;
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "techo") == 0)
+    {
+        assert((args == 0) && (rets == 1));
+        float r;
+        switch(yo.tag)
+        {
+        case PDCRT_TOBJ_ENTERO:
+            r = yo.value.i;
+            break;
+        case PDCRT_TOBJ_FLOAT:
+            r = yo.value.f;
+            break;
+        default:
+            assert(0);
+        }
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(ceil(r))));
+        return 0;
+    }
     else
     {
-        printf("mensaje no entendido\n");
+        printf("Mensaje ");
+        pdcrt_escribir_texto(msj.value.t);
+        printf(" no entendido para el número ");
+        switch(yo.tag)
+        {
+        case PDCRT_TOBJ_ENTERO:
+            printf("%d", yo.value.i);
+            break;
+        case PDCRT_TOBJ_FLOAT:
+            printf("%f", yo.value.f);
+            break;
+        default:
+            assert(0);
+        }
+        printf("\n");
         abort();
     }
 
@@ -602,9 +669,119 @@ int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto ms
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(yo.value.t->longitud)));
         return 0;
     }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
+    {
+        assert((args == 0) && (rets == 1));
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        return 0;
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "comoNumeroEntero") == 0)
+    {
+        assert((args == 0) && (rets == 1));
+        int r = 0;
+        for(size_t i = 0; i < yo.value.t->longitud; i++)
+        {
+            r *= 10;
+            char c = yo.value.t->contenido[i];
+            if(c == '-' || c == '+')
+            {
+                assert(i == 0);
+                if(c == '-')
+                {
+                    r = -r;
+                }
+                break;
+            }
+            else
+            {
+                assert(c >= '0' && c <= '9');
+                r += c - '0';
+            }
+        }
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(r)));
+        return 0;
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "comoNumeroReal") == 0)
+    {
+        assert((args == 0) && (rets == 1));
+        float r = 0;
+        char* punto_decimal = &yo.value.t->contenido[yo.value.t->longitud - 1];
+        for(size_t i = 0; i < yo.value.t->longitud; i++)
+        {
+            if(yo.value.t->contenido[i] == '.')
+            {
+                punto_decimal = &yo.value.t->contenido[i];
+                break;
+            }
+        }
+        for(char* p = punto_decimal; p >= yo.value.t->contenido; p--)
+        {
+            r *= 10;
+            char c = *p;
+            if(c == '-' || c == '+')
+            {
+                assert(p == yo.value.t->contenido);
+                if(c == '-')
+                {
+                    r = -r;
+                }
+                break;
+            }
+            else
+            {
+                assert(c >= '0' && c <= '9');
+                r += c - '0';
+            }
+        }
+        float fp = 0;
+        for(char* p = yo.value.t->contenido; p > punto_decimal; p--)
+        {
+            fp /= 10;
+            char c = *p;
+            if(c == '-' || c == '+')
+            {
+                assert(p == yo.value.t->contenido);
+                if(c == '-')
+                {
+                    r = -r;
+                }
+                break;
+            }
+            else
+            {
+                assert(c >= '0' && c <= '9');
+                fp += ((float) (c - '0')) / 10.0;
+            }
+        }
+        r += fp;
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_float(r)));
+        return 0;
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "") == 0)
+    {
+        assert((args == 0) && (rets == 1));
+        //
+        return 0;
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "") == 0)
+    {
+        assert((args == 0) && (rets == 1));
+        //
+        return 0;
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "") == 0)
+    {
+        assert((args == 0) && (rets == 1));
+        //
+        return 0;
+    }
     else
     {
-        printf("mensaje no entendido\n");
+        printf("Mensaje ");
+        pdcrt_escribir_texto(msj.value.t);
+        printf(" no entendido para el texto ");
+        pdcrt_escribir_texto_max(yo.value.t, 30);
+        printf("\n");
         abort();
     }
 

@@ -819,23 +819,30 @@ PDVM 1.0
 PLATFORM "pdcrt"
 
 SECTION "code"
-  LOCAL 0
-  OPNFRM EACT, NIL, 1
-  EINIT EACT, 0, 0
-  CLSFRM EACT
-  MKCLZ EACT, 1
-  LSETC EACT, 0, 0
-  LGETC EACT, 0, 0
-  ICONST 20
-  ROT 1
-  DYNCALL 1, 1
-  ROT 0
-  MSG 0, 0, 1
+  LCONST 1
+  MSG 2, 0, 1
   PRN
   NL
 ENDSECTION
 
 SECTION "procedures"
+  PROC 0
+    LOCAL 0
+    OPNFRM EACT, NIL, 1
+    EINIT EACT, 0, 0
+    CLSFRM EACT
+    MKCLZ EACT, 1
+    LSETC EACT, 0, 0
+    LGETC EACT, 0, 0
+    ICONST 20
+    ROT 1
+    DYNCALL 1, 1
+    ROT 0
+    MSG 0, 0, 1
+    PRN
+    NL
+  ENDPROC
+
   PROC 1
     PARAM ESUP
     PARAM 0
@@ -870,6 +877,8 @@ ENDSECTION
 
 SECTION "constant pool"
   #0 STRING "comoTexto"
+  #1 STRING "6"
+  #2 STRING "comoNumeroEntero"
 ENDSECTION
 
 ]=]
