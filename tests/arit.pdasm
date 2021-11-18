@@ -1,0 +1,20 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  ICONST 5
+  ICONST 7
+  ICONST 2
+  MUL
+  ICONST 1
+  SUM
+  SUM
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+ENDSECTION
+
+SECTION "constant pool"
+ENDSECTION

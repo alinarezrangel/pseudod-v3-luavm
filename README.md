@@ -30,6 +30,11 @@ runtime. Actualmente las únicas existentes son:
   está compilando es un sistema GNU. Nota que el predeterminado es 1 y puede
   que tengas que cambiarlo para compilar pdcrt en tu sistema operativo.
 
+## Ejecutar pruebas ##
+
+El programa `./run-tests.sh` ejecutará todas las pruebas. `./run.sh` es un
+script de ayuda para el anterior.
+
 ## Documentación ##
 
 Nada está documentado por ahora.
