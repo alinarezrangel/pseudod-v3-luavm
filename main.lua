@@ -921,6 +921,7 @@ end
 
 local parser = makeparsecli {
    {"o", "output", 1, "Archivo en el cual guardar la salida."},
+   {"O", "stdout", 0, "Escribe el compilado a la salida estándar."},
    {"h", "help", 0, "Muestra esta ayuda y termina."},
    {"v", "version", 0, "Muestra la versión del ensamblador"},
    {"V", "verbose", 0, "Muestra salida adicional."},
@@ -986,7 +987,7 @@ else
    assert(type(res[1]) == "string", "se esperaba un archivo de entrada")
    compiled = main(readall(res[1]), config)
 end
-if res.output then
+if not res.stdout and res.output then
    writeto(res.output, compiled)
 else
    print(compiled)
