@@ -125,6 +125,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "SUM" / "SUB"
     / "POP" / "CHOOSE" / "JMP" / "NAME"
     / "MTRUE" / "CMPEQ" / "CMPNEQ" / "NOT"
     / "ROT" / "GT" / "LT" / "GE" / "LE"
+    / "MSG"
     / "PRN" / "NL"
 
 procsec <- {| '' -> 'procedures_section'
@@ -660,7 +661,7 @@ end
 
 toc.opschema.MSG = schema "Cx, Ua, Ub"
 function toc.opcodes.MSG(emit, state, op)
-   emit:stmt("pdcrt_op_msg(marco, «1:constid», «2:int», «3:int»)", op.Cx, op.Ua, op.Ub)
+   emit:stmt("pdcrt_op_msg(marco, «1:int», «2:int», «3:int»)", op.Cx, op.Ua, op.Ub)
 end
 
 -- Opcodes end.
@@ -822,15 +823,14 @@ SECTION "code"
   OPNFRM EACT, NIL, 1
   EINIT EACT, 0, 0
   CLSFRM EACT
-  LCONST 0
-  PRN
-  NL
   MKCLZ EACT, 1
   LSETC EACT, 0, 0
   LGETC EACT, 0, 0
-  ICONST 13
+  ICONST 20
   ROT 1
   DYNCALL 1, 1
+  ROT 0
+  MSG 0, 0, 1
   PRN
   NL
 ENDSECTION
@@ -846,30 +846,30 @@ SECTION "procedures"
     LT
     CHOOSE 1, 2
     NAME 1
-      ICONST 1
-      RETN 1
-      JMP 3
+    ICONST 1
+    RETN 1
+    JMP 3
     NAME 2
-      LGETC EACT, 1, 0
-      LGET 0
-      ICONST 1
-      SUB
-      ROT 1
-      DYNCALL 1, 1
-      LGETC EACT, 1, 0
-      LGET 0
-      ICONST 2
-      SUB
-      ROT 1
-      DYNCALL 1, 1
-      SUM
-      RETN 1
+    LGETC EACT, 1, 0
+    LGET 0
+    ICONST 1
+    SUB
+    ROT 1
+    DYNCALL 1, 1
+    LGETC EACT, 1, 0
+    LGET 0
+    ICONST 2
+    SUB
+    ROT 1
+    DYNCALL 1, 1
+    SUM
+    RETN 1
     NAME 3
   ENDPROC
 ENDSECTION
 
 SECTION "constant pool"
-  #0 STRING "module"
+  #0 STRING "comoTexto"
 ENDSECTION
 
 ]=]
