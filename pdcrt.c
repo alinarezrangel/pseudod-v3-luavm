@@ -335,7 +335,7 @@ pdcrt_objeto pdcrt_objeto_marca_de_pila(void)
 {
     pdcrt_objeto obj;
     obj.tag = PDCRT_TOBJ_MARCA_DE_PILA;
-    obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
+    obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_marca_de_pila;
     return obj;
 }
 
@@ -374,7 +374,7 @@ pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador
 {
     obj->tag = PDCRT_TOBJ_OBJETO;
     obj->value.o.recv = recv;
-    obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
+    obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_marca_de_pila;
     return pdcrt_aloj_env(&obj->value.o.attrs, alojador, num_attrs);
 }
 
