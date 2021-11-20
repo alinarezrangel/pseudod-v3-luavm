@@ -969,7 +969,8 @@ pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_con
     }
     else
     {
-        consts->textos = pdcrt_realojar_simple(alojador, consts->textos, consts->num_textos * sizeof(pdcrt_texto*), (consts->num_textos + 1) * sizeof(pdcrt_texto*));
+        size_t nuevo_tam = idx >= consts->num_textos ? (idx + 1) : (consts->num_textos + 1);
+        consts->textos = pdcrt_realojar_simple(alojador, consts->textos, consts->num_textos * sizeof(pdcrt_texto*), nuevo_tam * sizeof(pdcrt_texto*));
         assert(consts->textos != NULL);
         consts->num_textos += 1;
         consts->textos[idx] = texto;
