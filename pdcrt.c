@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <math.h>
+#include <errno.h>
 
 #ifdef PDCRT_OPT_GNU
 #include <malloc.h>
@@ -678,82 +679,36 @@ int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto ms
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoNumeroEntero") == 0)
     {
         assert((args == 0) && (rets == 1));
-        int r = 0;
-        for(size_t i = 0; i < yo.value.t->longitud; i++)
+        char* buff = pdcrt_alojar_simple(marco->contexto->alojador, yo.value.t->longitud + 1);
+        assert(buff != NULL);
+        memcpy(buff, yo.value.t->contenido, yo.value.t->longitud);
+        buff[yo.value.t->longitud] = '\0';
+        errno = 0;
+        int r = strtol(buff, NULL, 10);
+        if(errno != 0)
         {
-            r *= 10;
-            char c = yo.value.t->contenido[i];
-            if(c == '-' || c == '+')
-            {
-                assert(i == 0);
-                if(c == '-')
-                {
-                    r = -r;
-                }
-                break;
-            }
-            else
-            {
-                assert(c >= '0' && c <= '9');
-                r += c - '0';
-            }
+            perror("strtol");
+            abort();
         }
+        pdcrt_dealojar_simple(marco->contexto->alojador, buff, yo.value.t->longitud + 1);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(r)));
         return 0;
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoNumeroReal") == 0)
     {
         assert((args == 0) && (rets == 1));
-        float r = 0;
-        char* punto_decimal = &yo.value.t->contenido[yo.value.t->longitud - 1];
-        for(size_t i = 0; i < yo.value.t->longitud; i++)
+        char* buff = pdcrt_alojar_simple(marco->contexto->alojador, yo.value.t->longitud + 1);
+        assert(buff != NULL);
+        memcpy(buff, yo.value.t->contenido, yo.value.t->longitud);
+        buff[yo.value.t->longitud] = '\0';
+        errno = 0;
+        float r = strtof(buff, NULL);
+        if(errno != 0)
         {
-            if(yo.value.t->contenido[i] == '.')
-            {
-                punto_decimal = &yo.value.t->contenido[i];
-                break;
-            }
+            perror("strtof");
+            abort();
         }
-        for(char* p = punto_decimal; p >= yo.value.t->contenido; p--)
-        {
-            r *= 10;
-            char c = *p;
-            if(c == '-' || c == '+')
-            {
-                assert(p == yo.value.t->contenido);
-                if(c == '-')
-                {
-                    r = -r;
-                }
-                break;
-            }
-            else
-            {
-                assert(c >= '0' && c <= '9');
-                r += c - '0';
-            }
-        }
-        float fp = 0;
-        for(char* p = yo.value.t->contenido; p > punto_decimal; p--)
-        {
-            fp /= 10;
-            char c = *p;
-            if(c == '-' || c == '+')
-            {
-                assert(p == yo.value.t->contenido);
-                if(c == '-')
-                {
-                    r = -r;
-                }
-                break;
-            }
-            else
-            {
-                assert(c >= '0' && c <= '9');
-                fp += ((float) (c - '0')) / 10.0;
-            }
-        }
-        r += fp;
+        pdcrt_dealojar_simple(marco->contexto->alojador, buff, yo.value.t->longitud + 1);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_float(r)));
         return 0;
     }

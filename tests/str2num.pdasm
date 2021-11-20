@@ -1,0 +1,60 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LCONST 1
+  MSG 0, 0, 1
+  PRN
+  NL
+
+  LCONST 2
+  MSG 0, 0, 1
+  PRN
+  NL
+
+  LCONST 3
+  MSG 0, 0, 1
+  PRN
+  NL
+
+  LCONST 4
+  MSG 0, 0, 1
+  PRN
+  NL
+
+  LCONST 6
+  MSG 5, 0, 1
+  PRN
+  NL
+
+  LCONST 7
+  MSG 5, 0, 1
+  PRN
+  NL
+
+  LCONST 8
+  MSG 5, 0, 1
+  PRN
+  NL
+
+  LCONST 9
+  MSG 5, 0, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "comoNumeroEntero"
+  #1 STRING "5837"
+  #2 STRING "-731"
+  #3 STRING "01"
+  #4 STRING "13"
+  #5 STRING "comoNumeroReal"
+  #6 STRING "53.03"
+  #7 STRING "-7.425"
+  #8 STRING "00.42300000"
+  #9 STRING "-0.13234"
+ENDSECTION
