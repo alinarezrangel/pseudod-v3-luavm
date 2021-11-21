@@ -43,6 +43,38 @@ SECTION "code"
   MSG 0, 2, 1
   PRN
   NL
+
+  ICONST 0
+  LCONST 3
+  LCONST 8
+  MSG 0, 2, 1
+  PRN
+  NL
+  ICONST 1
+  LCONST 3
+  LCONST 8
+  MSG 0, 2, 1
+  PRN
+  NL
+  ICONST 8
+  LCONST 3
+  LCONST 8
+  MSG 0, 2, 1
+  PRN
+  NL
+  ICONST 15
+  LCONST 3
+  LCONST 8
+  MSG 0, 2, 1
+  PRN
+  NL
+
+  ICONST 9
+  LCONST 7
+  LCONST 8
+  MSG 0, 2, 1
+  PRN
+  NL
 ENDSECTION
 
 SECTION "procedures"
@@ -57,5 +89,6 @@ SECTION "constant pool"
   #5 STRING "doque"
   #6 STRING "no"
   #7 STRING ""
+  #8 STRING "haaa aahaa aaahaaa"
 ENDSECTION
 
