@@ -413,6 +413,14 @@ int pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto 
 int pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 
+// Formatear:
+pdcrt_error pdcrt_formatear_texto(struct pdcrt_marco* marco,
+                                  PDCRT_OUT pdcrt_texto** res,
+                                  pdcrt_texto* fmt,
+                                  PDCRT_ARR(num_objs) pdcrt_objeto* objs,
+                                  size_t num_objs);
+
+
 // La pila de valores.
 //
 // Implementada como un "arreglo dinámico" clásico (con
@@ -465,6 +473,7 @@ typedef struct pdcrt_constantes
     pdcrt_texto* msj_igualA;
     pdcrt_texto* msj_clonar;
     pdcrt_texto* msj_llamar;
+    pdcrt_texto* msj_comoTexto;
 } pdcrt_constantes;
 
 // Inicializa la lista de constantes.
@@ -598,7 +607,11 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
     {                                                                   \
         pdcrt_texto* txt;                                               \
         const char* str = (lit);                                        \
-        pdcrt_aloj_texto_desde_c(&txt, aloj, str);                      \
+        if((pderrno = pdcrt_aloj_texto_desde_c(&txt, aloj, str)) != PDCRT_OK) \
+        {                                                               \
+            puts(pdcrt_perror(pderrno));                                \
+            exit(EXIT_FAILURE);                                         \
+        }                                                               \
         pdcrt_registrar_constante_textual(aloj, &ctx->constantes, id, txt); \
     }                                                                   \
     while(0)

@@ -1,0 +1,67 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LCONST 2
+  LCONST 1
+  MSG 0, 1, 1
+  PRN
+  NL
+
+  LCONST 3
+  LCONST 3
+  LCONST 4
+  MSG 0, 2, 1
+  PRN
+  NL
+
+  LCONST 5
+  MSG 0, 0, 1
+  PRN
+  NL
+
+  ICONST 1
+  ICONST 2
+  LCONST 6
+  MSG 0, 2, 1
+  PRN
+
+  LCONST 0
+  LCONST 7
+  MSG 0, 1, 1
+  PRN
+  NL
+
+  LCONST 7
+  LCONST 1
+  MSG 0, 1, 1
+  PRN
+  NL
+
+  LCONST 9
+  MSG 0, 0, 1
+  PRN
+  NL
+
+  LCONST 10
+  MSG 0, 0, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+ENDSECTION
+
+SECTION "constant pool"
+  #0  STRING "formatear"
+  #1  STRING "¡Hola ~T!"
+  #2  STRING "Mundo"
+  #3  STRING "Adios"
+  #4  STRING "~T ~qhola~q ~T"
+  #5  STRING ""
+  #6  STRING "~t = ~t~%"
+  #7  STRING "~T"
+  #8  STRING "~~~~"
+  #9  STRING "hello world~%~%"
+  #10 STRING "«~E«~E {~e{~e"
+ENDSECTION

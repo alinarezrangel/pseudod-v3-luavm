@@ -167,7 +167,7 @@ local function escapecstr(str)
       elseif st == "\"" then
          return "\\\""
       else
-         return ("\\x%02x"):format(string.byte(st))
+         return ("\"\"\\x%02x\"\""):format(string.byte(st))
       end
    end
    return (string.gsub(str, "[^a-zA-Z0-9.+/^&$@ -]", repl))

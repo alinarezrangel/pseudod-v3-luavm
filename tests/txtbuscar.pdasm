@@ -1,0 +1,61 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  ICONST 0
+  LCONST 2
+  LCONST 1
+  MSG 0, 2, 1
+  PRN
+  NL
+
+  ICONST 0
+  LCONST 3
+  LCONST 1
+  MSG 0, 2, 1
+  PRN
+  NL
+
+  ICONST 0
+  LCONST 4
+  LCONST 1
+  MSG 0, 2, 1
+  PRN
+  NL
+
+  ICONST 0
+  LCONST 5
+  LCONST 1
+  MSG 0, 2, 1
+  PRN
+  NL
+
+  ICONST 0
+  LCONST 6
+  LCONST 1
+  MSG 0, 2, 1
+  PRN
+  NL
+
+  ICONST 0
+  LCONST 7
+  LCONST 1
+  MSG 0, 2, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "buscar"
+  #1 STRING "hola mundo"
+  #2 STRING "la m"
+  #3 STRING "h"
+  #4 STRING "undo"
+  #5 STRING "doque"
+  #6 STRING "no"
+  #7 STRING ""
+ENDSECTION
+
