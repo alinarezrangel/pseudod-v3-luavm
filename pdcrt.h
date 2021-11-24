@@ -267,7 +267,8 @@ typedef struct pdcrt_objeto
         PDCRT_TOBJ_MARCA_DE_PILA = 2,
         PDCRT_TOBJ_CLOSURE = 3,
         PDCRT_TOBJ_TEXTO = 4,
-        PDCRT_TOBJ_OBJETO = 5
+        PDCRT_TOBJ_OBJETO = 5,
+        PDCRT_TOBJ_BOOLEANO = 6
     } tag;
     union
     {
@@ -276,6 +277,7 @@ typedef struct pdcrt_objeto
         pdcrt_closure c;
         pdcrt_impl_obj o;
         pdcrt_texto* t;
+        bool b;
     } value;
     pdcrt_funcion_generica recv;
 } pdcrt_objeto;
@@ -381,6 +383,8 @@ pdcrt_objeto pdcrt_objeto_entero(int v);
 pdcrt_objeto pdcrt_objeto_float(float v);
 // Crea un objeto "MARCA_DE_PILA".
 pdcrt_objeto pdcrt_objeto_marca_de_pila(void);
+// Crea un objeto desde un bool.
+pdcrt_objeto pdcrt_objeto_booleano(bool v);
 // Aloja un objeto closure.
 //
 // `env_size` será pasado a `pdcrt_aloj_env`, mientras que `proc` será el
@@ -411,6 +415,7 @@ int pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto m
 int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 int pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 int pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+int pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 
 // Formatear:
@@ -474,6 +479,8 @@ typedef struct pdcrt_constantes
     pdcrt_texto* msj_clonar;
     pdcrt_texto* msj_llamar;
     pdcrt_texto* msj_comoTexto;
+    pdcrt_texto* txt_verdadero;
+    pdcrt_texto* txt_falso;
 } pdcrt_constantes;
 
 // Inicializa la lista de constantes.
@@ -672,6 +679,7 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
 // corresponde 1-a-1 con un opcode.
 
 void pdcrt_op_iconst(pdcrt_marco* marco, int c);
+void pdcrt_op_bconst(pdcrt_marco* marco, bool c);
 void pdcrt_op_lconst(pdcrt_marco* marco, int c);
 
 void pdcrt_op_sum(pdcrt_marco* marco);

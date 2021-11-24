@@ -117,8 +117,9 @@ code <- {| '' -> 'locals'  (rs local)* |}
         {| '' -> 'opcodes'  (rs opcode)* |}
 local <- {| {"LOCAL"} rs (id / envs) |}
 
-OP <- "LCONST" / "ICONST" / "FCONST" / "SUM" / "SUB"
-    / "MUL" / "DIV" / "RETN" / "DYNCALL"
+OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
+    / "SUM" / "SUB" / "MUL" / "DIV"
+    / "RETN" / "DYNCALL"
     / "MKCLZ" / "MK0CLZ"
     / "OPNFRM" / "EINIT" / "CLSFRM"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
@@ -434,6 +435,13 @@ function toc.makeemitter()
       elseif spec == "strlit" then
          assert(type(arg) == "string", "expected string")
          return '"' .. escapecstr(arg) .. '"'
+      elseif spec == "bool" then
+         assert(type(arg) == "boolean", "expected boolean")
+         if arg then
+            return "true"
+         else
+            return "false"
+         end
       else
          error("unknown specifier " .. spec)
       end
@@ -495,6 +503,12 @@ toc.opschema = {}
 toc.opschema.ICONST = schema "Ix"
 function toc.opcodes.ICONST(emit, state, op)
    emit:stmt("pdcrt_op_iconst(marco, «1:int»)", op.Ix)
+end
+
+toc.opschema.BCONST = schema "Ix"
+function toc.opcodes.BCONST(emit, state, op)
+   assert(op.Ix == 0 or op.Ix == 1, "argument of BCONST must be 0 or 1")
+   emit:stmt("pdcrt_op_bconst(marco, «1:bool»)", op.Ix == 1)
 end
 
 toc.opschema.LCONST = schema "Cx"

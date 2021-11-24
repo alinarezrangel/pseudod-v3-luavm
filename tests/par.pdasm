@@ -47,8 +47,8 @@ SECTION "procedures"
     CMPEQ
     CHOOSE 1, 2
     NAME 1
-    -- devolver 1
-    ICONST 1
+    -- devolver VERDADERO
+    BCONST 1
     RETN 1
     NAME 2
     -- devolver no EsPar: (x - 1)
@@ -77,8 +77,8 @@ SECTION "procedures"
     CMPEQ
     CHOOSE 1, 2
     NAME 1
-    -- devolver 1
-    ICONST 1
+    -- devolver VERDADERO
+    BCONST 1
     RETN 1
     NAME 2
     -- devolver no EsImpar: (x - 1)

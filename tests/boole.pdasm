@@ -1,0 +1,114 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  LOCAL 1
+  OPNFRM EACT, NIL, 0
+  CLSFRM EACT
+
+  BCONST 0
+  BCONST 0
+  MSG 0, 2, 1
+  PRN
+  NL
+  BCONST 0
+  BCONST 1
+  MSG 0, 2, 1
+  PRN
+  NL
+  BCONST 1
+  BCONST 0
+  MSG 0, 2, 1
+  PRN
+  NL
+  BCONST 1
+  BCONST 1
+  MSG 0, 2, 1
+  PRN
+  NL
+
+  BCONST 0
+  BCONST 0
+  MSG 1, 2, 1
+  PRN
+  NL
+  BCONST 0
+  BCONST 1
+  MSG 1, 2, 1
+  PRN
+  NL
+  BCONST 1
+  BCONST 0
+  MSG 1, 2, 1
+  PRN
+  NL
+  BCONST 1
+  BCONST 1
+  MSG 1, 2, 1
+  PRN
+  NL
+
+  ICONST 0
+  ICONST 1
+  BCONST 0
+  MSG 2, 2, 1
+  PRN
+  NL
+  ICONST 0
+  ICONST 1
+  BCONST 1
+  MSG 2, 2, 1
+  PRN
+  NL
+
+  MKCLZ EACT, 1
+  LSET 0
+  MKCLZ EACT, 2
+  LSET 1
+
+  LGET 0
+  LGET 1
+  BCONST 0
+  MSG 3, 2, 2
+  PRN
+  NL
+  PRN
+  NL
+
+  LGET 0
+  LGET 1
+  BCONST 1
+  MSG 3, 2, 2
+  PRN
+  NL
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+  PROC 1
+    PARAM ESUP
+    OPNFRM EACT, ESUP, 0
+    CLSFRM EACT
+    ICONST 1
+    ICONST 2
+    RETN 2
+  ENDPROC
+
+  PROC 2
+    PARAM ESUP
+    OPNFRM EACT, ESUP, 0
+    CLSFRM EACT
+    ICONST 3
+    ICONST 4
+    RETN 2
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "operador_||"
+  #1 STRING "operador_&&"
+  #2 STRING "escojer"
+  #3 STRING "llamarSegun"
+ENDSECTION
