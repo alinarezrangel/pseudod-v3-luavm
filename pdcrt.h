@@ -65,17 +65,22 @@
 // entonces el alojador de arena del runtime fallará con una probabilidad de 1
 // sobre `PDCRT_PRB_ALOJADOR_INESTABLE`. Por ejemplo, si
 // `PDCRT_PRB_ALOJADOR_INESTABLE` es 2 (el valor predeterminado) entonces el
-// alojador de area fallará con una probabilidad de 1/2 = 50%. Utiliza `rand`
+// alojador de área fallará con una probabilidad de 1/2 = 50%. Utiliza `rand`
 // para obtener los números aleatorios.
 //
-// `PDCRT_PRB`: Activa todas las macros anteriores.
+// `PDCRT_PRB_SRAND`: Un número (`unsigned int`) que será la semilla pasada a
+// `srand` al crear un alojador de arena. Esta macro existe para que puedas
+// reproducir bugs o fallas encontradas con
+// `PDCRT_PRB_ALOJADOR_INESTABLE`. Tiene efecto incluso si
+// `PDCRT_PRB_ALOJADOR_INESTABLE` no está definida.
+//
+// `PDCRT_PRB`: Activa todas las macros anteriores excepto `PDCRT_PRB_SRAND`.
 
 #ifdef PDCRT_PRB
 #define PDCRT_PRB_ALOJADOR_INESTABLE 2
 #endif
 
 #define PDCRT_PRB_ALOJADOR_INESTABLE 50
-#define PDCRT_PRB_SRAND 1637845373
 
 
 // Códigos de error.
