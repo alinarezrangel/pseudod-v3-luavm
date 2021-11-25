@@ -21,6 +21,62 @@
 // arreglo.
 #define PDCRT_ARR(campo_tam)
 
+// Macros de depuración.
+//
+// Las siguientes macros activan distintos sistemas de depuración del
+// runtime. Específicamente:
+//
+// `PDCRT_DBG_RASTREAR_MARCOS`: Escribe a `stdout` cada vez que se cree o
+// destruya un marco. De esta forma podrás rastrear que funciones se están
+// ejecutando. Recuerda que los "marcos" que corresponden a C no tienen
+// `pdcrt_marco`s por ahora.
+//
+// `PDCRT_DBG_RASTREAR_CONTEXTO`: Escribe a `stdout` el estado del contexto del
+// runtime de vez en cuando.
+//
+// `PDCRT_DBG_ESTADISTICAS_DE_LOS_ALOJADORES`: Al destruir un alojador, escribe
+// estadísticas útiles del mismo.
+//
+// `PDCRT_DBG_ESCRIBIR_ERRORES`: Cuando una función "importante" devuelva un
+// `pdcrt_error` que no sea `PDCRT_OK`, escribe la función, el error y la
+// operación a `stdout` (pero no termina el programa).
+//
+// `PDCRT_DBG`: Activa todas las opciones anteriores.
+
+#ifdef PDCRT_DBG
+#define PDCRT_DBG_RASTREAR_MARCOS
+#define PDCRT_DBG_ESTADISTICAS_DE_LOS_ALOJADORES
+#define PDCRT_DBG_ESCRIBIR_ERRORES
+#define PDCRT_DBG_RASTREAR_CONTEXTO
+#endif
+
+#define PDCRT_DBG_RASTREAR_CONTEXTO
+#define PDCRT_DBG_RASTREAR_MARCOS
+#define PDCRT_DBG_ESTADISTICAS_DE_LOS_ALOJADORES
+#define PDCRT_DBG_ESCRIBIR_ERRORES
+
+// Las macros PRB (de "prueba").
+//
+// Similares a las macros de depuración, estas macros habilitan capacidades del
+// runtime que solo son útiles a la hora de realizar pruebas en
+// este. Actualmente las macros de prueba son:
+//
+// `PDCRT_PRB_ALOJADOR_INESTABLE` (debe ser un `int`): Si está definido
+// entonces el alojador de arena del runtime fallará con una probabilidad de 1
+// sobre `PDCRT_PRB_ALOJADOR_INESTABLE`. Por ejemplo, si
+// `PDCRT_PRB_ALOJADOR_INESTABLE` es 2 (el valor predeterminado) entonces el
+// alojador de area fallará con una probabilidad de 1/2 = 50%. Utiliza `rand`
+// para obtener los números aleatorios.
+//
+// `PDCRT_PRB`: Activa todas las macros anteriores.
+
+#ifdef PDCRT_PRB
+#define PDCRT_PRB_ALOJADOR_INESTABLE 2
+#endif
+
+#define PDCRT_PRB_ALOJADOR_INESTABLE 2
+
+
 // Códigos de error.
 //
 // Todos los códigos de error están aquí. El valor especial `PDCRT_OK` indica
@@ -499,7 +555,6 @@ typedef struct pdcrt_contexto
     pdcrt_pila pila;
     pdcrt_alojador alojador;
     pdcrt_constantes constantes;
-    bool rastrear_marcos;
 } pdcrt_contexto;
 
 // Variantes de las funciones con el mismo nombre pero sin el `_simple` al
@@ -559,6 +614,19 @@ void pdcrt_deinic_marco(pdcrt_marco* marco);
 void pdcrt_fijar_local(pdcrt_marco* marco, pdcrt_local_index n, pdcrt_objeto obj);
 // Obtiene el valor de una variable local.
 pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
+
+void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* info);
+
+// La macro `PDCRT_RASTREAR_MARCO(marco, procname, info)` emitirá una llamada a
+// `pdcrt_mostrar_marco` si `PDCRT_DBG_RASTREAR_MARCOS` está definido, o se
+// expandirá a un statment vacío si no.
+#ifdef PDCRT_DBG_RASTREAR_MARCOS
+#define PDCRT_RASTREAR_MARCO(marco, procname, info) \
+    pdcrt_mostrar_marco(marco, procname, info)
+#else
+#define PDCRT_RASTREAR_MARCO(marco, procname, info) \
+    do { (void) (marco); (void) (procname); (void) (info); } while(0)
+#endif
 
 
 // Las siguientes macros solo existen para el compilador. Los usuarios de pdcrt
@@ -649,19 +717,22 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
             puts(pdcrt_perror(pderrno));                                \
             exit(EXIT_FAILURE);                                         \
         }                                                               \
-        if(marco->contexto->rastrear_marcos)                            \
-            pdcrt_depurar_contexto(ctx, "P1 " #name);                   \
         pdcrt_empujar_en_pila(&ctx->pila, ctx->alojador, pdcrt_objeto_marca_de_pila()); \
-        if(marco->contexto->rastrear_marcos)                            \
-            pdcrt_depurar_contexto(ctx, "P2 " #name);                   \
+        PDCRT_RASTREAR_MARCO(marco, #name, "preludio");                 \
     }                                                                   \
     while(0)
 #define PDCRT_ASSERT_PARAMS(nparams)            \
     pdcrt_assert_params(marco, nparams)
 #define PDCRT_PARAM(idx, param)                        \
     pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
-#define PDCRT_PROC_POSTLUDE(name)               \
-    pdcrt_return_point: do {} while(0)
+#define PDCRT_PROC_POSTLUDE(name)                                       \
+    do                                                                  \
+    {                                                                   \
+    pdcrt_return_point:;                                                \
+        PDCRT_RASTREAR_MARCO(marco, #name, "postludio");                \
+        pdcrt_deinic_marco(marco);                                      \
+    }                                                                   \
+    while(0)
 
 // Obtiene un puntero a la función con nombre `name`. `name` es su nombre en el
 // bytecode.

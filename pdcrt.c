@@ -1353,7 +1353,6 @@ pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
         return pderrno;
     }
     ctx->alojador = alojador;
-    ctx->rastrear_marcos = false;
     if((pderrno = pdcrt_aloj_constantes(alojador, &ctx->constantes)) != PDCRT_OK)
     {
         pdcrt_deinic_pila(&ctx->pila, alojador);
@@ -1474,22 +1473,20 @@ static int pdcrt_getopt(int argc, char* argv[], const char* opts, char** optarg,
 
 void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[])
 {
+    (void) ctx;
+
     static bool check = false;
     assert(!check);
     check = true;
 
-    ctx->rastrear_marcos = false;
     int opt, optind = 1, mostrarAyuda = 0;
     char* optarg = NULL;
-    while((opt = pdcrt_getopt(argc, argv, "t:h", &optarg, &optind)) != -1)
+    while((opt = pdcrt_getopt(argc, argv, "h", &optarg, &optind)) != -1)
     {
         switch(opt)
         {
         case 'h':
             mostrarAyuda = 1;
-            break;
-        case 't':
-            ctx->rastrear_marcos = atoi(optarg) == 1;
             break;
         default:
             assert(0 && u8"opción sin reconocer");
@@ -1545,6 +1542,33 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n)
 {
     assert(n != PDCRT_ID_NIL);
     return marco->locales[n + PDCRT_NUM_LOCALES_ESP];
+}
+
+void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* info)
+{
+    FILE* out = stdout;
+    size_t n = 0;
+    fprintf(out, "|Marco de %s (0x%zX)\n", procname, (intptr_t) marco);
+    fprintf(out, "|  %d:", PDCRT_NUM_LOCALES_ESP);
+    for(pdcrt_marco* m = marco; m != NULL; m = m->marco_anterior)
+    {
+        fprintf(out, " > 0x%zX(%zd)", (intptr_t) m, m->num_locales);
+        n += 1;
+    }
+    fprintf(out, "  (Tiene %zd marcos.)\n", n);
+    pdcrt_objeto frm = pdcrt_obtener_local(marco, PDCRT_ID_EACT);
+    if(frm.tag == PDCRT_TOBJ_CLOSURE)
+    {
+        n = 0;
+        fprintf(out, "|  env %d:", PDCRT_NUM_LOCALES_ESP);
+        for(pdcrt_objeto f = frm; f.tag == PDCRT_TOBJ_CLOSURE; f = f.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP])
+        {
+            fprintf(out, " > %zd", f.value.c.env->env_size);
+            n += 1;
+        }
+        fprintf(out, "  (Tiene %zd envs.)\n", n);
+    }
+    fprintf(out, "|  %s\n", info);
 }
 
 
@@ -1685,8 +1709,8 @@ void pdcrt_op_einit(pdcrt_marco* marco, pdcrt_objeto env, size_t i, pdcrt_objeto
 void pdcrt_op_close_frame(pdcrt_marco* marco, pdcrt_objeto env)
 {
     // nada que hacer.
-    (void) marco;
     (void) env;
+    PDCRT_RASTREAR_MARCO(marco, "<unk>", "CLSFRM");
 }
 
 void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc)
@@ -1713,8 +1737,6 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
 
 void pdcrt_assert_params(pdcrt_marco* marco, int nparams)
 {
-    if(marco->contexto->rastrear_marcos)
-        pdcrt_depurar_contexto(marco->contexto, "P1 assert_params");
     pdcrt_objeto marca = pdcrt_sacar_de_pila(&marco->contexto->pila);
     if(marca.tag != PDCRT_TOBJ_MARCA_DE_PILA)
     {
@@ -1736,8 +1758,6 @@ void pdcrt_assert_params(pdcrt_marco* marco, int nparams)
         }
     }
     pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, nparams, marca);
-    if(marco->contexto->rastrear_marcos)
-        pdcrt_depurar_contexto(marco->contexto, "P2 assert_params");
 }
 
 void pdcrt_op_dyncall(pdcrt_marco* marco, int acepta, int devuelve)
@@ -1749,11 +1769,7 @@ void pdcrt_op_dyncall(pdcrt_marco* marco, int acepta, int devuelve)
 
 void pdcrt_op_call(pdcrt_marco* marco, pdcrt_proc_t proc, int acepta, int devuelve)
 {
-    if(marco->contexto->rastrear_marcos)
-        pdcrt_depurar_contexto(marco->contexto, "precall");
     (*proc)(marco, acepta, devuelve);
-    if(marco->contexto->rastrear_marcos)
-        pdcrt_depurar_contexto(marco->contexto, "postcall");
 }
 
 void pdcrt_op_retn(pdcrt_marco* marco, int n)
