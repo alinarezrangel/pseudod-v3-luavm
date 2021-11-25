@@ -1678,7 +1678,7 @@ void pdcrt_op_einit(pdcrt_marco* marco, pdcrt_objeto env, size_t i, pdcrt_objeto
 {
     (void) marco;
     pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
-    env.value.c.env->env[i + 1] = local;
+    env.value.c.env->env[i + PDCRT_NUM_LOCALES_ESP] = local;
 }
 
 void pdcrt_op_close_frame(pdcrt_marco* marco, pdcrt_objeto env)
