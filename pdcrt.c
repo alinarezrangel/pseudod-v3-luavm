@@ -352,7 +352,7 @@ static void pdcrt_escribir_texto_max(pdcrt_texto* texto, size_t max)
 pdcrt_error pdcrt_aloj_env(pdcrt_env** env, pdcrt_alojador alojador, size_t env_size)
 {
     *env = pdcrt_alojar_simple(alojador, sizeof(pdcrt_env) + sizeof(pdcrt_objeto) * env_size);
-    if(!env)
+    if(!*env)
     {
         PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
         return PDCRT_ENOMEM;
