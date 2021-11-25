@@ -9,6 +9,16 @@
 #define PDCRT_MALLOC_SIZE(ptr) malloc_usable_size(ptr)
 #endif
 
+// Macro simple de ayuda: emite una llamada a pdcrt_depurar_contexto si
+// PDCRT_DBG_RASTREAR_CONTEXTO está definido o un statment vacío si no.
+#ifdef PDCRT_DBG_RASTREAR_CONTEXTO
+#define PDCRT_DEPURAR_CONTEXTO(ctx, extra)      \
+    pdcrt_depurar_contexto((ctx), (extra))
+#else
+#define PDCRT_DEPURAR_CONTEXTO(ctx, extra)      \
+    do { (void) (ctx); (void) (extra); } while(0)
+#endif
+
 
 const char* pdcrt_perror(pdcrt_error err)
 {
@@ -1363,7 +1373,7 @@ pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
 
 void pdcrt_deinic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
 {
-    pdcrt_depurar_contexto(ctx, "deinic");
+    PDCRT_DEPURAR_CONTEXTO(ctx, "Deinicializando el contexto");
     pdcrt_deinic_pila(&ctx->pila, alojador);
 }
 
@@ -1526,8 +1536,7 @@ pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_
 
 void pdcrt_deinic_marco(pdcrt_marco* marco)
 {
-    if(marco->contexto->rastrear_marcos)
-        pdcrt_depurar_contexto(marco->contexto, "Deinic marco");
+    PDCRT_DEPURAR_CONTEXTO(marco->contexto, "Deinicializando un marco");
     pdcrt_dealojar(marco->contexto, marco->locales, sizeof(pdcrt_objeto) * marco->num_locales);
     marco->num_locales = 0;
 }
