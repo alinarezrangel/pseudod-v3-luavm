@@ -1283,6 +1283,7 @@ pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_const
     PDCRT_INIC_CONST_TXT(msj_comoTexto, "comoTexto");
     PDCRT_INIC_CONST_TXT(txt_verdadero, "VERDADERO");
     PDCRT_INIC_CONST_TXT(txt_falso, "FALSO");
+    return PDCRT_OK;
 error:
     PDCRT_DEINIC_CONST_TXT(operador_mas);
     PDCRT_DEINIC_CONST_TXT(operador_menos);
@@ -1303,7 +1304,7 @@ error:
 #undef PDCRT_DEINIC_CONST_TXT
 #undef PDCRT_INIC_CONST_TXT
 
-    return PDCRT_OK;
+    return pderrno;
 }
 
 pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto)
