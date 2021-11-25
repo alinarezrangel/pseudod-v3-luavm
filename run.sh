@@ -1,8 +1,9 @@
 #!/bin/sh
 
+echo lua5.4 main.lua -W all -o sample.c "$1"
 lua5.4 main.lua -W all -o sample.c "$1"
 make
-./sample | head -n -13 > test-output.txt
+./sample | grep -vE '^[|]' > test-output.txt
 echo "diff \"$2\" test-output.txt"
 diff "$2" test-output.txt
 exit $?

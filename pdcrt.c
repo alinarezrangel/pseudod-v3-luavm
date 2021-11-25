@@ -175,27 +175,27 @@ void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj)
         else
             cant_alojaciones_por_desvstd[2]++;
     }
-    printf(u8"Desalojando alojador de arena: %zd elementos, %zd bytes en total, máxima alojación de %zd bytes.\n",
+    printf(u8"|Desalojando alojador de arena: %zd elementos, %zd bytes en total, máxima alojación de %zd bytes.\n",
            arena->num_punteros, total, maxaloj);
-    printf(u8"  Total de %zd bytes, %zd KiB, %zd MiB\n", total, total / 1024, (total / 1024) / 1024);
-    printf(u8"  Máxima alojación de %zd bytes, %zd KiB, %zd MiB\n\n", maxaloj, maxaloj / 1024, (maxaloj / 1024) / 1024);
+    printf(u8"|  Total de %zd bytes, %zd KiB, %zd MiB\n", total, total / 1024, (total / 1024) / 1024);
+    printf(u8"|  Máxima alojación de %zd bytes, %zd KiB, %zd MiB\n|\n", maxaloj, maxaloj / 1024, (maxaloj / 1024) / 1024);
 
-    printf(u8"  Tamaño promedio: %.2F bytes / %zd bytes\n", tamprom, (size_t) tamprom);
-    printf(u8"  Varianza: %.2F bytes / %zd bytes\n", var, (size_t) var);
-    printf(u8"  Desviación estándar: %.2F bytes / %zd bytes\n\n", desvstd, (size_t) desvstd);
+    printf(u8"|  Tamaño promedio: %.2F bytes / %zd bytes\n", tamprom, (size_t) tamprom);
+    printf(u8"|  Varianza: %.2F bytes / %zd bytes\n", var, (size_t) var);
+    printf(u8"|  Desviación estándar: %.2F bytes / %zd bytes\n|\n", desvstd, (size_t) desvstd);
 
-    printf(u8"  %d alojaciones (%.2F%%) tienen 1 desv. std. o menos\n",
+    printf(u8"|  %d alojaciones (%.2F%%) tienen 1 desv. std. o menos\n",
            cant_alojaciones_por_desvstd[0],
            100 * (((double)cant_alojaciones_por_desvstd[0]) / ((double)arena->num_punteros)));
-    printf(u8"  %d alojaciones (%.2F%%) tienen más de 1 y menos de 2 desv. std.\n",
+    printf(u8"|  %d alojaciones (%.2F%%) tienen más de 1 y menos de 2 desv. std.\n",
            cant_alojaciones_por_desvstd[1],
            100 * (((double)cant_alojaciones_por_desvstd[1]) / ((double)arena->num_punteros)));
-    printf(u8"  %d alojaciones (%.2F%%) tienen más de 2 desv. std.\n",
+    printf(u8"|  %d alojaciones (%.2F%%) tienen más de 2 desv. std.\n",
            cant_alojaciones_por_desvstd[2],
            100 * (((double)cant_alojaciones_por_desvstd[2]) / ((double)arena->num_punteros)));
 #else
-    printf(u8"Desalojando alojador de arena: %zd elementos\n", arena->num_punteros);
-    printf(u8"  Advertencia: no se pudo solicitar el tamaño en bytes de los elementos\n");
+    printf(u8"|Desalojando alojador de arena: %zd elementos\n", arena->num_punteros);
+    printf(u8"|  Advertencia: no se pudo solicitar el tamaño en bytes de los elementos\n");
 #endif
     for(size_t i = 0; i < arena->num_punteros; i++)
     {
@@ -255,7 +255,6 @@ pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojad
     pdcrt_error errc = pdcrt_aloj_texto(texto, alojador, strlen(cstr));
     if(errc != PDCRT_OK)
     {
-        printf("errc %zd\n", strlen(cstr));
         return errc;
     }
     for(size_t i = 0; cstr[i] != '\0'; i++)
@@ -1382,21 +1381,21 @@ static void pdcrt_depurar_objeto(pdcrt_objeto obj)
     switch(obj.tag)
     {
     case PDCRT_TOBJ_ENTERO:
-        printf("    i%d\n", obj.value.i);
+        printf("|    i%d\n", obj.value.i);
         break;
     case PDCRT_TOBJ_BOOLEANO:
-        printf("    %s\n", obj.value.b? "VERDADERO" : "FALSO");
+        printf("|    %s\n", obj.value.b? "VERDADERO" : "FALSO");
         break;
     case PDCRT_TOBJ_MARCA_DE_PILA:
-        printf("    Marca de pila\n");
+        printf("|    Marca de pila\n");
         break;
     case PDCRT_TOBJ_FLOAT:
-        printf("    f%f\n", obj.value.f);
+        printf("|    f%f\n", obj.value.f);
         break;
     case PDCRT_TOBJ_CLOSURE:
-        printf(u8"    Closure/función\n");
-        printf(u8"      proc => 0x%zX\n", (intptr_t) obj.value.c.proc);
-        printf(u8"      env 0x%zX  #%zd\n", (intptr_t) obj.value.c.env, obj.value.c.env->env_size);
+        printf(u8"|    Closure/función\n");
+        printf(u8"|      proc => 0x%zX\n", (intptr_t) obj.value.c.proc);
+        printf(u8"|      env 0x%zX  #%zd\n", (intptr_t) obj.value.c.env, obj.value.c.env->env_size);
         break;
     default:
         assert(0);
@@ -1405,8 +1404,8 @@ static void pdcrt_depurar_objeto(pdcrt_objeto obj)
 
 void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra)
 {
-    printf("Contexto: %s\n", extra);
-    printf("  Pila [%zd elementos de %zd max.]\n", ctx->pila.num_elementos, ctx->pila.capacidad);
+    printf("|Contexto: %s\n", extra);
+    printf("|  Pila [%zd elementos de %zd max.]\n", ctx->pila.num_elementos, ctx->pila.capacidad);
     for(size_t i = 0; i < ctx->pila.num_elementos; i++)
     {
         pdcrt_objeto obj = ctx->pila.elementos[i];
