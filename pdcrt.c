@@ -133,6 +133,12 @@ static void* pdcrt_alojar_en_arena(void* vdt, void* ptr, size_t tam_viejo, size_
     }
     else if(tam_viejo == 0)
     {
+#ifdef PDCRT_PRB_ALOJADOR_INESTABLE
+        if(rand() % PDCRT_PRB_ALOJADOR_INESTABLE == 0)
+        {
+            return NULL;
+        }
+#endif
         void* nptr = malloc(tam_nuevo);
         if(nptr != NULL)
         {
@@ -142,6 +148,12 @@ static void* pdcrt_alojar_en_arena(void* vdt, void* ptr, size_t tam_viejo, size_
     }
     else
     {
+#ifdef PDCRT_PRB_ALOJADOR_INESTABLE
+        if(rand() % PDCRT_PRB_ALOJADOR_INESTABLE == 0)
+        {
+            return NULL;
+        }
+#endif
         void* nptr = realloc(ptr, tam_nuevo);
         if(nptr != NULL)
         {
