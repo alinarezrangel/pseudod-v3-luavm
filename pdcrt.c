@@ -1531,6 +1531,10 @@ pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_
     marco->contexto = contexto;
     marco->marco_anterior = marco_anterior;
     marco->num_locales = num_real_de_locales;
+    for(size_t i = 0; i < marco->num_locales; i++)
+    {
+        marco->locales[i] = pdcrt_objeto_entero(0);
+    }
     return PDCRT_OK;
 }
 
