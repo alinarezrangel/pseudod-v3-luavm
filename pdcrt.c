@@ -9,6 +9,10 @@
 #define PDCRT_MALLOC_SIZE(ptr) malloc_usable_size(ptr)
 #endif
 
+#ifdef PDCRT_PRB_ALOJADOR_INESTABLE
+#include <time.h>
+#endif
+
 // Macro simple de ayuda: emite una llamada a pdcrt_depurar_contexto si
 // PDCRT_DBG_RASTREAR_CONTEXTO está definido o un statment vacío si no.
 #ifdef PDCRT_DBG_RASTREAR_CONTEXTO
@@ -174,6 +178,13 @@ pdcrt_error pdcrt_aloj_alojador_de_arena(pdcrt_alojador* aloj)
     dt->num_punteros = 0;
     aloj->alojar = &pdcrt_alojar_en_arena;
     aloj->datos = dt;
+#if defined(PDCRT_PRB_ALOJADOR_INESTABLE) && !defined(PDCRT_PRB_SRAND)
+    unsigned int s = time(NULL);
+    srand(s);
+    printf(u8"|Semilla del generador de números aleatorios: %u\n", s);
+#elif defined(PDCRT_PRB_SRAND)
+    srand(PDCRT_PRB_SRAND);
+#endif
     return PDCRT_OK;
 }
 
