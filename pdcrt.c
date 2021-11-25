@@ -46,12 +46,18 @@ const char* pdcrt_perror(pdcrt_error err)
     do { (void) err; (void) info; } while(0)
 #endif
 
+// Como abort() pero termina con un código de salida `PDCRT_SALIDA_ERROR`.
+_Noreturn static void pdcrt_abort()
+{
+    exit(PDCRT_SALIDA_ERROR);
+}
+
 static void no_falla(pdcrt_error err)
 {
     if(err != PDCRT_OK)
     {
         fprintf(stderr, "Error (que no debia fallar): %s\n", pdcrt_perror(err));
-        abort();
+        pdcrt_abort();
     }
 }
 
@@ -391,7 +397,7 @@ void pdcrt_objeto_debe_tener_tipo(pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo)
     if(obj.tag != tipo)
     {
         fprintf(stderr, u8"Objeto de tipo %s debía tener tipo %s\n", pdcrt_tipo_como_texto(obj.tag), pdcrt_tipo_como_texto(tipo));
-        abort();
+        pdcrt_abort();
     }
 }
 
@@ -765,7 +771,7 @@ int pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto m
             assert(0);
         }
         printf("\n");
-        abort();
+        pdcrt_abort();
     }
 
     return 0;
@@ -816,7 +822,7 @@ int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto ms
         if(errno != 0)
         {
             perror("strtol");
-            abort();
+            pdcrt_abort();
         }
         pdcrt_dealojar_simple(marco->contexto->alojador, buff, sizeof(char) * (yo.value.t->longitud + 1));
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(r)));
@@ -838,7 +844,7 @@ int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto ms
         if(errno != 0)
         {
             perror("strtof");
-            abort();
+            pdcrt_abort();
         }
         pdcrt_dealojar_simple(marco->contexto->alojador, buff, sizeof(char) * (yo.value.t->longitud + 1));
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_float(r)));
@@ -990,7 +996,7 @@ int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto ms
             printf("...");
         }
         printf("\n");
-        abort();
+        pdcrt_abort();
     }
 
     return 0;
@@ -1007,7 +1013,7 @@ int pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto 
     else
     {
         printf("mensaje no entendido\n");
-        abort();
+        pdcrt_abort();
     }
 
     return 0;
@@ -1021,7 +1027,7 @@ int pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_o
     (void) args;
     (void) rets;
     fprintf(stderr, u8"Error: se trató de enviar un mensaje a una marca de pila.\n");
-    abort();
+    pdcrt_abort();
 }
 
 int pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
@@ -1089,7 +1095,7 @@ int pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto
         printf("Mensaje ");
         pdcrt_escribir_texto(msj.value.t);
         printf(" no entendido para el booleano %s\n", yo.value.b? "VERDADERO" : "FALSO");
-        abort();
+        pdcrt_abort();
     }
     return 0;
 }
@@ -1587,7 +1593,7 @@ void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[])
     if(optind != argc)
     {
         puts("Argumentos adicionales inesperados.\nUso: programa [opciones...]\nUsa la opción -h para más ayuda.");
-        exit(1);
+        exit(PDCRT_SALIDA_ERROR);
     }
     if(mostrarAyuda)
     {
@@ -1595,7 +1601,7 @@ void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[])
              "Opciones soportadas:\n"
              "  -t N   Registra las llamadas a funciones si N = 1. No lo hagas si N = 0.\n"
              "  -h     Muestra esta ayuda y termina.");
-        exit(1);
+        exit(PDCRT_SALIDA_ERROR);
     }
 }
 
@@ -1837,12 +1843,12 @@ void pdcrt_assert_params(pdcrt_marco* marco, int nparams)
     if(marca.tag != PDCRT_TOBJ_MARCA_DE_PILA)
     {
         fprintf(stderr, "Se esperaba una marca de pila pero se obtuvo un %s\n", pdcrt_tipo_como_texto(marca.tag));
-        abort();
+        pdcrt_abort();
     }
     if(marco->contexto->pila.num_elementos < (size_t)nparams)
     {
         fprintf(stderr, "Se esperaban al menos %d elementos.\n", nparams);
-        abort();
+        pdcrt_abort();
     }
     for(size_t i = marco->contexto->pila.num_elementos - nparams; i < marco->contexto->pila.num_elementos; i++)
     {
@@ -1850,7 +1856,7 @@ void pdcrt_assert_params(pdcrt_marco* marco, int nparams)
         if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA)
         {
             fprintf(stderr, "Faltaron elementos en el marco de llamada\n");
-            abort();
+            pdcrt_abort();
         }
     }
     pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, nparams, marca);
@@ -1876,7 +1882,7 @@ void pdcrt_op_retn(pdcrt_marco* marco, int n)
         if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA)
         {
             fprintf(stderr, "Trato de devolver a traves de una marca de pila\n");
-            abort();
+            pdcrt_abort();
         }
     }
     pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, n);

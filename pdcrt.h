@@ -83,6 +83,14 @@
 #define PDCRT_PRB_ALOJADOR_INESTABLE 50
 
 
+// Los dos códigos de salida usados por el runtime.
+//
+// `PDCRT_SALIDA_ERROR` es el código que se usará para indicar que sucedió un
+// error, mientras que `PDCRT_SALIDA_EXITO` será el código de salida exitoso.
+#define PDCRT_SALIDA_ERROR 2
+#define PDCRT_SALIDA_EXITO 0
+
+
 // Códigos de error.
 //
 // Todos los códigos de error están aquí. El valor especial `PDCRT_OK` indica
@@ -655,18 +663,18 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
     if((pderrno = pdcrt_aloj_alojador_de_arena(&aloj)) != PDCRT_OK)     \
     {                                                                   \
         puts(pdcrt_perror(pderrno));                                    \
-        exit(EXIT_FAILURE);                                             \
+        exit(PDCRT_SALIDA_ERROR);                                       \
     }                                                                   \
     if((pderrno = pdcrt_inic_contexto(&ctx_real, aloj)) != PDCRT_OK) \
     {                                                                   \
         puts(pdcrt_perror(pderrno));                                    \
-        exit(EXIT_FAILURE);                                             \
+        exit(PDCRT_SALIDA_ERROR);                                       \
     }                                                                   \
     pdcrt_procesar_cli(ctx, argc, argv);                                \
     if((pderrno = pdcrt_inic_marco(&marco_real, ctx, nlocals, NULL)))   \
     {                                                                   \
         puts(pdcrt_perror(pderrno));                                    \
-        exit(EXIT_FAILURE);                                             \
+        exit(PDCRT_SALIDA_ERROR);                                       \
     }                                                                   \
     do {} while(0)
 
@@ -676,7 +684,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
         pdcrt_deinic_marco(&marco_real);            \
         pdcrt_deinic_contexto(ctx, aloj);           \
         pdcrt_dealoj_alojador_de_arena(aloj);       \
-        exit(EXIT_SUCCESS);                         \
+        exit(PDCRT_SALIDA_EXITO);                   \
     }                                               \
     while(0)
 
@@ -691,7 +699,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
         if((pderrno = pdcrt_aloj_texto_desde_c(&txt, aloj, str)) != PDCRT_OK) \
         {                                                               \
             puts(pdcrt_perror(pderrno));                                \
-            exit(EXIT_FAILURE);                                         \
+            exit(PDCRT_SALIDA_ERROR);                                   \
         }                                                               \
         pdcrt_registrar_constante_textual(aloj, &ctx->constantes, id, txt); \
     }                                                                   \
@@ -721,7 +729,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
         if((pderrno = pdcrt_inic_marco(&marco_real, ctx, nlocals, name##marco_anterior))) \
         {                                                               \
             puts(pdcrt_perror(pderrno));                                \
-            exit(EXIT_FAILURE);                                         \
+            exit(PDCRT_SALIDA_ERROR);                                   \
         }                                                               \
         pdcrt_empujar_en_pila(&ctx->pila, ctx->alojador, pdcrt_objeto_marca_de_pila()); \
         PDCRT_RASTREAR_MARCO(marco, #name, "preludio");                 \
