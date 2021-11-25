@@ -180,6 +180,7 @@ pdcrt_error pdcrt_aloj_alojador_de_arena(pdcrt_alojador* aloj)
 void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj)
 {
     pdcrt_alojador_de_arena* arena = aloj.datos;
+#ifdef PDCRT_DBG_ESTADISTICAS_DE_LOS_ALOJADORES
 #ifdef PDCRT_MALLOC_SIZE
     size_t total = 0, maxaloj = 0;
     int cant_alojaciones_por_desvstd[3] = {0, 0, 0};
@@ -234,6 +235,7 @@ void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj)
 #else
     printf(u8"|Desalojando alojador de arena: %zd elementos\n", arena->num_punteros);
     printf(u8"|  Advertencia: no se pudo solicitar el tamaño en bytes de los elementos\n");
+#endif
 #endif
     for(size_t i = 0; i < arena->num_punteros; i++)
     {
