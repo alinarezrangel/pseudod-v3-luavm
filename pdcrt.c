@@ -188,6 +188,7 @@ pdcrt_error pdcrt_aloj_alojador_de_arena(pdcrt_alojador* aloj)
 #if defined(PDCRT_PRB_ALOJADOR_INESTABLE) && !defined(PDCRT_PRB_SRAND)
     unsigned int s = time(NULL);
     srand(s);
+    srand(s = rand());
     printf(u8"|Semilla del generador de números aleatorios: %u\n", s);
 #elif defined(PDCRT_PRB_SRAND)
     srand(PDCRT_PRB_SRAND);
