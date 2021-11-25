@@ -39,6 +39,20 @@ static void no_falla(pdcrt_error err)
     }
 }
 
+
+// Obtiene la siguiente capacidad de un arreglo dinámico.
+//
+// Devuelve la que debería ser la siguiente capacidad del arreglo. Trata de
+// garantizar inserción en tiempo constante multiplicando la capacidad por 2 en
+// cada ciclo.
+//
+// Además, se asegura de que la capacidad devuelta siempre pueda almacenar al
+// menos `req_adicional` elementos nuevos, incluso si esto implica crecer un
+// poco más que `cap_actual * 2`.
+//
+// Finalmente, toma en cuenta la API de los alojadores del runtime y nunca
+// devuelve una capacidad de 0 (`pdcrt_siguiente_capacidad(0, 0, 0)` devuelve
+// un número mayor que 0).
 static size_t pdcrt_siguiente_capacidad(size_t cap_actual, size_t tam_actual, size_t req_adicional)
 {
     size_t base = cap_actual == 0? 1 : 0;
