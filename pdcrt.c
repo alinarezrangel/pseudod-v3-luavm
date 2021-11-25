@@ -30,6 +30,18 @@ const char* pdcrt_perror(pdcrt_error err)
     return errores[err];
 }
 
+// La macro `PDCRT_ESCRIBIR_ERROR` se espandirá a una llamada apropiada a
+// `printf` con `err` (un `pdcrt_error`) e `info` (un string) si
+// `PDCRT_DBG_ESCRIBIR_ERRORES` está definido, de otra forma se expandirá a un
+// statment vacío.
+#ifdef PDCRT_DBG_ESCRIBIR_ERRORES
+#define PDCRT_ESCRIBIR_ERROR(err, info)         \
+    printf("|%s: %s\n", (info), pdcrt_perror((err)))
+#else
+#define PDCRT_ESCRIBIR_ERROR(err, info)         \
+    do { (void) err; (void) info; } while(0)
+#endif
+
 static void no_falla(pdcrt_error err)
 {
     if(err != PDCRT_OK)
@@ -245,6 +257,7 @@ pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador aloja
     *texto = pdcrt_alojar_simple(alojador, sizeof(pdcrt_texto));
     if(*texto == NULL)
     {
+        PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, "pdcrt_aloj_texto: alojando el texto mismo");
         return PDCRT_ENOMEM;
     }
     if(lon == 0)
@@ -256,6 +269,7 @@ pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador aloja
         (*texto)->contenido = pdcrt_alojar_simple(alojador, sizeof(char) * lon);
         if((*texto)->contenido == NULL)
         {
+            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, "pdcrt_aloj_texto: alojando el contenido del texto");
             pdcrt_dealojar_simple(alojador, *texto, sizeof(pdcrt_texto));
             return PDCRT_ENOMEM;
         }
@@ -269,6 +283,7 @@ pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojad
     pdcrt_error errc = pdcrt_aloj_texto(texto, alojador, strlen(cstr));
     if(errc != PDCRT_OK)
     {
+        PDCRT_ESCRIBIR_ERROR(errc, __func__);
         return errc;
     }
     for(size_t i = 0; cstr[i] != '\0'; i++)
@@ -313,6 +328,7 @@ pdcrt_error pdcrt_aloj_env(pdcrt_env** env, pdcrt_alojador alojador, size_t env_
     *env = pdcrt_alojar_simple(alojador, sizeof(pdcrt_env) + sizeof(pdcrt_objeto) * env_size);
     if(!env)
     {
+        PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
         return PDCRT_ENOMEM;
     }
     else
@@ -1186,6 +1202,7 @@ pdcrt_error pdcrt_inic_pila(pdcrt_pila* pila, pdcrt_alojador alojador)
     if(!pila->elementos)
     {
         pila->capacidad = 0;
+        PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
         return PDCRT_ENOMEM;
     }
     else
@@ -1209,6 +1226,7 @@ pdcrt_error pdcrt_empujar_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, pdc
         pdcrt_objeto* nuevosels = pdcrt_realojar_simple(alojador, pila->elementos, pila->capacidad * sizeof(pdcrt_objeto), nuevacap * sizeof(pdcrt_objeto));
         if(!nuevosels)
         {
+            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
             return PDCRT_ENOMEM;
         }
         else
@@ -1539,6 +1557,7 @@ pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_
     marco->locales = pdcrt_alojar(contexto, sizeof(pdcrt_objeto) * num_real_de_locales);
     if(!marco->locales)
     {
+        PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, "pdcrt_inic_marco: alojando las locales");
         return PDCRT_ENOMEM;
     }
     marco->contexto = contexto;
