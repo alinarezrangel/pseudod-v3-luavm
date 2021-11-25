@@ -172,6 +172,7 @@ pdcrt_error pdcrt_aloj_alojador_de_arena(pdcrt_alojador* aloj)
     pdcrt_alojador_de_arena* dt = malloc(sizeof(pdcrt_alojador_de_arena));
     if(dt == NULL)
     {
+        PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
         return PDCRT_ENOMEM;
     }
     dt->punteros = NULL;
@@ -803,7 +804,11 @@ int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto ms
     {
         assert((args == 0) && (rets == 1));
         char* buff = pdcrt_alojar_simple(marco->contexto->alojador, sizeof(char) * (yo.value.t->longitud + 1));
-        assert(buff != NULL);
+        if(buff == NULL)
+        {
+            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, "Texto#comoNumeroEntero: alojando buffer temporal");
+            no_falla(PDCRT_ENOMEM);
+        }
         memcpy(buff, yo.value.t->contenido, yo.value.t->longitud);
         buff[yo.value.t->longitud] = '\0';
         errno = 0;
@@ -821,7 +826,11 @@ int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto ms
     {
         assert((args == 0) && (rets == 1));
         char* buff = pdcrt_alojar_simple(marco->contexto->alojador, sizeof(char) * (yo.value.t->longitud + 1));
-        assert(buff != NULL);
+        if(buff == NULL)
+        {
+            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, "Texto#comoNumeroEntero: alojando buffer temporal");
+            no_falla(PDCRT_ENOMEM);
+        }
         memcpy(buff, yo.value.t->contenido, yo.value.t->longitud);
         buff[yo.value.t->longitud] = '\0';
         errno = 0;
@@ -954,7 +963,11 @@ int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto ms
         else
         {
             objetos = pdcrt_alojar_simple(marco->contexto->alojador, num_objetos * sizeof(pdcrt_objeto));
-            assert(objetos != NULL);
+            if(objetos == NULL)
+            {
+                PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, "Texto#formatear: alojando arreglo de locales para pasar a pdcrt_formatear_texto");
+                no_falla(PDCRT_ENOMEM);
+            }
         }
         for(size_t i = 0; i < num_objetos; i++)
         {
@@ -1099,7 +1112,11 @@ static void pdcrt_inic_constructor_de_texto(PDCRT_OUT struct pdcrt_constructor_d
     if(cons->capacidad > 0)
     {
         cons->contenido = pdcrt_alojar_simple(alojador, sizeof(char) * cons->capacidad);
-        assert(cons->contenido != NULL);
+        if(cons->contenido == NULL)
+        {
+            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
+            no_falla(PDCRT_ENOMEM);
+        }
     }
 }
 
@@ -1109,7 +1126,11 @@ static void pdcrt_constructor_agregar(pdcrt_alojador alojador, struct pdcrt_cons
     {
         size_t nueva_cap = pdcrt_siguiente_capacidad(cons->capacidad, cons->longitud, longitud);
         char* nuevo = pdcrt_realojar_simple(alojador, cons->contenido, cons->capacidad * sizeof(char), nueva_cap * sizeof(char));
-        assert(nuevo != NULL);
+        if(nuevo == NULL)
+        {
+            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
+            no_falla(PDCRT_ENOMEM);
+        }
         cons->contenido = nuevo;
         cons->capacidad = nueva_cap;
     }
@@ -1370,6 +1391,7 @@ error:
 #undef PDCRT_DEINIC_CONST_TXT
 #undef PDCRT_INIC_CONST_TXT
 
+    PDCRT_ESCRIBIR_ERROR(pderrno, __func__);
     return pderrno;
 }
 
@@ -1383,7 +1405,11 @@ pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_con
     {
         size_t nuevo_tam = idx >= consts->num_textos ? (idx + 1) : (consts->num_textos + 1);
         consts->textos = pdcrt_realojar_simple(alojador, consts->textos, consts->num_textos * sizeof(pdcrt_texto*), nuevo_tam * sizeof(pdcrt_texto*));
-        assert(consts->textos != NULL);
+        if(consts->textos == NULL)
+        {
+            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
+            no_falla(PDCRT_ENOMEM);
+        }
         consts->num_textos += 1;
         consts->textos[idx] = texto;
     }
