@@ -23,17 +23,6 @@
     do { (void) (ctx); (void) (extra); } while(0)
 #endif
 
-
-const char* pdcrt_perror(pdcrt_error err)
-{
-    static const char* const errores[] =
-        { u8"Ok",
-          u8"No hay memoria",
-          u8"No se pudo alojar más memoria"
-        };
-    return errores[err];
-}
-
 // La macro `PDCRT_ESCRIBIR_ERROR` se espandirá a una llamada apropiada a
 // `printf` con `err` (un `pdcrt_error`) e `info` (un string) si
 // `PDCRT_DBG_ESCRIBIR_ERRORES` está definido, de otra forma se expandirá a un
@@ -45,6 +34,17 @@ const char* pdcrt_perror(pdcrt_error err)
 #define PDCRT_ESCRIBIR_ERROR(err, info)         \
     do { (void) err; (void) info; } while(0)
 #endif
+
+
+const char* pdcrt_perror(pdcrt_error err)
+{
+    static const char* const errores[] =
+        { u8"Ok",
+          u8"No hay memoria",
+          u8"No se pudo alojar más memoria"
+        };
+    return errores[err];
+}
 
 // Como abort() pero termina con un código de salida `PDCRT_SALIDA_ERROR`.
 _Noreturn static void pdcrt_abort()
@@ -60,7 +60,6 @@ static void no_falla(pdcrt_error err)
         pdcrt_abort();
     }
 }
-
 
 // Obtiene la siguiente capacidad de un arreglo dinámico.
 //
@@ -1011,6 +1010,19 @@ int pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto 
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
         return (*yo.value.c.proc)(marco, args + 1, rets);
     }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
+    {
+        assert((args == 1) && (rets == 1));
+        pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_objeto_iguales(yo, rhs))));
+        return 0;
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "clonar") == 0)
+    {
+        assert((args == 0) && (rets == 1));
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        return 0;
+    }
     else
     {
         printf("mensaje no entendido\n");
@@ -1054,6 +1066,12 @@ int pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto
         assert((args == 1) && (rets == 1));
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_objeto_iguales(yo, rhs))));
+        return 0;
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "clonar") == 0)
+    {
+        assert((args == 0) && (rets == 1));
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
         return 0;
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "escojer") == 0)
@@ -1106,7 +1124,7 @@ int pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto
 
 struct pdcrt_constructor_de_texto
 {
-    char* contenido;
+    PDCRT_ARR(capacidad) char* contenido;
     size_t longitud;
     size_t capacidad;
 };

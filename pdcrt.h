@@ -1,11 +1,44 @@
 #ifndef PDCRT_H
 #define PDCRT_H
 
+// El runtime en C de PseudoD.
+//
+// Consiste de:
+//
+// 1. Un sistema de alojadores ("allocators") que te permite modificar que
+// versiones de `malloc`/`realloc`/`free` se usarán.
+//
+// 2. El sistema de objetos mediante el cual funciona todo PseudoD.
+//
+// 3. (Como parte del #2) Una pequeña biblioteca de manipulación de
+// strings-no-terminados-en-0.
+//
+// 4. La implementaciones de *closures*.
+//
+// 5. Las estructuras de datos principales de la máquina
+// virtual. Específicamente: la pila de valores, el "constant pool" ("piscina
+// de constantes", aunque prefiero el término "lista de constantes"), el
+// "contexto" y los marcos de activación de las funciones.
+//
+// 6. Macros y funciones necesarias para compilar el código producido por el
+// ensamblador.
+//
+// Algunos detalles adicionales:
+//
+// 1. A menos que se indique lo contrario, todos los textos, tanto de C como de
+// PseudoD, están en UTF-8.
+//
+// 2. A menos que se indique lo contrario (con `PDCRT_NULL`), ningún puntero
+// puede ser `NULL`.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+
+
+// Las siguientes macros son usadas como "marcadores" de algunas variables:
 
 // Marca un puntero que puede ser nulo
 #define PDCRT_NULL
@@ -20,6 +53,7 @@
 // dinámico. `campo_tam` es una variable o campo que contiene el tamaño del
 // arreglo.
 #define PDCRT_ARR(campo_tam)
+
 
 // Macros de depuración.
 //
@@ -50,11 +84,6 @@
 #define PDCRT_DBG_RASTREAR_CONTEXTO
 #endif
 
-#define PDCRT_DBG_RASTREAR_CONTEXTO
-#define PDCRT_DBG_RASTREAR_MARCOS
-#define PDCRT_DBG_ESTADISTICAS_DE_LOS_ALOJADORES
-#define PDCRT_DBG_ESCRIBIR_ERRORES
-
 // Las macros PRB (de "prueba").
 //
 // Similares a las macros de depuración, estas macros habilitan capacidades del
@@ -80,8 +109,6 @@
 #define PDCRT_PRB_ALOJADOR_INESTABLE 2
 #endif
 
-#define PDCRT_PRB_ALOJADOR_INESTABLE 50
-
 
 // Los dos códigos de salida usados por el runtime.
 //
@@ -103,7 +130,11 @@ typedef enum pdcrt_error
     PDCRT_WPARTIALMEM = 2,
 } pdcrt_error;
 
+// Devuelve una representación textual de un código de error. El puntero
+// devuelto apunta a un bloque de memoria estático, así que no es necesario
+// desalojarlo con `free` y es válido por toda la duración del programa.
 const char* pdcrt_perror(pdcrt_error err);
+
 
 // Alojador.
 //
@@ -133,7 +164,18 @@ const char* pdcrt_perror(pdcrt_error err);
 // `pdcrt_func_alojar` mantienen en todo momento registro del tamaño actual del
 // área, lo que te permite ahorrar espacio en metadatos.
 //
-// En vez de llamar manualmente a `pdcrt_func_alojar`, deberías usar las
+// También notarás como todas las llamadas a `alojador` tienen este argumento
+// `DT`. `DT` es un `void*` provisto por ti mismo para pasar datos adicionales
+// a tus alojadores.
+//
+// Un detalle que debes tener en cuenta con esta API es que no es posible
+// alojar/dealojar un bloque de tamaño 0, específicamente tratar de alojar un
+// bloque de tamaño 0 cuenta como *comportamiento indefinido*. En todas las
+// llamadas a un alojador tendrás que recordar esto. (Esto es diferente de como
+// `malloc` funciona: `malloc` explícitamente indica que puede devolver `NULL`
+// o un puntero válido para `free`.)
+//
+// Nota: En vez de llamar manualmente a `pdcrt_func_alojar`, deberías usar las
 // funciones `pdcrt_alojar_simple`, `pdcrt_dealojar_simple` y
 // `pdcrt_realojar_simple`.
 //
@@ -141,10 +183,6 @@ const char* pdcrt_perror(pdcrt_error err);
 // debería también mantener un sistema de run-time-type-information (RTTI) para
 // permitir al proveedor de memoria optimizar ciertos patrones. Actualmente
 // estoy trabajando en diseñar dicha extensión.
-//
-// También notarás como todas las llamadas a `alojador` tienen este argumento
-// `DT`. `DT` es un `void*` provisto por ti mismo para pasar datos adicionales
-// a tus alojadores.
 typedef PDCRT_NULL void* (*pdcrt_func_alojar)(void* datos_del_usuario, PDCRT_IN PDCRT_NULL void* ptr, size_t tam_viejo, size_t tam_nuevo);
 
 // El verdadero núcleo del sistema de memoria de pdcrt.
@@ -165,6 +203,9 @@ pdcrt_alojador pdcrt_alojador_de_malloc(void);
 // acumula hasta que al final, cuando se llame a
 // `pdcrt_dealoj_alojador_de_arena` toda la memoria que fue alojada será
 // desalojada.
+//
+// Nota: Técnicamente hablando esto no es un alojador de arena sino un alojador
+// grupal.
 pdcrt_error pdcrt_aloj_alojador_de_arena(pdcrt_alojador* aloj);
 void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj);
 
@@ -173,6 +214,7 @@ void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj);
 PDCRT_NULL void* pdcrt_alojar_simple(pdcrt_alojador alojador, size_t tam);
 void pdcrt_dealojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam);
 PDCRT_NULL void* pdcrt_realojar_simple(pdcrt_alojador alojador, PDCRT_NULL void* ptr, size_t tam_actual, size_t tam_nuevo);
+
 
 struct pdcrt_contexto;
 struct pdcrt_objeto;
@@ -199,6 +241,9 @@ typedef int (*pdcrt_proc_t)(struct pdcrt_marco* marco, int args, int rets);
 // El comentario de `pdcrt_objeto` tiene más información, pero es muy
 // importante que `env` sea un puntero ya que los valores del entorno son
 // mutables.
+//
+// Las closures no "poseen" su `env`: un mismo `env` puede ser compartido por
+// varias `pdcrt_closure`s.
 typedef struct pdcrt_closure
 {
     pdcrt_proc_t proc;
@@ -219,11 +264,16 @@ typedef struct pdcrt_impl_obj
 //
 // También nota que `contenido` no tiene `const` en ninguna parte: esto es para
 // simplificar la inicialización de los textos. Sin embargo, tu siempre
-// deberías tratarlo como si estuviese declarado con `PDCRT_ARR(longitud) const
-// char* const contenido;`.
+// deberías tratarlo como si estuviese declarado con `PDCRT_NULL
+// PDCRT_ARR(longitud) const char* const contenido;`.
+//
+// Como caso especial, un texto vacío puede tener `NULL` como `contenido`.
+//
+// Los textos "poseen" su contenido. Este es alojado y desalojado junto al
+// texto.
 typedef struct pdcrt_texto
 {
-    PDCRT_ARR(longitud) char* contenido;
+    PDCRT_NULL PDCRT_ARR(longitud) char* contenido;
     size_t longitud;
 } pdcrt_texto;
 
@@ -278,7 +328,7 @@ typedef void (*pdcrt_funcion_generica)(void);
 // en PseudoD los números son inmutables así que no importa si están a través
 // de un puntero o no. Ahora, podrás preguntarte porqué `pdcrt_closure`, que es
 // mutable, no está a través de un puntero. La respuesta es que la única parte
-// mutable de `pdcrt_closure` el su `pdcrt_env`. Y de hecho, `pdcrt_env` está a
+// mutable de `pdcrt_closure` es su `pdcrt_env`. Y de hecho, `pdcrt_env` está a
 // través de un puntero en `pdcrt_closure`.
 //
 // Otro motivo por el cual los valores en `pdcrt_objeto` están a través de
@@ -387,24 +437,6 @@ typedef int pdcrt_recvmsj(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_obje
 #define PDCRT_ENVIAR_MENSAJE(marco, yo, msj, args, rets)    \
     ((*PDCRT_CONV_RECV((yo).recv))((marco), (yo), (msj), (args), (rets)))
 
-// El entorno de una "closure".
-//
-// `env` contiene los objetos capturados. Para guardarle espacio a las
-// variables especiales (véase más abajo las macros `PDCRT_ID_EACT` y
-// `PDCRT_ID_ESUP`), `env` y `env_size` realmente tienen un tamaño de
-// `tam_del_entorno + PDCRT_NUM_LOCALES_ESP`. Es importante que si vas a
-// acceder directamente a `env`, tengas este "offset" en cuenta.
-//
-// Nota: Podría parecer ineficiente que solo mantenemos tamaño+contenido, en
-// vez de capacidad+tamaño+contenido. Sin embargo, los entornos nunca cambian
-// de tamaño después de creados así que la garantía de agregar elementos en
-// O(1) de forma asintótica no importa.
-typedef struct pdcrt_env
-{
-    size_t env_size;
-    PDCRT_ARR(env_size) pdcrt_objeto env[];
-} pdcrt_env;
-
 // Locales especiales.
 //
 // Algunas variables locales de PseudoD son especiales porque se definen en el
@@ -423,7 +455,8 @@ typedef struct pdcrt_env
 //
 // Los valores de las macros `PDCRT_ID_*` son públicos: están sujetos a la
 // política de estabilidad del proyecto y puedes usarlos directamente en tus
-// programas (aunque te recomiendo usar las macros para mayor legibilidad).
+// programas (aunque te recomiendo usar las macros para mayor legibilidad). Lo
+// mismo con la macro `PDCRT_NUM_LOCALES_ESP`.
 #define PDCRT_ID_EACT -1
 #define PDCRT_ID_ESUP -2
 #define PDCRT_ID_NIL -3
@@ -431,6 +464,31 @@ typedef struct pdcrt_env
 #define PDCRT_NAME_ESUP pdcrt_special_esup
 #define PDCRT_NAME_NIL pdcrt_special_nil
 #define PDCRT_NUM_LOCALES_ESP 2
+
+// El entorno de una "closure".
+//
+// `env` contiene los objetos capturados. Para guardarle espacio a las
+// variables especiales (véase las macros `PDCRT_ID_EACT` y `PDCRT_ID_ESUP`),
+// `env` y `env_size` realmente tienen un tamaño de `tam_del_entorno +
+// PDCRT_NUM_LOCALES_ESP`. Es importante que si vas a acceder directamente a
+// `env`, tengas este "offset" en cuenta.
+//
+// Nota: Podría parecer ineficiente que solo mantenemos tamaño+contenido, en
+// vez de capacidad+tamaño+contenido. Sin embargo, los entornos nunca cambian
+// de tamaño después de creados así que la garantía de agregar elementos en
+// O(1) de forma asintótica no importa.
+typedef struct pdcrt_env
+{
+    size_t env_size;
+    PDCRT_ARR(env_size + PDCRT_NUM_LOCALES_ESP) pdcrt_objeto env[];
+} pdcrt_env;
+
+// Tipo de un índice a una variable local.
+//
+// Usado por `pdcrt_marco` y por `pdcrt_env`, representa el índice de una
+// variable local. Es un entero con signo para permitir los valores negativos
+// de `PDCRT_ID_*`.
+typedef long pdcrt_local_index;
 
 // Aloja y desaloja un entorno.
 //
@@ -440,21 +498,22 @@ pdcrt_error pdcrt_aloj_env(PDCRT_OUT pdcrt_env** env, pdcrt_alojador alojador, s
 void pdcrt_dealoj_env(pdcrt_env* env, pdcrt_alojador alojador);
 
 // Devuelve un C-string que es una versión legible del tipo del objeto
-// especificado.
+// especificado. Tal como con `pdcrt_perror`, el puntero devuelto tiene
+// duración estática y es válido por toda la duración del programa.
 const char* pdcrt_tipo_como_texto(pdcrt_tipo_de_objeto tipo);
 
-// Aborta la ejecución del programa (con `assert`) si `obj` no tiene el tipo
-// `tipo`.
+// Aborta la ejecución del programa si `obj` no tiene el tipo `tipo`.
 void pdcrt_objeto_debe_tener_tipo(pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo);
 
 // Crea un objeto entero (con el valor `v`).
 pdcrt_objeto pdcrt_objeto_entero(int v);
 // Crea un objeto real (con el valor `v`).
 pdcrt_objeto pdcrt_objeto_float(float v);
-// Crea un objeto "MARCA_DE_PILA".
+// Crea un objeto "marca de pila".
 pdcrt_objeto pdcrt_objeto_marca_de_pila(void);
 // Crea un objeto desde un bool.
 pdcrt_objeto pdcrt_objeto_booleano(bool v);
+
 // Aloja un objeto closure.
 //
 // `env_size` será pasado a `pdcrt_aloj_env`, mientras que `proc` será el
@@ -474,6 +533,8 @@ pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador
 // PseudoD", sección "¿Qué es la Igualdad?" para los detalles.
 
 // Determina si dos objetos tienen el mismo valor.
+//
+// No llama a sus métodos `igualA`/`operador_=`, incluso si tienen uno.
 bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b);
 // Determina si `a` y `b` son el mismo objeto.
 bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b);
@@ -513,6 +574,7 @@ typedef struct pdcrt_pila
 // Inicializa y desinicializa una pila.
 pdcrt_error pdcrt_inic_pila(PDCRT_OUT pdcrt_pila* pila, pdcrt_alojador alojador);
 void pdcrt_deinic_pila(pdcrt_pila* pila, pdcrt_alojador alojador);
+
 // Empuja un objeto en la pila. Puede fallar si se queda sin memoria.
 pdcrt_error pdcrt_empujar_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, pdcrt_objeto val);
 // Saca un elemento de la pila. Aborta la ejecución del programa si la pila
@@ -521,10 +583,14 @@ pdcrt_objeto pdcrt_sacar_de_pila(pdcrt_pila* pila);
 // Obtiene el objeto en la cima de la pila. Aborta la ejecución del programa si
 // la pila está vacía.
 pdcrt_objeto pdcrt_cima_de_pila(pdcrt_pila* pila);
-// Elimina el enésimo elemento de la pila.
+// Elimina el enésimo elemento de la pila. Nota que `n` indexa desde la cima de
+// la pila, no desde el comienzo de `pila->elementos`. Por ejemplo: si `n` es 0
+// entonces esto es lo mismo que `pdcrt_cima_de_pila`.
 pdcrt_objeto pdcrt_eliminar_elemento_en_pila(pdcrt_pila* pila, size_t n);
-// Inserta un elemento en la pila en una posición indicada.
+// Inserta un elemento en la pila en una posición indicada. Tal como con
+// `pdcrt_eliminar_elemento_en_pila`, `n` indexa desde la cima.
 void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, size_t n, pdcrt_objeto obj);
+
 
 // Lista de constantes ("constant pool").
 //
@@ -553,17 +619,21 @@ typedef struct pdcrt_constantes
     pdcrt_texto* txt_falso;
 } pdcrt_constantes;
 
-// Inicializa la lista de constantes.
+// Aloja una nueva lista de constantes.
 pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_constantes* consts);
 // Registra una constante textual en la lista. La lista es expandida en la
 // medida necesaria para que la operación funcione.
 pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto);
+
 
 // El contexto del intérprete.
 //
 // El núcleo del runtime. El contexto contiene todas las partes "globales" del
 // programa, como la pila, el alojador, la lista de constantes e información de
 // depuración.
+//
+// El contexto "posee" la pila y la lista de constantes: al desalojar el
+// contexto también se desalojará la pila y la lista de constantes.
 typedef struct pdcrt_contexto
 {
     pdcrt_pila pila;
@@ -580,9 +650,11 @@ PDCRT_NULL void* pdcrt_alojar(pdcrt_contexto* ctx, size_t tam);
 void pdcrt_dealojar(pdcrt_contexto* ctx, void* ptr, size_t tam);
 PDCRT_NULL void* pdcrt_realojar(pdcrt_contexto* ctx, PDCRT_NULL void* ptr, size_t tam_actual, size_t tam_nuevo);
 
-// Inicializa y desinicializa un contexto.
+// Inicializa y desinicializa un contexto. También inicializa la pila y la
+// lista de constantes de este.
 pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador);
 void pdcrt_deinic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador);
+
 // Escribe a la salida estándar información útil cuando se quiere depurar un
 // contexto. `extra` será escrito junto a la salida para que la puedas
 // distinguir.
@@ -591,9 +663,8 @@ void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra);
 // Procesa los argumentos del CLI indicados en `argc` y `argv`, leyéndolos como
 // argumentos del runtime. Esta función usa estado global y no es ni reentrante
 // ni thread-safe. Tampoco puede llamarse más de una vez.
-//
-// Del CLI configura el contexto dado.
 void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[]);
+
 
 // Un marco de llamadas (también llamado "marco de activación").
 //
@@ -608,13 +679,10 @@ void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[]);
 typedef struct pdcrt_marco
 {
     pdcrt_contexto* contexto;
-    PDCRT_ARR(num_locales) pdcrt_objeto* locales;
+    PDCRT_ARR(num_locales + PDCRT_NUM_LOCALES_ESP) pdcrt_objeto* locales;
     size_t num_locales;
     PDCRT_NULL struct pdcrt_marco* marco_anterior;
 } pdcrt_marco;
-
-// Tipo de un índice a una variable local.
-typedef long pdcrt_local_index;
 
 // Inicializa y desinicializa un marco. `num_locales` es el número de locales,
 // `PDCRT_NUM_LOCALES_ESP` será agregado automáticamente así que no tienes que
@@ -624,11 +692,15 @@ typedef long pdcrt_local_index;
 // activó a este.
 pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_t num_locales, PDCRT_NULL pdcrt_marco* marco_anterior);
 void pdcrt_deinic_marco(pdcrt_marco* marco);
+
 // Fija el valor de una variable local.
 void pdcrt_fijar_local(pdcrt_marco* marco, pdcrt_local_index n, pdcrt_objeto obj);
 // Obtiene el valor de una variable local.
 pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
 
+// Tal como `pdcrt_depurar_contexto`, pero muestra información referente a un
+// marco. `procname` es el nombre del procedimiento que contiene el marco a
+// mostrar. `info` es un texto adicional que se mostrará en la salida.
 void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* info);
 
 // La macro `PDCRT_RASTREAR_MARCO(marco, procname, info)` emitirá una llamada a
@@ -761,7 +833,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
 // Los opcodes.
 //
 // Véase el ensamblador para ver que hace cada uno. Cada una de estas funciones
-// corresponde 1-a-1 con un opcode.
+// corresponde case 1-a-1 con un opcode.
 
 void pdcrt_op_iconst(pdcrt_marco* marco, int c);
 void pdcrt_op_bconst(pdcrt_marco* marco, bool c);
