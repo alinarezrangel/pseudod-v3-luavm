@@ -33,8 +33,8 @@ sample.c: main.lua
 sample: sample.c libpdcrt.a
 	$(CC) $(CFLAGS) sample.c $(CLIBS) -o sample
 
-pdcrt.o: pdcrt.c pdcrt.h
-	$(CC) $(CFLAGS) -c pdcrt.c -o pdcrt.o
+pdcrt.o: src/pdcrt.c src/pdcrt.h
+	$(CC) $(CFLAGS) -c src/pdcrt.c -o pdcrt.o
 
 libpdcrt.a: pdcrt.o
 	ar rcs libpdcrt.a pdcrt.o
