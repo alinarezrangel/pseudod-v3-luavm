@@ -838,7 +838,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
 // Los opcodes.
 //
 // Véase el ensamblador para ver que hace cada uno. Cada una de estas funciones
-// corresponde case 1-a-1 con un opcode.
+// corresponde casi 1-a-1 con un opcode.
 
 void pdcrt_op_iconst(pdcrt_marco* marco, int c);
 void pdcrt_op_bconst(pdcrt_marco* marco, bool c);
