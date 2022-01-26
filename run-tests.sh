@@ -1,6 +1,6 @@
 #!/bin/sh
 
-for test_name in fib arit envs par procs str2num txtbuscar fmt boole sumador
+for test_name in fib arit envs par procs str2num txtbuscar fmt boole sumador spush inittonull
 do
     echo "Running $test_name"
     if ./run.sh "./tests/$test_name.pdasm" "./tests/$test_name.expected.txt"; then
