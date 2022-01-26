@@ -388,7 +388,8 @@ typedef struct pdcrt_objeto
         PDCRT_TOBJ_CLOSURE = 3,
         PDCRT_TOBJ_TEXTO = 4,
         PDCRT_TOBJ_OBJETO = 5,
-        PDCRT_TOBJ_BOOLEANO = 6
+        PDCRT_TOBJ_BOOLEANO = 6,
+        PDCRT_TOBJ_NULO = 7
     } tag;
     union
     {
@@ -513,6 +514,8 @@ pdcrt_objeto pdcrt_objeto_float(float v);
 pdcrt_objeto pdcrt_objeto_marca_de_pila(void);
 // Crea un objeto desde un bool.
 pdcrt_objeto pdcrt_objeto_booleano(bool v);
+// Crea un objeto nulo.
+pdcrt_objeto pdcrt_objeto_nulo(void);
 
 // Aloja un objeto closure.
 //
@@ -547,6 +550,7 @@ int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto ms
 int pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 int pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 int pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+int pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 
 // Formatear:
@@ -617,6 +621,7 @@ typedef struct pdcrt_constantes
     pdcrt_texto* msj_comoTexto;
     pdcrt_texto* txt_verdadero;
     pdcrt_texto* txt_falso;
+    pdcrt_texto* txt_nulo;
 } pdcrt_constantes;
 
 // Aloja una nueva lista de constantes.
@@ -779,7 +784,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
 
 // Declara, fija y obtiene una variable local.
 #define PDCRT_LOCAL(idx, name)                              \
-    pdcrt_fijar_local(marco, idx, pdcrt_objeto_entero(0))
+    pdcrt_fijar_local(marco, idx, pdcrt_objeto_nulo())
 #define PDCRT_SET_LVAR(idx, val)                \
     pdcrt_fijar_local(marco, idx, val)
 #define PDCRT_GET_LVAR(idx)                     \
