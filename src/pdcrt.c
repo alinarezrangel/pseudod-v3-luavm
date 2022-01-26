@@ -2015,3 +2015,33 @@ void pdcrt_op_msg(pdcrt_marco* marco, int cid, int args, int rets)
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
     PDCRT_ENVIAR_MENSAJE(marco, obj, mensaje, args, rets);
 }
+
+void pdcrt_op_spush(pdcrt_marco* marco, int eact, int esup)
+{
+    pdcrt_objeto o_eact = pdcrt_obtener_local(marco, eact);
+    pdcrt_objeto o_esup = pdcrt_obtener_local(marco, esup);
+    o_esup = o_eact;
+    o_eact = pdcrt_objeto_entero(0);
+    pdcrt_fijar_local(marco, eact, o_eact);
+    pdcrt_fijar_local(marco, esup, o_esup);
+    PDCRT_RASTREAR_MARCO(marco, "<unk>", "SPUSH");
+}
+
+void pdcrt_op_spop(pdcrt_marco* marco, int eact, int esup)
+{
+    pdcrt_objeto o_eact = pdcrt_obtener_local(marco, eact);
+    pdcrt_objeto o_esup = pdcrt_obtener_local(marco, esup);
+    pdcrt_objeto_debe_tener_tipo(o_eact, PDCRT_TOBJ_CLOSURE);
+    pdcrt_objeto_debe_tener_tipo(o_esup, PDCRT_TOBJ_CLOSURE);
+    assert(o_eact.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP].value.c.env == o_esup.value.c.env);
+    o_esup = o_esup.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
+    o_eact = o_eact.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
+    pdcrt_objeto_debe_tener_tipo(o_eact, PDCRT_TOBJ_CLOSURE);
+    // No es necesario verificar que ESUP sea una CLOSURE porque el primer EACT
+    // de un procedimiento no tiene ESUP, o en otras palabras: si EACT es el
+    // primero del procedimiento (lo que corresponde con `SPOP`-ear al ámbito
+    // principal) entonces ESUP será nulo.
+    pdcrt_fijar_local(marco, eact, o_eact);
+    pdcrt_fijar_local(marco, esup, o_esup);
+    PDCRT_RASTREAR_MARCO(marco, "<unk>", "SPOP");
+}

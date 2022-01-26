@@ -128,6 +128,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "ROT" / "GT" / "LT" / "GE" / "LE"
     / "MSG"
     / "PRN" / "NL"
+    / "SPUSH" / "SPOP"
 
 procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
@@ -678,6 +679,20 @@ function toc.opcodes.MSG(emit, state, op)
    emit:stmt("pdcrt_op_msg(marco, «1:int», «2:int», «3:int»)", op.Cx, op.Ua, op.Ub)
 end
 
+toc.opschema.SPUSH = schema "Ea, Eb"
+function toc.opcodes.SPUSH(emit, state, op)
+   assert(op.Ea == EACT)
+   assert(op.Eb == ESUP)
+   emit:stmt("pdcrt_op_spush(marco, PDCRT_ID_EACT, PDCRT_ID_ESUP)")
+end
+
+toc.opschema.SPOP = schema "Ea, Eb"
+function toc.opcodes.SPOP(emit, state, op)
+   assert(op.Ea == EACT)
+   assert(op.Eb == ESUP)
+   emit:stmt("pdcrt_op_spop(marco, PDCRT_ID_EACT, PDCRT_ID_ESUP)")
+end
+
 -- Opcodes end.
 
 function toc.opcode(emit, state, op)
@@ -836,66 +851,39 @@ PDVM 1.0
 PLATFORM "pdcrt"
 
 SECTION "code"
-  LCONST 1
-  MSG 2, 0, 1
+  LOCAL 0
+  OPNFRM EACT, NIL, 1
+  EINIT EACT, 0, 0
+  CLSFRM EACT
+
+  ICONST 0
+  LSETC EACT, 0, 0
+
+  NAME 1
+  LGETC EACT, 0, 0
+  ICONST 10
+  LT
+  CHOOSE 2, 3
+  NAME 2
+  SPUSH EACT, ESUP
+  OPNFRM EACT, ESUP, 0
+  CLSFRM EACT
+  LGETC EACT, 1, 0
+  ICONST 1
+  SUM
+  LSETC EACT, 1, 0
+  LGETC EACT, 1, 0
   PRN
   NL
+  SPOP EACT, ESUP
+  JMP 1
+  NAME 3
 ENDSECTION
 
 SECTION "procedures"
-  PROC 0
-    LOCAL 0
-    OPNFRM EACT, NIL, 1
-    EINIT EACT, 0, 0
-    CLSFRM EACT
-    MKCLZ EACT, 1
-    LSETC EACT, 0, 0
-    LGETC EACT, 0, 0
-    ICONST 20
-    ROT 1
-    DYNCALL 1, 1
-    ROT 0
-    MSG 0, 0, 1
-    PRN
-    NL
-  ENDPROC
-
-  PROC 1
-    PARAM ESUP
-    PARAM 0
-    OPNFRM EACT, ESUP, 0
-    CLSFRM EACT
-    LGET 0
-    ICONST 2
-    LT
-    CHOOSE 1, 2
-    NAME 1
-    ICONST 1
-    RETN 1
-    JMP 3
-    NAME 2
-    LGETC EACT, 1, 0
-    LGET 0
-    ICONST 1
-    SUB
-    ROT 1
-    DYNCALL 1, 1
-    LGETC EACT, 1, 0
-    LGET 0
-    ICONST 2
-    SUB
-    ROT 1
-    DYNCALL 1, 1
-    SUM
-    RETN 1
-    NAME 3
-  ENDPROC
 ENDSECTION
 
 SECTION "constant pool"
-  #0 STRING "comoTexto"
-  #1 STRING "6"
-  #2 STRING "comoNumeroEntero"
 ENDSECTION
 
 ]=]

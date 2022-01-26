@@ -893,4 +893,7 @@ void pdcrt_op_nl(pdcrt_marco* marco);
 
 void pdcrt_op_msg(pdcrt_marco* marco, int cid, int args, int rets);
 
+void pdcrt_op_spush(pdcrt_marco* marco, int eact, int esup);
+void pdcrt_op_spop(pdcrt_marco* marco, int eact, int esup);
+
 #endif /* PDCRT_H */
