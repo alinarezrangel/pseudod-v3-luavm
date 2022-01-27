@@ -649,8 +649,8 @@ typedef struct pdcrt_contexto
 // Variantes de las funciones con el mismo nombre pero sin el `_simple` al
 // final.
 //
-// En vez de pedirte un alojador, usan el contenido en el contexto. Además de
-// esto, son iguales a sus homónimos con `_simple`.
+// En vez de pedirte un alojador, usan el contenido en el contexto. En todo lo
+// demás son iguales a sus homónimos con `_simple`.
 PDCRT_NULL void* pdcrt_alojar(pdcrt_contexto* ctx, size_t tam);
 void pdcrt_dealojar(pdcrt_contexto* ctx, void* ptr, size_t tam);
 PDCRT_NULL void* pdcrt_realojar(pdcrt_contexto* ctx, PDCRT_NULL void* ptr, size_t tam_actual, size_t tam_nuevo);
@@ -742,7 +742,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
         puts(pdcrt_perror(pderrno));                                    \
         exit(PDCRT_SALIDA_ERROR);                                       \
     }                                                                   \
-    if((pderrno = pdcrt_inic_contexto(&ctx_real, aloj)) != PDCRT_OK) \
+    if((pderrno = pdcrt_inic_contexto(&ctx_real, aloj)) != PDCRT_OK)    \
     {                                                                   \
         puts(pdcrt_perror(pderrno));                                    \
         exit(PDCRT_SALIDA_ERROR);                                       \
@@ -814,7 +814,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
     while(0)
 #define PDCRT_ASSERT_PARAMS(nparams)            \
     pdcrt_assert_params(marco, nparams)
-#define PDCRT_PARAM(idx, param)                        \
+#define PDCRT_PARAM(idx, param)                                     \
     pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
 #define PDCRT_PROC_POSTLUDE(name)                                       \
     do                                                                  \
@@ -898,7 +898,7 @@ void pdcrt_op_nl(pdcrt_marco* marco);
 
 void pdcrt_op_msg(pdcrt_marco* marco, int cid, int args, int rets);
 
-void pdcrt_op_spush(pdcrt_marco* marco, int eact, int esup);
-void pdcrt_op_spop(pdcrt_marco* marco, int eact, int esup);
+void pdcrt_op_spush(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup);
+void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup);
 
 #endif /* PDCRT_H */

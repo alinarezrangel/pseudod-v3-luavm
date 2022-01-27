@@ -1404,65 +1404,42 @@ pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_const
     {                                                                   \
         goto error;                                                     \
     }
-#define PDCRT_DEINIC_CONST_TXT(cm)                  \
+#define PDCRT_DEINIC_CONST_TXT(cm, _lit)            \
     if(consts->cm != NULL)                          \
     {                                               \
         pdcrt_dealoj_texto(alojador, consts->cm);   \
     }
+#define PDCRT_NULL_CONST_TXT(cm, _lit)          \
+    consts->cm = NULL;
 
-    consts->operador_mas = NULL;
-    consts->operador_menos = NULL;
-    consts->operador_por = NULL;
-    consts->operador_entre = NULL;
-    consts->operador_menorQue = NULL;
-    consts->operador_menorOIgualA = NULL;
-    consts->operador_mayorQue = NULL;
-    consts->operador_mayorOIgualA = NULL;
-    consts->operador_igualA = NULL;
-    consts->msj_igualA = NULL;
-    consts->msj_clonar = NULL;
-    consts->msj_llamar = NULL;
-    consts->msj_comoTexto = NULL;
-    consts->txt_verdadero = NULL;
-    consts->txt_falso = NULL;
-    consts->txt_nulo = NULL;
-    PDCRT_INIC_CONST_TXT(operador_mas, "operador_+");
-    PDCRT_INIC_CONST_TXT(operador_menos, "operador_-");
-    PDCRT_INIC_CONST_TXT(operador_por, "operador_*");
-    PDCRT_INIC_CONST_TXT(operador_entre, "operador_/");
-    PDCRT_INIC_CONST_TXT(operador_menorQue, "operador_<");
-    PDCRT_INIC_CONST_TXT(operador_menorOIgualA, "operador_=<");
-    PDCRT_INIC_CONST_TXT(operador_mayorQue, "operador_>");
-    PDCRT_INIC_CONST_TXT(operador_mayorOIgualA, "operador_>=");
-    PDCRT_INIC_CONST_TXT(operador_igualA, "operador_=");
-    PDCRT_INIC_CONST_TXT(msj_igualA, "igualA");
-    PDCRT_INIC_CONST_TXT(msj_clonar, "clonar");
-    PDCRT_INIC_CONST_TXT(msj_llamar, "llamar");
-    PDCRT_INIC_CONST_TXT(msj_comoTexto, "comoTexto");
-    PDCRT_INIC_CONST_TXT(txt_verdadero, "VERDADERO");
-    PDCRT_INIC_CONST_TXT(txt_falso, "FALSO");
-    PDCRT_INIC_CONST_TXT(txt_nulo, "NULO");
+#define PDCRT_TABLA(M)                                     \
+    M(operador_mas, "operador_+");                         \
+    M(operador_menos, "operador_-");                       \
+    M(operador_por, "operador_*");                         \
+    M(operador_entre, "operador_/");                       \
+    M(operador_menorQue, "operador_<");                    \
+    M(operador_mayorQue, "operador_>");                    \
+    M(operador_menorOIgualA, "operador_=<");               \
+    M(operador_mayorOIgualA, "operador_>=");               \
+    M(operador_igualA, "operador_=");                      \
+    M(msj_igualA, "igualA");                               \
+    M(msj_clonar, "clonar");                               \
+    M(msj_llamar, "llamar");                               \
+    M(msj_comoTexto, "comoTexto");                         \
+    M(txt_verdadero, "VERDADERO");                         \
+    M(txt_falso, "FALSO");                                 \
+    M(txt_nulo, "NULO");
+
+    PDCRT_TABLA(PDCRT_NULL_CONST_TXT)
+    PDCRT_TABLA(PDCRT_INIC_CONST_TXT)
     return PDCRT_OK;
 error:
-    PDCRT_DEINIC_CONST_TXT(operador_mas);
-    PDCRT_DEINIC_CONST_TXT(operador_menos);
-    PDCRT_DEINIC_CONST_TXT(operador_por);
-    PDCRT_DEINIC_CONST_TXT(operador_entre);
-    PDCRT_DEINIC_CONST_TXT(operador_menorQue);
-    PDCRT_DEINIC_CONST_TXT(operador_menorOIgualA);
-    PDCRT_DEINIC_CONST_TXT(operador_mayorQue);
-    PDCRT_DEINIC_CONST_TXT(operador_mayorOIgualA);
-    PDCRT_DEINIC_CONST_TXT(operador_igualA);
-    PDCRT_DEINIC_CONST_TXT(msj_igualA);
-    PDCRT_DEINIC_CONST_TXT(msj_clonar);
-    PDCRT_DEINIC_CONST_TXT(msj_llamar);
-    PDCRT_DEINIC_CONST_TXT(msj_comoTexto);
-    PDCRT_DEINIC_CONST_TXT(txt_verdadero);
-    PDCRT_DEINIC_CONST_TXT(txt_falso);
-    PDCRT_DEINIC_CONST_TXT(txt_nulo);
+    PDCRT_TABLA(PDCRT_DEINIC_CONST_TXT)
 
 #undef PDCRT_DEINIC_CONST_TXT
 #undef PDCRT_INIC_CONST_TXT
+#undef PDCRT_NULL_CONST_TXT
+#undef PDCRT_TABLA
 
     PDCRT_ESCRIBIR_ERROR(pderrno, __func__);
     return pderrno;
@@ -2067,7 +2044,7 @@ void pdcrt_op_msg(pdcrt_marco* marco, int cid, int args, int rets)
     PDCRT_ENVIAR_MENSAJE(marco, obj, mensaje, args, rets);
 }
 
-void pdcrt_op_spush(pdcrt_marco* marco, int eact, int esup)
+void pdcrt_op_spush(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup)
 {
     pdcrt_objeto o_eact = pdcrt_obtener_local(marco, eact);
     pdcrt_objeto o_esup = pdcrt_obtener_local(marco, esup);
@@ -2078,7 +2055,7 @@ void pdcrt_op_spush(pdcrt_marco* marco, int eact, int esup)
     PDCRT_RASTREAR_MARCO(marco, "<unk>", "SPUSH");
 }
 
-void pdcrt_op_spop(pdcrt_marco* marco, int eact, int esup)
+void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup)
 {
     pdcrt_objeto o_eact = pdcrt_obtener_local(marco, eact);
     pdcrt_objeto o_esup = pdcrt_obtener_local(marco, esup);
