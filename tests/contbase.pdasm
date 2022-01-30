@@ -1,0 +1,34 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  ICONST 0
+  LSET 0
+  NAME 1
+  LGET 0
+  ICONST 10
+  LT
+  CHOOSE 2, 3
+  NAME 2
+  LGET 0
+  ICONST 1
+  SUM
+  LSET 0
+  LGET 0
+  PRN
+  NL
+  JMP 1
+  NAME 3
+  ICONST 1000
+  MSG 1, 0, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+ENDSECTION
+
+SECTION "constant pool"
+  #1 STRING "negar"
+ENDSECTION

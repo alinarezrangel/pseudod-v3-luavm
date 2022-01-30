@@ -22,22 +22,39 @@ local WARNINGS = {
    -- {nombre-largo, nombre-corto, {llaves-en-enabledwarnings...}, ayuda}
    {"increasing-locals", "inc-locals", {"increasing_locals"},
     "Advierte de cuando los índices de las locales no están en órden ascendente."},
+
    {"redefined-constant", "redef-const", {"redefined_constant"},
     "Advierte cuando se redefina una constante."},
+
    {"procedure-doesnt-exists", "undef-proc", {"procedure_doesnt_exists"},
     "Advierte cuando se refiera a un procedimiento que no exísta."},
+
    {"redefined-procedure", "redef-proc", {"redefined_procedure"},
     "Advierte cuando se redefina un procedimiento."},
+
    {"no-procedure-section", "no-proc-sec", {"no_procedure_section"},
     "Advierte si no hay sección de procedimientos."},
+
+   {"no-constant-pool", "no-const-pool", {"no_constant_pool"},
+    "Advierte si no hay una sección de \"lista de constantes\"."},
+
    {"no-constants-section", "no-const-sec", {"no_constant_section"},
     "Advierte si no hay sección de constantes."},
+
    {"no-code-section", "no-code-sec", {"no_code_section"},
     "Advierte si no hay sección de código."},
+
+   {"empty-function", "empty-fn", {"empty_function"},
+    "Advierte si se encuentra una función vacía."},
+
    {"future", "future", {"future"},
     "Advierte sobre cosas que van a cambiar en un futuro."},
-   {"useful", "useful", {"redefined_constant", "redefined_procedure", "procedure_doesnt_exists", "no_procedure_section", "no_code_section", "future"},
+
+   {"useful", "useful", {"redefined_constant", "redefined_procedure", "procedure_doesnt_exists",
+                         "no_procedure_section", "no_code_section", "no_constant_pool",
+                         "empty_function", "future"},
     "Activa advertencias útiles durante el desarrollo."},
+
    {"all", "all", {--[[ el código más adelante llena este campo ]]},
     "Activa todas las advertencias."},
 }
@@ -306,21 +323,73 @@ local function processconstpool(cpool)
 end
 
 
-function attach_extra(tbl, extra)
+local REQUIRES_CONTINUATION = {
+   "LT", "GT", "LE", "GE",     -- Llamadas a función (operadores)
+   "CMPEQ", "CMPNEQ",          -- Llamadas a función (método `igualA`)
+   "MSG", "DYNCALL",           -- Llamadas a función
+   "SUM", "SUB", "MUL", "DIV", -- Llamadas a función (operadores)
+   "NAME", "JMP", "CHOOSE"     -- Control de flujo
+}
+
+local FALLS_THROUGHT = {
+   "NAME",
+}
+
+local function contains(tbl, el)
+   for i = 1, #tbl do
+      if tbl[i] == el then
+         return true
+      end
+   end
+   return false
+end
+
+local function splitcode(code)
+   local parts = {{}}
+   for i = 1, #code.opcodes do
+      local instr = code.opcodes[i]
+      local opcode = instr[1]
+      if contains(REQUIRES_CONTINUATION, opcode) then
+         local lastpart = parts[#parts]
+         lastpart.kreq = instr
+         parts[#parts + 1] = {}
+      else
+         local lastpart = parts[#parts]
+         lastpart[#lastpart + 1] = instr
+      end
+   end
+
+   local res = {}
+   for k, v in pairs(code) do
+      res[k] = v
+   end
+   res.opcodes = nil
+   res.parts = parts
+   return res
+end
+
+
+local function attach_extra(tbl, extra)
    local function index(t, k)
       local v = extra[k]
       if v ~= nil then
          return v
       else
-         return rawget(t, k)
+         return tbl[k]
       end
    end
    local r = {}
-   for k, v in pairs(tbl) do
-      r[k] = v
-   end
-   return setmetatable(r, {__index = index})
+   return setmetatable(r, {__index = index, tbl = tbl, extra = extra})
 end
+
+local function extra_wrapped(tbl)
+   return getmetatable(tbl).tbl
+end
+
+local function extra_extra(tbl)
+   return getmetatable(tbl).extra
+end
+
 
 local toc = {}
 
@@ -398,7 +467,7 @@ function toc.makeemitter()
          if arg == ESUP or arg == EACT then
             isspecial = true
          end
-         assert(isspecial or math.type(arg) == "integer" and arg >= 0, "expected integer")
+         assert(isspecial or (math.type(arg) == "integer" and arg >= 0), "expected local id")
          if arg == ESUP then
             return "PDCRT_NAME_ESUP"
          elseif arg == EACT then
@@ -414,7 +483,7 @@ function toc.makeemitter()
          if arg == ESUP or arg == EACT then
             isspecial = true
          end
-         assert(ornil or isspecial or (math.type(arg) == "integer" and arg >= 0), "expected integer")
+         assert(ornil or isspecial or (math.type(arg) == "integer" and arg >= 0), "expected local id")
          if arg == nil then
             return "PDCRT_ID_NIL"
          elseif arg == ESUP then
@@ -425,14 +494,20 @@ function toc.makeemitter()
             return tostring(arg)
          end
       elseif spec == "procid" then
-         assert(math.type(arg) == "integer" and arg >= 0, "expected integer")
+         assert(math.type(arg) == "integer" and arg >= 0, "expected procedure id")
          return tostring(arg)
       elseif spec == "procname" then
-         assert(math.type(arg) == "integer" and arg >= 0, "expected integer")
+         assert(math.type(arg) == "integer" and arg >= 0, "expected procedure id")
          return ("PDCRT_PROC_NAME(name_%s)"):format(tostring(arg))
       elseif spec == "labelid" then
          assert(math.type(arg) == "integer" and arg >= 0, "expected label")
          return tostring(arg)
+      elseif spec == "contproc" then
+         assert(math.type(arg) == "integer" and arg >= 0, "expected continuation procedure")
+         return "name_" .. tostring(arg)
+      elseif spec == "contname" then
+         assert(math.type(arg) == "integer" and arg >= 0, "expected continuation id")
+         return "k" .. tostring(arg)
       elseif spec == "strlit" then
          assert(type(arg) == "string", "expected string")
          return '"' .. escapecstr(arg) .. '"'
@@ -540,42 +615,42 @@ end
 
 toc.opschema.SUM = schema ""
 function toc.opcodes.SUM(emit, state, op)
-   emit:stmt("pdcrt_op_sum(marco)")
+   emit:stmt("return pdcrt_op_sum(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.MUL = schema ""
 function toc.opcodes.MUL(emit, state, op)
-   emit:stmt("pdcrt_op_mul(marco)")
+   emit:stmt("return pdcrt_op_mul(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.SUB = schema ""
 function toc.opcodes.SUB(emit, state, op)
-   emit:stmt("pdcrt_op_sub(marco)")
+   emit:stmt("return pdcrt_op_sub(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.DIV = schema ""
 function toc.opcodes.DIV(emit, state, op)
-   emit:stmt("pdcrt_op_div(marco)")
+   emit:stmt("return pdcrt_op_div(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.GT = schema ""
 function toc.opcodes.GT(emit, state, op)
-   emit:stmt("pdcrt_op_gt(marco)")
+   emit:stmt("return pdcrt_op_gt(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.LT = schema ""
 function toc.opcodes.LT(emit, state, op)
-   emit:stmt("pdcrt_op_lt(marco)")
+   emit:stmt("return pdcrt_op_lt(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.GE = schema ""
 function toc.opcodes.GE(emit, state, op)
-   emit:stmt("pdcrt_op_ge(marco)")
+   emit:stmt("return pdcrt_op_ge(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.LE = schema ""
 function toc.opcodes.LE(emit, state, op)
-   emit:stmt("pdcrt_op_le(marco)")
+   emit:stmt("return pdcrt_op_le(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.LSET = schema "Lx"
@@ -625,22 +700,28 @@ end
 
 toc.opschema.DYNCALL = schema "Ux, Uy"
 function toc.opcodes.DYNCALL(emit, state, op)
-   emit:stmt("pdcrt_op_dyncall(marco, «1:int», «2:int»)", op.Ux, op.Uy)
+   emit:stmt("return pdcrt_op_dyncall(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int»)", state.current_proc.id, state.next_ccid, op.Ux, op.Uy)
 end
 
 toc.opschema.CHOOSE = schema "Tx, Ty"
 function toc.opcodes.CHOOSE(emit, state, op)
-   emit:stmt("if(pdcrt_op_choose(marco)) { goto PDCRT_LABEL(«1:labelid»); } else { goto PDCRT_LABEL(«2:labelid»); }", op.Tx, op.Ty)
+   local cont_consq = state.labels_to_ccid[op.Tx]
+   local cont_alt = state.labels_to_ccid[op.Ty]
+   emit:toplevelstmt("if(pdcrt_op_choose(marco)) {")
+   emit:stmt("PDCRT_CONTINUE(«1:contproc», «2:contname»)", state.current_proc.id, cont_consq)
+   emit:toplevelstmt("} else {")
+   emit:stmt("PDCRT_CONTINUE(«1:contproc», «2:contname»)", state.current_proc.id, cont_alt)
+   emit:toplevelstmt("}")
 end
 
 toc.opschema.NAME = schema "Tx"
 function toc.opcodes.NAME(emit, state, op)
-   emit:stmt("PDCRT_LABEL(«1:labelid»):", op.Tx)
+   -- Nothing to do
 end
 
 toc.opschema.JMP = schema "Tx"
 function toc.opcodes.JMP(emit, state, op)
-   emit:stmt("goto PDCRT_LABEL(«1:labelid»)", op.Tx)
+   emit:stmt("PDCRT_CONTINUE(«1:contproc», «2:contname»)", state.current_proc.id, state.labels_to_ccid[op.Tx])
 end
 
 toc.opschema.ROT = schema "Ia"
@@ -650,8 +731,7 @@ end
 
 toc.opschema.RETN = schema "Ua"
 function toc.opcodes.RETN(emit, state, op)
-   emit:stmt("pdcrt_op_retn(marco, «1:int»)", op.Ua)
-   emit:stmt("PDCRT_RETURN()")
+   emit:stmt("PDCRT_RETURN(«1:int»)", op.Ua)
 end
 
 toc.opschema.NOT = schema ""
@@ -666,17 +746,17 @@ end
 
 toc.opschema.CMPEQ = schema ""
 function toc.opcodes.CMPEQ(emit, state, op)
-   emit:stmt("pdcrt_op_cmp(marco, PDCRT_CMP_EQ)")
+   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_EQ, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.CMPNEQ = schema ""
 function toc.opcodes.CMPNEQ(emit, state, op)
-   emit:stmt("pdcrt_op_cmp(marco, PDCRT_CMP_NEQ)")
+   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_NEQ, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.MSG = schema "Cx, Ua, Ub"
 function toc.opcodes.MSG(emit, state, op)
-   emit:stmt("pdcrt_op_msg(marco, «1:int», «2:int», «3:int»)", op.Cx, op.Ua, op.Ub)
+   emit:stmt("return pdcrt_op_msg(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int», «5:int»)", state.current_proc.id, state.next_ccid, op.Cx, op.Ua, op.Ub)
 end
 
 toc.opschema.SPUSH = schema "Ea, Eb"
@@ -711,24 +791,30 @@ function toc.compconsts(emit, state)
    end
 end
 
-function toc.compcode(emit, state)
-   emit:opentoplevel("PDCRT_MAIN() {")
-   emit:stmt("PDCRT_MAIN_PRELUDE(«1:int»)", #state.code.locals)
-   log.dbg("starting to emit consts inside code")
-   toc.compconsts(emit, state)
-   log.dbg("emitted consts.")
-   for i = 1, #state.code.locals do
-      local p = state.code.locals[i]
-      emit:stmt("PDCRT_LOCAL(«1:localid», «1:localname»)", p[2])
+function toc.comppart(emit, state, part, next_ccid)
+   local substate = attach_extra(state, { next_ccid = next_ccid })
+   for i = 1, #part do
+      toc.opcode(emit, substate, part[i])
    end
-   for i = 1, #state.code.opcodes do
-      toc.opcode(emit, state, state.code.opcodes[i])
+   if part.kreq then
+      toc.opcode(emit, substate, part.kreq)
    end
-   emit:stmt("PDCRT_MAIN_POSTLUDE()")
-   emit:closetoplevel("}")
 end
 
-function toc.opproc(emit, state, proc)
+function toc.compparts(emit, state, proc)
+   -- ccid = Continuation Id
+   local labels_to_ccid = {}
+   for i = 1, #proc.parts - 1 do
+      local part = proc.parts[i]
+      if part.kreq[1] == "NAME" then
+         labels_to_ccid[part.kreq[2]] = i + 1
+         assert((i + 1) <= #proc.parts, "continuation must follow NAME opcode")
+      end
+   end
+
+   local substate = attach_extra(state, { labels_to_ccid = labels_to_ccid })
+
+   log.dbg("emitting main proc for %s", proc.id)
    emit:opentoplevel("PDCRT_PROC(«1:localname») {", proc.id)
    emit:stmt("PDCRT_PROC_PRELUDE(«1:localname», «2:int»)", proc.id, #proc.params + #proc.locals)
    emit:stmt("PDCRT_ASSERT_PARAMS(«1:int»)", #proc.params)
@@ -740,12 +826,66 @@ function toc.opproc(emit, state, proc)
       local p = proc.locals[i]
       emit:stmt("PDCRT_LOCAL(«1:localid», «1:localname»)", p[2])
    end
-   for i = 1, #proc.opcodes do
-      toc.opcode(emit, state, proc.opcodes[i])
+   if #proc.parts > 0 then
+      log.dbg("emitting main part for procedure %s", proc.id)
+      toc.comppart(emit, substate, proc.parts[1], 2)
+      log.dbg("emitted")
+   else
+      warnabout("empty_function", "procedure %s is empty", proc.id)
    end
-   emit:stmt("PDCRT_PROC_POSTLUDE(«1:localname»)", proc.id)
-   emit:stmt("return pdcrt_passthru_return(marco)")
+   if #proc.parts > 1 and contains(FALLS_THROUGHT, proc.parts[1].kreq[1]) then
+      emit:stmt("PDCRT_CONTINUE(«1:contproc», «2:contname»)", proc.id, 2)
+   else
+      emit:stmt("PDCRT_RETURN(0)")
+   end
    emit:closetoplevel("}")
+
+   if #proc.parts >= 2 then
+      log.dbg("procedure %s has #%d continuations", proc.id, #proc.parts - 1)
+   end
+
+   for i = 2, #proc.parts do
+      local part = proc.parts[i]
+      log.dbg("compiling continuation #%d (%d)", i - 1, i)
+      emit:opentoplevel("PDCRT_CONT(«1:contproc», «2:contname») {", proc.id, i)
+      emit:stmt("PDCRT_CONT_PRELUDE(«1:contproc», «2:contname»)", proc.id, i)
+      toc.comppart(emit, substate, part, i + 1)
+      if not part.kreq or contains(FALLS_THROUGHT, part.kreq[1]) then
+         if (i + 1) <= #proc.parts then
+            emit:stmt("PDCRT_CONTINUE(«1:contproc», «2:contname»)", proc.id, i + 1)
+         else
+            emit:stmt("PDCRT_RETURN(0)")
+         end
+      end
+      emit:closetoplevel("}")
+      log.dbg("finished compilation of continuation")
+   end
+end
+
+local BASE_RESERVED_PROC_IDS = 4294967296
+local MAIN_PROC_ID = BASE_RESERVED_PROC_IDS
+
+function toc.compcode(emit, state)
+   local proc = {
+      params = {},
+      locals = state.code.locals,
+      parts = state.code.parts,
+      id = MAIN_PROC_ID,
+   }
+   local extra = {
+      in_procedure = false,
+      current_proc = proc,
+   }
+
+   emit:toplevelstmt("PDCRT_MAIN_CONT_DECLR()")
+   emit:opentoplevel("PDCRT_MAIN() {")
+   emit:stmt("PDCRT_MAIN_PRELUDE(«1:int»)", 0)
+   toc.compconsts(emit, state)
+   emit:stmt("PDCRT_RUN(«1:procname»)", MAIN_PROC_ID)
+   emit:closetoplevel("}")
+   emit:toplevelstmt("PDCRT_MAIN_CONT()")
+
+   toc.compparts(emit, attach_extra(state, extra), proc)
 end
 
 function toc.compprocs(emit, state)
@@ -754,13 +894,24 @@ function toc.compprocs(emit, state)
          in_procedure = true,
          current_proc = proc,
       }
-      toc.opproc(emit, attach_extra(state, extra), proc)
+      toc.compparts(emit, attach_extra(state, extra), proc)
    end
 end
 
 function toc.compprocdeclrs(emit, state)
+   emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname»)", MAIN_PROC_ID)
+   for kid, part in pairs(state.code.parts) do
+      if kid > 1 then
+         emit:toplevelstmt("PDCRT_DECLARE_CONT(«1:localname», «2:contname»)", MAIN_PROC_ID, kid)
+      end
+   end
    for id, proc in pairs(state.procedures) do
       emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname»)", id)
+      for kid, part in pairs(proc.parts) do
+         if kid > 1 then
+            emit:toplevelstmt("PDCRT_DECLARE_CONT(«1:localname», «2:contname»)", id, kid)
+         end
+      end
    end
 end
 
@@ -796,9 +947,13 @@ local function main(input, config)
    if secs.procedures_section then
       local P = {}
       for i = 1, #secs.procedures_section do
-         local r = prepproc(secs.procedures_section[i])
+         local r = splitcode(prepproc(secs.procedures_section[i]))
          if P[r.id] ~= nil then
             warnabout("redefined_procedure", "duplicate procedure with id #%d", r.id)
+         end
+         if r.id == MAIN_PROC_ID then
+            log.error("Cannot define procedure with MAIN_PROC_ID (%d)", MAIN_PROC_ID)
+            os.exit(3)
          end
          P[r.id] = r
       end
@@ -807,12 +962,18 @@ local function main(input, config)
       warnabout("no_procedure_section", "no procedure section")
    end
    log.info("extracted procedures")
-   local code = processcode(codetotable(assert(secs.code_section, "code section not provided")))
+   local code = splitcode(processcode(codetotable(assert(secs.code_section, "code section not provided"))))
    log.info("processed code")
+   if secs.constant_pool_section then
+      secs.constant_pool_section = processconstpool(secs.constant_pool_section)
+   else
+      warnabout("no_constant_pool", "no constant pool")
+   end
+   log.info("processed constant pool")
    local state = {
       version = secs.version,
       procedures = secs.procedures_section,
-      constants = processconstpool(secs.constant_pool_section),
+      constants = secs.constant_pool_section,
       code = code,
    }
    checklocals("code", state.code)
@@ -851,36 +1012,15 @@ PDVM 1.0
 PLATFORM "pdcrt"
 
 SECTION "code"
-  LOCAL 0
-  OPNFRM EACT, NIL, 1
-  EINIT EACT, 0, 0
-  CLSFRM EACT
-
-  ICONST 0
-  LSETC EACT, 0, 0
-
-  NAME 1
-  LGETC EACT, 0, 0
-  ICONST 10
-  LT
-  CHOOSE 2, 3
-  NAME 2
-  SPUSH EACT, ESUP
-  OPNFRM EACT, ESUP, 0
-  CLSFRM EACT
-  LGETC EACT, 1, 0
-  ICONST 1
-  SUM
-  LSETC EACT, 1, 0
-  LGETC EACT, 1, 0
-  PRN
-  NL
-  SPOP EACT, ESUP
-  JMP 1
-  NAME 3
+  MK0CLZ 1
+  DYNCALL 0, 0
 ENDSECTION
 
 SECTION "procedures"
+  PROC 1
+    MK0CLZ 1
+    DYNCALL 0, 0
+  ENDPROC
 ENDSECTION
 
 SECTION "constant pool"

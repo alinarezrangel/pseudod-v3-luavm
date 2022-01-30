@@ -1,9 +1,12 @@
-#!/bin/sh
+#!/usr/bin/env lunash
 
-echo lua5.4 main.lua -W all -o sample.c "$1"
-lua5.4 main.lua -W all -o sample.c "$1"
+local status
+lset file $(nth args 1)
+lset expfile $(nth args 2)
+echo lua5.4 main.lua -W all -o sample.c $file
+lua5.4 main.lua -W all -o sample.c $file
 make
-./sample | grep -vE '^[|]' > test-output.txt
-echo "diff \"$2\" test-output.txt"
-diff "$2" test-output.txt
-exit $?
+./sample | ?[0,1] grep -vE '^[|]' | lunash-tool write-file test-output.txt
+echo diff $expfile test-output.txt
+?>status[0,1] diff $expfile test-output.txt
+: @(exit status)

@@ -221,16 +221,21 @@ struct pdcrt_objeto;
 struct pdcrt_marco;
 struct pdcrt_env;
 
-// Un procedimiento que se puede llamar desde PseudoD.
+
+// Un puntero a función.
 //
-// Estos procedimientos serán llamados como partes de una "closure". La
-// explicación de estas está más abajo.
+// El estándar de C indica que los punteros a void y los punteros a función no
+// son inter-convertibles. Esto es debido a que C explícitamente soporta
+// arquitecturas en las que el *data-space* y el *code-space* son de distintos
+// tamaños (por ejemplo, algunos sistemas embebidos como los Arduino o los
+// PICs). POSIX prácticamente garantiza que `void*` y los punteros a función
+// son inter-convertibles pero ya que el estándar no lo indica, prefiero evitar
+// problemas con el optimizador.
 //
-// `args` y `rets` indica el número de valores que esta función puede
-// sacar/debe empujar en la pila. Nota que el número es exacto: si `args` es 3
-// y `rets` es 1 entonces la función **debe** sacar 3 valores al comienzo y
-// empujar 1 al final.
-typedef int (*pdcrt_proc_t)(struct pdcrt_marco* marco, int args, int rets);
+// Para esto, utilizaré el tipo `pdcrt_funcion_generica` para representar un
+// puntero a función genérico, mientras que `void*` significará un puntero a
+// datos genérico.
+typedef void (*pdcrt_funcion_generica)(void);
 
 // Una "closure" (clausura).
 //
@@ -246,7 +251,7 @@ typedef int (*pdcrt_proc_t)(struct pdcrt_marco* marco, int args, int rets);
 // varias `pdcrt_closure`s.
 typedef struct pdcrt_closure
 {
-    pdcrt_proc_t proc;
+    pdcrt_funcion_generica proc; // tipo real: pdcrt_proc_t
     struct pdcrt_env* env;
 } pdcrt_closure;
 
@@ -284,21 +289,6 @@ pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador aloja
 pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, const char* cstr);
 // Desaloja un texto.
 void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto);
-
-// Un puntero a función.
-//
-// El estándar de C indica que los punteros a void y los punteros a función no
-// son inter-convertibles. Esto es debido a que C explícitamente soporta
-// arquitecturas en las que el *data-space* y el *code-space* son de distintos
-// tamaños (por ejemplo, algunos sistemas embebidos como los Arduino o los
-// PICs). POSIX prácticamente garantiza que `void*` y los punteros a función
-// son inter-convertibles pero ya que el estándar no lo indica, prefiero evitar
-// problemas con el optimizador.
-//
-// Para esto, utilizaré el tipo `pdcrt_funcion_generica` para representar un
-// puntero a función genérico, mientras que `void*` significará un puntero a
-// datos genérico.
-typedef void (*pdcrt_funcion_generica)(void);
 
 // El tipo `pdcrt_objeto`.
 //
@@ -405,6 +395,74 @@ typedef struct pdcrt_objeto
 
 typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
 
+
+//
+typedef struct pdcrt_continuacion
+{
+    enum pdcrt_tipo_de_continuacion
+    {
+        PDCRT_CONT_INICIAR,
+        PDCRT_CONT_CONTINUAR,
+        PDCRT_CONT_DEVOLVER,
+        PDCRT_CONT_ENVIAR_MENSAJE
+    } tipo;
+
+    union
+    {
+        struct
+        {
+            pdcrt_funcion_generica proc; // tipo real: pdcrt_proc_t
+            pdcrt_funcion_generica cont; // tipo real: pdcrt_proc_continuacion
+            struct pdcrt_marco* marco_superior;
+            int args;
+            int rets;
+        } iniciar;
+
+        struct
+        {
+            pdcrt_funcion_generica proc; // tipo real: pdcrt_proc_continuacion
+            struct pdcrt_marco* marco_actual;
+        } continuar;
+
+        struct
+        {
+            pdcrt_funcion_generica recv; // tipo real: pdcrt_proc_continuacion
+            struct pdcrt_marco* marco;
+            struct pdcrt_objeto yo;
+            struct pdcrt_objeto mensaje;
+            int args;
+            int rets;
+        } enviar_mensaje;
+    } valor;
+} pdcrt_continuacion;
+
+typedef pdcrt_continuacion (*pdcrt_proc_continuacion)(struct pdcrt_marco* marco);
+
+pdcrt_continuacion pdcrt_continuacion_normal(pdcrt_proc_continuacion proc, struct pdcrt_marco* marco);
+pdcrt_continuacion pdcrt_continuacion_devolver(void);
+pdcrt_continuacion pdcrt_continuacion_enviar_mensaje(pdcrt_proc_continuacion proc, struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto mensaje, int args, int rets);
+
+void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k);
+
+// Un procedimiento que se puede llamar desde PseudoD.
+//
+// Estos procedimientos serán llamados como partes de una "closure". La
+// explicación de estas está más abajo.
+//
+// `args` y `rets` indica el número de valores que esta función puede
+// sacar/debe empujar en la pila. Nota que el número es exacto: si `args` es 3
+// y `rets` es 1 entonces la función **debe** sacar 3 valores al comienzo y
+// empujar 1 al final.
+typedef pdcrt_continuacion (*pdcrt_proc_t)(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, int args, int rets);
+
+pdcrt_continuacion pdcrt_continuacion_iniciar(
+    pdcrt_proc_t proc,
+    pdcrt_proc_continuacion cont,
+    struct pdcrt_marco* marco_sup,
+    int args,
+    int rets
+);
+
 // Tipo de las funciones que sirven para recibir mensajes.
 //
 // Algunas notas:
@@ -419,12 +477,12 @@ typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
 //
 // 3. El valor de retorno aún no se está usando, pero en un futuro significará
 // lo mismo que en `pdcrt_proc_t`.
-typedef int pdcrt_recvmsj(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+typedef pdcrt_continuacion (*pdcrt_recvmsj)(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 // Convierte un puntero a una función genérica `pdcrt_funcion_generica` a un
 // puntero a una función que recibe mensajes `pdcrt_recvmsj`. La implementación
 // de esta macro es pública y puedes usarla libremente en tus programas.
-#define PDCRT_CONV_RECV(recv_gen) ((pdcrt_recvmsj*)(recv_gen))
+#define PDCRT_CONV_RECV(recv_gen) ((pdcrt_recvmsj) (recv_gen))
 
 // Envía un mensaje a un objeto (macro de conveniencia).
 //
@@ -545,12 +603,12 @@ bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b);
 
 // Receptores de mensajes:
 
-int pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-int pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-int pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-int pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-int pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-int pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 
 // Formatear:
@@ -615,6 +673,7 @@ typedef struct pdcrt_constantes
     pdcrt_texto* operador_mayorQue;
     pdcrt_texto* operador_mayorOIgualA;
     pdcrt_texto* operador_igualA;
+    pdcrt_texto* operador_noIgualA;
     pdcrt_texto* msj_igualA;
     pdcrt_texto* msj_clonar;
     pdcrt_texto* msj_llamar;
@@ -726,10 +785,6 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
 #define PDCRT_MAIN()                            \
     int main(int argc, char* argv[])
 
-// Todas las funciones tienen la etiqueta `pdcrt_return_point` al final, justo
-// antes de sus `return`s.
-#define PDCRT_RETURN() goto pdcrt_return_point
-
 #define PDCRT_MAIN_PRELUDE(nlocals)                                     \
     pdcrt_contexto ctx_real;                                            \
     pdcrt_error pderrno;                                                \
@@ -755,15 +810,20 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
     }                                                                   \
     do {} while(0)
 
-#define PDCRT_MAIN_POSTLUDE()                       \
-    do                                              \
-    {                                               \
-        pdcrt_deinic_marco(&marco_real);            \
-        pdcrt_deinic_contexto(ctx, aloj);           \
-        pdcrt_dealoj_alojador_de_arena(aloj);       \
-        exit(PDCRT_SALIDA_EXITO);                   \
-    }                                               \
-    while(0)
+#define PDCRT_RUN(proc)                                                 \
+        pdcrt_trampolin(marco, pdcrt_continuacion_iniciar((proc), &pdprocm_cont, marco, 0, 0))
+
+#define PDCRT_MAIN_CONT_DECLR()                                     \
+        pdcrt_continuacion pdprocm_cont(struct pdcrt_marco* marco);
+
+#define PDCRT_MAIN_CONT()                                               \
+        pdcrt_continuacion pdprocm_cont(struct pdcrt_marco* marco)      \
+        {                                                               \
+            pdcrt_deinic_marco(marco);                                 \
+            pdcrt_deinic_contexto(marco->contexto, marco->contexto->alojador); \
+            pdcrt_dealoj_alojador_de_arena(marco->contexto->alojador);  \
+            exit(PDCRT_SALIDA_EXITO);                                   \
+        }
 
 // Registra una literal textual. Solo puede llamarse dentro de `PDCRT_MAIN()`.
 // `lit` debe ser una literal de C (como `"hola mundo"`), mientras que `id`
@@ -790,20 +850,17 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
 #define PDCRT_GET_LVAR(idx)                     \
     pdcrt_obtener_local(marco, idx)
 
-// Crea una etiqueta en la función actual.
-#define PDCRT_LABEL(idx)                        \
-        pdcrt_label_##idx
-
 #define PDCRT_PROC(name)                                                \
-    int pdproc_##name(pdcrt_marco* name##marco_anterior, int name##nargs, int name##nrets) // {}
+    pdcrt_continuacion pdproc_##name(pdcrt_marco* name##marco_actual, pdcrt_marco* name##marco_anterior, int name##nargs, int name##nrets) // {}
+#define PDCRT_CONT(name, k)                                             \
+    pdcrt_continuacion pdprock_##name##_k##k(pdcrt_marco* name##marco_actual) // {}
 #define PDCRT_PROC_PRELUDE(name, nlocals)                               \
-    pdcrt_marco marco_real;                                             \
     pdcrt_error pderrno;                                                \
     pdcrt_contexto* ctx = name##marco_anterior->contexto;               \
-    pdcrt_marco* marco = &marco_real;                                   \
+    pdcrt_marco* marco = name##marco_actual;                            \
     do                                                                  \
     {                                                                   \
-        if((pderrno = pdcrt_inic_marco(&marco_real, ctx, nlocals, name##marco_anterior))) \
+        if((pderrno = pdcrt_inic_marco(marco, ctx, nlocals, name##marco_anterior))) \
         {                                                               \
             puts(pdcrt_perror(pderrno));                                \
             exit(PDCRT_SALIDA_ERROR);                                   \
@@ -816,23 +873,44 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
     pdcrt_assert_params(marco, nparams)
 #define PDCRT_PARAM(idx, param)                                     \
     pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
-#define PDCRT_PROC_POSTLUDE(name)                                       \
-    do                                                                  \
-    {                                                                   \
-    pdcrt_return_point:;                                                \
-        PDCRT_RASTREAR_MARCO(marco, #name, "postludio");                \
-        pdcrt_deinic_marco(marco);                                      \
-    }                                                                   \
-    while(0)
+#define PDCRT_CONT_PRELUDE(name, k)                     \
+    pdcrt_marco* marco = name##marco_actual;            \
+    PDCRT_RASTREAR_MARCO(marco, #name, "continuar");
 
 // Obtiene un puntero a la función con nombre `name`. `name` es su nombre en el
 // bytecode.
 #define PDCRT_PROC_NAME(name)                   \
     &pdproc_##name
 
+#define PDCRT_CONT_NAME(name, k)                \
+    &pdprock_##name##_k##k
+
 // Declara una función antes de usarla.
 #define PDCRT_DECLARE_PROC(name)                \
     PDCRT_PROC(name);
+#define PDCRT_DECLARE_CONT(name, k)             \
+    PDCRT_CONT(name, k);
+
+#define PDCRT_RETURN(nrets)                                       \
+    do                                                            \
+    {                                                             \
+        pdcrt_op_retn(marco, nrets);                              \
+        PDCRT_RASTREAR_MARCO(marco, "<unk>", "postludio");        \
+        pdcrt_deinic_marco(marco);                                \
+        return pdcrt_continuacion_devolver();                     \
+    }                                                             \
+    while(0)
+
+#define PDCRT_REIFY_CONT(proc, k)                               \
+    pdcrt_continuacion_normal(PDCRT_CONT_NAME(proc, k), marco)
+
+#define PDCRT_CONTINUE(proc, k)                                         \
+    do                                                                  \
+    {                                                                   \
+        PDCRT_RASTREAR_MARCO(marco, "<unk>", "continuar");              \
+        return PDCRT_REIFY_CONT(proc, k);                               \
+    }                                                                   \
+    while(0)
 
 
 // Los opcodes.
@@ -844,14 +922,14 @@ void pdcrt_op_iconst(pdcrt_marco* marco, int c);
 void pdcrt_op_bconst(pdcrt_marco* marco, bool c);
 void pdcrt_op_lconst(pdcrt_marco* marco, int c);
 
-void pdcrt_op_sum(pdcrt_marco* marco);
-void pdcrt_op_sub(pdcrt_marco* marco);
-void pdcrt_op_mul(pdcrt_marco* marco);
-void pdcrt_op_div(pdcrt_marco* marco);
-void pdcrt_op_gt(pdcrt_marco* marco);
-void pdcrt_op_ge(pdcrt_marco* marco);
-void pdcrt_op_lt(pdcrt_marco* marco);
-void pdcrt_op_le(pdcrt_marco* marco);
+pdcrt_continuacion pdcrt_op_sum(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
+pdcrt_continuacion pdcrt_op_sub(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
+pdcrt_continuacion pdcrt_op_mul(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
+pdcrt_continuacion pdcrt_op_div(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
+pdcrt_continuacion pdcrt_op_gt(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
+pdcrt_continuacion pdcrt_op_ge(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
+pdcrt_continuacion pdcrt_op_lt(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
+pdcrt_continuacion pdcrt_op_le(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
 
 void pdcrt_op_pop(pdcrt_marco* marco);
 
@@ -871,8 +949,7 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc);
 
 void pdcrt_assert_params(pdcrt_marco* marco, int nparams);
 
-void pdcrt_op_dyncall(pdcrt_marco* marco, int acepta, int devuelve);
-void pdcrt_op_call(pdcrt_marco* marco, pdcrt_proc_t proc, int acepta, int devuelve);
+pdcrt_continuacion pdcrt_op_dyncall(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int acepta, int devuelve);
 
 void pdcrt_op_retn(pdcrt_marco* marco, int n);
 int pdcrt_real_return(pdcrt_marco* marco);
@@ -889,14 +966,14 @@ typedef enum pdcrt_cmp
     PDCRT_CMP_REFEQ
 } pdcrt_cmp;
 
-void pdcrt_op_cmp(pdcrt_marco* marco, pdcrt_cmp cmp);
+pdcrt_continuacion pdcrt_op_cmp(pdcrt_marco* marco, pdcrt_cmp cmp, pdcrt_proc_continuacion proc);
 void pdcrt_op_not(pdcrt_marco* marco);
 void pdcrt_op_mtrue(pdcrt_marco* marco);
 
 void pdcrt_op_prn(pdcrt_marco* marco);
 void pdcrt_op_nl(pdcrt_marco* marco);
 
-void pdcrt_op_msg(pdcrt_marco* marco, int cid, int args, int rets);
+pdcrt_continuacion pdcrt_op_msg(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int cid, int args, int rets);
 
 void pdcrt_op_spush(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup);
 void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup);
