@@ -396,7 +396,39 @@ typedef struct pdcrt_objeto
 typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
 
 
+// Una continuación.
 //
+// El runtime de PseudoD está implementado con continuaciones. Actualmente
+// utiliza un sistema "stack-less", pero en un futuro quiero hacer que use un
+// recolector de basura "Chenney on the MTA".
+//
+// A diferencia de un sistema en CSP ("continuation-passing style") real, el
+// runtime actualmente solo implementa uno "stack-less". La diferencia es que
+// aquí las funciones no toman una continuación a la cual pasar el valor de
+// retorno, en cambio, un trampolín mantiene manualmente un stack en
+// memoria. Las continuaciones solo exísten "localmente" dentro de las
+// funciones. En un futuro cambiaré todo para que utilice CSP.
+//
+// Existen 4 "tipos" de continuaciones:
+//
+// 1. `PDCRT_CONT_INICIAR`: Llama a una función.
+//
+// 2. `PDCRT_CONT_CONTINUAR`: Continúa la función actual.
+//
+// 3. `PDCRT_CONT_DEVOLVER`: Devuelve de la función actual a la continuación de
+// la función que la llamó.
+//
+// 4. `PDCRT_CONT_ENVIAR_MENSAJE`: Como `PDCRT_CONT_INICIAR`, pero en vez de
+// llamar a una función, le envía un mensaje a un objeto.
+//
+// Nota como llamar a una función y enviarle un mensaje a un objeto son
+// operaciones distíntas: en el runtime las funciones de PseudoD siempre son
+// representadas como objetos, pero a veces el runtime necesita crear funciones
+// internas y para esto utiliza INICIAR. El caso más importante ahora mismo es
+// justamente la implementación del método `llamar` de `Procedimiento`, el cual
+// llama a su función contenida. Esto es ineficiente y consume más espacio en
+// la pila de lo necesario, en un futuro agregaré los tipos de continuaciones
+// necesarios para implementar "tail-calls" y optimizaré todas las llamadas.
 typedef struct pdcrt_continuacion
 {
     enum pdcrt_tipo_de_continuacion
@@ -409,6 +441,22 @@ typedef struct pdcrt_continuacion
 
     union
     {
+        // Datos para iniciar una continuación.
+        //
+        // - `proc` es la función que se llamará. Será llamada con un nuevo
+        //   marco y el marco superior. El marco pasado no estará inicializado:
+        //   esta función tiene que inicializarlo lo antes posible con el marco
+        //   superior pasado.
+        //
+        // - `cont` es la continuación de la función que esta llamando a
+        //   `proc`.
+        //
+        // - `marco_superior` es el marco actual de la función que esta
+        //   llamando a `proc`. Es decir, `marco_superior` es el marco superior
+        //   de `proc` pero el marco actual de `cont`.
+        //
+        // - `args` y `rets` son los números de argumentos y valores devueltos
+        //   por `proc`.
         struct
         {
             pdcrt_funcion_generica proc; // tipo real: pdcrt_proc_t
@@ -418,12 +466,30 @@ typedef struct pdcrt_continuacion
             int rets;
         } iniciar;
 
+        // Datos para continuar la función actual.
+        //
+        // - `proc` es la función que será llamada cuando se continúe con esta
+        //   función.
+        //
+        // - `marco_actual` es el marco actual que será conservado a travez de
+        //   la continuación.
         struct
         {
             pdcrt_funcion_generica proc; // tipo real: pdcrt_proc_continuacion
             struct pdcrt_marco* marco_actual;
         } continuar;
 
+        // - `recv` es la continuación que recibirá el resultado de enviar el
+        //   mensaje.
+        //
+        // - `marco` es el marco actual de `recv`. Será usado como marco
+        //   superior para el objeto.
+        //
+        // - `yo` es el objeto que recibirá el mensaje.
+        //
+        // - `mensaje` es el mensaje que será enviado.
+        //
+        // - `args` y `rets` tienen el mismo significado que en `iniciar`.
         struct
         {
             pdcrt_funcion_generica recv; // tipo real: pdcrt_proc_continuacion
@@ -436,12 +502,36 @@ typedef struct pdcrt_continuacion
     } valor;
 } pdcrt_continuacion;
 
+// Tipo de las funciones que pueden ser usadas como continuaciones.
+//
+// `marco` es el marco de la función que comenzó.
 typedef pdcrt_continuacion (*pdcrt_proc_continuacion)(struct pdcrt_marco* marco);
 
+// Crea y devuelve una continuación. Corresponde al tipo de continuación
+// `PDCRT_CONT_CONTINUAR`.
 pdcrt_continuacion pdcrt_continuacion_normal(pdcrt_proc_continuacion proc, struct pdcrt_marco* marco);
+// Crea y devuelve una continuación para devolver.
 pdcrt_continuacion pdcrt_continuacion_devolver(void);
-pdcrt_continuacion pdcrt_continuacion_enviar_mensaje(pdcrt_proc_continuacion proc, struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto mensaje, int args, int rets);
+// Crea y devuelve una continuación para enviar un mensaje. Corresponde al tipo
+// `PDCRT_CONT_ENVIAR_MENSAJE`.
+pdcrt_continuacion pdcrt_continuacion_enviar_mensaje(
+    pdcrt_proc_continuacion proc,
+    struct pdcrt_marco* marco,
+    pdcrt_objeto yo,
+    pdcrt_objeto mensaje,
+    int args,
+    int rets
+);
 
+// El trampolín: ejecuta las continuaciones en una pila en memoria.
+//
+// `k` es la continuación a ejecutar, mientras que `marco` es el marco que esta
+// tendrá. Devuelve luego de ejecutar `k` y cualquier continuación que esta
+// cree. Esta función no termina con la ejecución del programa (con `abort` o
+// `exit`) y puede llamarse varias veces (si deseas ejecutar varias
+// continuaciones).
+//
+// `marco` debe apuntar a un marco válido.
 void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k);
 
 // Un procedimiento que se puede llamar desde PseudoD.
@@ -449,12 +539,23 @@ void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k);
 // Estos procedimientos serán llamados como partes de una "closure". La
 // explicación de estas está más abajo.
 //
+// `marco` es el marco de la función. Al principio no está inicializado (apunta
+// a un marco inválido): la función tiene que inicializarlo lo antes
+// posible. `marco_superior` es el marco de la función que está llamando a esta
+// y siempre está inicializado.
+//
 // `args` y `rets` indica el número de valores que esta función puede
 // sacar/debe empujar en la pila. Nota que el número es exacto: si `args` es 3
 // y `rets` es 1 entonces la función **debe** sacar 3 valores al comienzo y
 // empujar 1 al final.
-typedef pdcrt_continuacion (*pdcrt_proc_t)(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, int args, int rets);
+typedef pdcrt_continuacion (*pdcrt_proc_t)(
+    struct pdcrt_marco* marco,
+    struct pdcrt_marco* marco_superior,
+    int args,
+    int rets
+);
 
+// Crea y devuelve una continuación que llama a una función.
 pdcrt_continuacion pdcrt_continuacion_iniciar(
     pdcrt_proc_t proc,
     pdcrt_proc_continuacion cont,

@@ -1151,7 +1151,6 @@ pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo
     if(pdcrt_texto_cmp_lit(msj.value.t, "llamar") == 0)
     {
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
-        //return (*(pdcrt_proc_t) yo.value.c.proc)(marco, marco->marco_anterior, args + 1, rets);
         return pdcrt_continuacion_iniciar((pdcrt_proc_t) yo.value.c.proc, pdcrt_continuacion_Procedimiento_llamar, marco, args + 1, rets);
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
@@ -2071,12 +2070,10 @@ pdcrt_continuacion pdcrt_op_dyncall(pdcrt_marco* marco, pdcrt_proc_continuacion 
     pdcrt_objeto cima = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(cima, PDCRT_TOBJ_CLOSURE);
     return pdcrt_continuacion_enviar_mensaje(proc, marco, cima, pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar), acepta, devuelve);
-    //PDCRT_ENVIAR_MENSAJE(marco, cima, pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar), acepta, devuelve);
 }
 
 void pdcrt_op_call(pdcrt_marco* marco, pdcrt_proc_t proc, int acepta, int devuelve)
 {
-    //(*proc)(marco, acepta, devuelve);
     assert(0);
 }
 
@@ -2146,7 +2143,6 @@ pdcrt_continuacion pdcrt_op_cmp(pdcrt_marco* marco, pdcrt_cmp cmp, pdcrt_proc_co
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, b));
     pdcrt_texto* mensaje = (cmp == PDCRT_CMP_EQ)? marco->contexto->constantes.operador_igualA : marco->contexto->constantes.operador_noIgualA;
     return pdcrt_continuacion_enviar_mensaje(proc, marco, a, pdcrt_objeto_desde_texto(mensaje), 1, 1);
-    //PDCRT_ENVIAR_MENSAJE(marco, a, pdcrt_objeto_desde_texto(marco->contexto->constantes.operador_igualA), 1, 1);
 }
 
 void pdcrt_op_not(pdcrt_marco* marco)
@@ -2202,7 +2198,6 @@ pdcrt_continuacion pdcrt_op_msg(pdcrt_marco* marco, pdcrt_proc_continuacion proc
     pdcrt_objeto mensaje = pdcrt_objeto_desde_texto(marco->contexto->constantes.textos[cid]);
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
     return pdcrt_continuacion_enviar_mensaje(proc, marco, obj, mensaje, args, rets);
-    //PDCRT_ENVIAR_MENSAJE(marco, obj, mensaje, args, rets);
 }
 
 void pdcrt_op_spush(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup)

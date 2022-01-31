@@ -615,42 +615,50 @@ end
 
 toc.opschema.SUM = schema ""
 function toc.opcodes.SUM(emit, state, op)
-   emit:stmt("return pdcrt_op_sum(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
+   emit:stmt("return pdcrt_op_sum(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.MUL = schema ""
 function toc.opcodes.MUL(emit, state, op)
-   emit:stmt("return pdcrt_op_mul(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
+   emit:stmt("return pdcrt_op_mul(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.SUB = schema ""
 function toc.opcodes.SUB(emit, state, op)
-   emit:stmt("return pdcrt_op_sub(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
+   emit:stmt("return pdcrt_op_sub(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.DIV = schema ""
 function toc.opcodes.DIV(emit, state, op)
-   emit:stmt("return pdcrt_op_div(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
+   emit:stmt("return pdcrt_op_div(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.GT = schema ""
 function toc.opcodes.GT(emit, state, op)
-   emit:stmt("return pdcrt_op_gt(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
+   emit:stmt("return pdcrt_op_gt(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.LT = schema ""
 function toc.opcodes.LT(emit, state, op)
-   emit:stmt("return pdcrt_op_lt(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
+   emit:stmt("return pdcrt_op_lt(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.GE = schema ""
 function toc.opcodes.GE(emit, state, op)
-   emit:stmt("return pdcrt_op_ge(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
+   emit:stmt("return pdcrt_op_ge(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.LE = schema ""
 function toc.opcodes.LE(emit, state, op)
-   emit:stmt("return pdcrt_op_le(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
+   emit:stmt("return pdcrt_op_le(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.LSET = schema "Lx"
@@ -700,7 +708,9 @@ end
 
 toc.opschema.DYNCALL = schema "Ux, Uy"
 function toc.opcodes.DYNCALL(emit, state, op)
-   emit:stmt("return pdcrt_op_dyncall(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int»)", state.current_proc.id, state.next_ccid, op.Ux, op.Uy)
+   emit:stmt("return pdcrt_op_dyncall(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int»)",
+             state.current_proc.id, state.next_ccid,
+             op.Ux, op.Uy)
 end
 
 toc.opschema.CHOOSE = schema "Tx, Ty"
@@ -721,7 +731,8 @@ end
 
 toc.opschema.JMP = schema "Tx"
 function toc.opcodes.JMP(emit, state, op)
-   emit:stmt("PDCRT_CONTINUE(«1:contproc», «2:contname»)", state.current_proc.id, state.labels_to_ccid[op.Tx])
+   emit:stmt("PDCRT_CONTINUE(«1:contproc», «2:contname»)",
+             state.current_proc.id, state.labels_to_ccid[op.Tx])
 end
 
 toc.opschema.ROT = schema "Ia"
@@ -746,17 +757,21 @@ end
 
 toc.opschema.CMPEQ = schema ""
 function toc.opcodes.CMPEQ(emit, state, op)
-   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_EQ, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
+   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_EQ, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.CMPNEQ = schema ""
 function toc.opcodes.CMPNEQ(emit, state, op)
-   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_NEQ, PDCRT_CONT_NAME(«1:contproc», «2:contname»))", state.current_proc.id, state.next_ccid)
+   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_NEQ, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.MSG = schema "Cx, Ua, Ub"
 function toc.opcodes.MSG(emit, state, op)
-   emit:stmt("return pdcrt_op_msg(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int», «5:int»)", state.current_proc.id, state.next_ccid, op.Cx, op.Ua, op.Ub)
+   emit:stmt("return pdcrt_op_msg(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int», «5:int»)",
+             state.current_proc.id, state.next_ccid,
+             op.Cx, op.Ua, op.Ub)
 end
 
 toc.opschema.SPUSH = schema "Ea, Eb"
@@ -862,7 +877,9 @@ function toc.compparts(emit, state, proc)
    end
 end
 
+-- The procedure IDs above BASE_RESERVED_PROC_IDS are reserved.
 local BASE_RESERVED_PROC_IDS = 4294967296
+-- Proc. ID used for the main procedure.
 local MAIN_PROC_ID = BASE_RESERVED_PROC_IDS
 
 function toc.compcode(emit, state)
