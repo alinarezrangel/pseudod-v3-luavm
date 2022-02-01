@@ -433,10 +433,12 @@ typedef struct pdcrt_continuacion
 {
     enum pdcrt_tipo_de_continuacion
     {
-        PDCRT_CONT_INICIAR,
-        PDCRT_CONT_CONTINUAR,
-        PDCRT_CONT_DEVOLVER,
-        PDCRT_CONT_ENVIAR_MENSAJE
+        PDCRT_CONT_INICIAR = 0,
+        PDCRT_CONT_CONTINUAR = 1,
+        PDCRT_CONT_DEVOLVER = 2,
+        PDCRT_CONT_ENVIAR_MENSAJE = 3,
+        PDCRT_CONT_TAIL_INICIAR = 4,
+        PDCRT_CONT_TAIL_ENVIAR_MENSAJE = 5
     } tipo;
 
     union
@@ -499,6 +501,33 @@ typedef struct pdcrt_continuacion
             int args;
             int rets;
         } enviar_mensaje;
+
+        // Como iniciar, pero no requiere una continuación al ser un tail-call.
+        //
+        // `marco_superior` debe ser el marco superior de la función
+        // actual. Antes de usar una continuación tail-iniciar, debes
+        // desinicializar tu marco actual y utilizar tu marco superior como
+        // `marco_superior`. El trampolín no hace esto automáticamente y no
+        // desinicializar el marco antes de usar una continuación "tail" dejará
+        // memoria sin desalojar.
+        struct
+        {
+            pdcrt_funcion_generica proc; // tipo real: pdcrt_proc_t
+            struct pdcrt_marco* marco_superior;
+            int args;
+            int rets;
+        } tail_iniciar;
+
+        // Tail-call como tail-iniciar, pero envía un mensaje en vez de llamar
+        // a una función.
+        struct
+        {
+            struct pdcrt_marco* marco_superior;
+            struct pdcrt_objeto yo;
+            struct pdcrt_objeto mensaje;
+            int args;
+            int rets;
+        } tail_enviar_mensaje;
     } valor;
 } pdcrt_continuacion;
 
@@ -563,6 +592,23 @@ pdcrt_continuacion pdcrt_continuacion_iniciar(
     int args,
     int rets
 );
+
+// Crea y devuelve una continuación tail-iniciar.
+pdcrt_continuacion pdcrt_continuacion_tail_iniciar(
+    pdcrt_proc_t proc,
+    struct pdcrt_marco* marco_superior,
+    int args,
+    int rets
+);
+// Crea y devuelve una continuación tail-enviar mensaje.
+pdcrt_continuacion pdcrt_continuacion_tail_enviar_mensaje(
+    struct pdcrt_marco* marco_superior,
+    pdcrt_objeto yo,
+    pdcrt_objeto mensaje,
+    int args,
+    int rets
+);
+
 
 // Tipo de las funciones que sirven para recibir mensajes.
 //

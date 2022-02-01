@@ -390,7 +390,12 @@ pdcrt_continuacion pdcrt_continuacion_devolver(void)
     return cont;
 }
 
-pdcrt_continuacion pdcrt_continuacion_enviar_mensaje(pdcrt_proc_continuacion proc, struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto mensaje, int args, int rets)
+pdcrt_continuacion pdcrt_continuacion_enviar_mensaje(pdcrt_proc_continuacion proc,
+                                                     struct pdcrt_marco* marco,
+                                                     pdcrt_objeto yo,
+                                                     pdcrt_objeto mensaje,
+                                                     int args,
+                                                     int rets)
 {
     pdcrt_continuacion cont;
     cont.tipo = PDCRT_CONT_ENVIAR_MENSAJE;
@@ -400,6 +405,40 @@ pdcrt_continuacion pdcrt_continuacion_enviar_mensaje(pdcrt_proc_continuacion pro
     cont.valor.enviar_mensaje.mensaje = mensaje;
     cont.valor.enviar_mensaje.args = args;
     cont.valor.enviar_mensaje.rets = rets;
+    return cont;
+}
+
+pdcrt_continuacion pdcrt_continuacion_tail_iniciar(
+    pdcrt_proc_t proc,
+    struct pdcrt_marco* marco_superior,
+    int args,
+    int rets
+)
+{
+    pdcrt_continuacion cont;
+    cont.tipo = PDCRT_CONT_TAIL_INICIAR;
+    cont.valor.tail_iniciar.proc = (pdcrt_funcion_generica) proc;
+    cont.valor.tail_iniciar.marco_superior = marco_superior;
+    cont.valor.tail_iniciar.args = args;
+    cont.valor.tail_iniciar.rets = rets;
+    return cont;
+}
+
+pdcrt_continuacion pdcrt_continuacion_tail_enviar_mensaje(
+    struct pdcrt_marco* marco_superior,
+    pdcrt_objeto yo,
+    pdcrt_objeto mensaje,
+    int args,
+    int rets
+)
+{
+    pdcrt_continuacion cont;
+    cont.tipo = PDCRT_CONT_TAIL_ENVIAR_MENSAJE;
+    cont.valor.tail_enviar_mensaje.marco_superior = marco_superior;
+    cont.valor.tail_enviar_mensaje.yo = yo;
+    cont.valor.tail_enviar_mensaje.mensaje = mensaje;
+    cont.valor.tail_enviar_mensaje.args = args;
+    cont.valor.tail_enviar_mensaje.rets = rets;
     return cont;
 }
 
@@ -460,6 +499,26 @@ void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k)
         case PDCRT_CONT_DEVOLVER:
             tam_pila -= 1;
             break;
+        case PDCRT_CONT_TAIL_INICIAR:
+        {
+            pdcrt_proc_t fproc = (pdcrt_proc_t) sk.valor.tail_iniciar.proc;
+            pila[tam_pila - 1] = (*fproc)(
+                &marcos[tam_pila],
+                sk.valor.tail_iniciar.marco_superior,
+                sk.valor.tail_iniciar.args,
+                sk.valor.tail_iniciar.rets);
+            break;
+        }
+        case PDCRT_CONT_TAIL_ENVIAR_MENSAJE:
+        {
+            pila[tam_pila - 1] = PDCRT_ENVIAR_MENSAJE(
+                sk.valor.tail_enviar_mensaje.marco_superior,
+                sk.valor.tail_enviar_mensaje.yo,
+                sk.valor.tail_enviar_mensaje.mensaje,
+                sk.valor.tail_enviar_mensaje.args,
+                sk.valor.tail_enviar_mensaje.rets);
+            break;
+        }
         }
     }
 }
@@ -1140,18 +1199,13 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
     return pdcrt_continuacion_devolver();
 }
 
-static pdcrt_continuacion pdcrt_continuacion_Procedimiento_llamar(struct pdcrt_marco* marco)
-{
-    return pdcrt_continuacion_devolver();
-}
-
 pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
     pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "llamar") == 0)
     {
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
-        return pdcrt_continuacion_iniciar((pdcrt_proc_t) yo.value.c.proc, pdcrt_continuacion_Procedimiento_llamar, marco, args + 1, rets);
+        return pdcrt_continuacion_tail_iniciar((pdcrt_proc_t) yo.value.c.proc, marco, args + 1, rets);
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
     {
@@ -1191,11 +1245,6 @@ pdcrt_continuacion pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_obj
     (void) rets;
     fprintf(stderr, u8"Error: se trató de enviar un mensaje a una marca de pila.\n");
     pdcrt_abort();
-}
-
-static pdcrt_continuacion pdcrt_continuacion_Boole_llamarSegun(struct pdcrt_marco* marco)
-{
-    return pdcrt_continuacion_devolver();
 }
 
 pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
@@ -1252,7 +1301,7 @@ pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto y
         pdcrt_objeto b = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto res = yo.value.b? a : b;
         pdcrt_objeto llamar_msj = pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar);
-        return pdcrt_continuacion_enviar_mensaje(pdcrt_continuacion_Boole_llamarSegun, marco, res, llamar_msj, 0, rets);
+        return pdcrt_continuacion_tail_enviar_mensaje(marco, res, llamar_msj, 0, rets);
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "y") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_&&") == 0)
     {
