@@ -402,12 +402,12 @@ typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
 // utiliza un sistema "stack-less", pero en un futuro quiero hacer que use un
 // recolector de basura "Chenney on the MTA".
 //
-// A diferencia de un sistema en CSP ("continuation-passing style") real, el
+// A diferencia de un sistema en CPS ("continuation-passing style") real, el
 // runtime actualmente solo implementa uno "stack-less". La diferencia es que
 // aquí las funciones no toman una continuación a la cual pasar el valor de
 // retorno, en cambio, un trampolín mantiene manualmente un stack en
 // memoria. Las continuaciones solo exísten "localmente" dentro de las
-// funciones. En un futuro cambiaré todo para que utilice CSP.
+// funciones. En un futuro cambiaré todo para que utilice CPS.
 //
 // Existen 4 "tipos" de continuaciones:
 //
