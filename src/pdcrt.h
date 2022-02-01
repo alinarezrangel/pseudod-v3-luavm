@@ -421,14 +421,20 @@ typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
 // 4. `PDCRT_CONT_ENVIAR_MENSAJE`: Como `PDCRT_CONT_INICIAR`, pero en vez de
 // llamar a una función, le envía un mensaje a un objeto.
 //
+// 5. `PDCRT_CONT_TAIL_INICIAR`: Como `PDCRT_CONT_INICIAR`, pero asume que la
+// función actual destruyó su marco de activación (porque ya no lo necesita) y
+// llama al procedimiento indicado reemplazando al actual. Básicamente,
+// implementa un "tail-call".
+//
+// 6. `PDCRT_CONT_TAIL_ENVIAR_MENSAJE`: Como `PDCRT_CONT_ENVIAR_MENSAJE`, pero
+// envía el mensaje como un tail-call (un "tail-enviar mensaje", por así
+// decirlo). Tal como `PDCRT_CONT_TAIL_INICIAR` asume que la función que esta
+// enviando el mensaje destruirá su marco.
+//
 // Nota como llamar a una función y enviarle un mensaje a un objeto son
 // operaciones distíntas: en el runtime las funciones de PseudoD siempre son
 // representadas como objetos, pero a veces el runtime necesita crear funciones
-// internas y para esto utiliza INICIAR. El caso más importante ahora mismo es
-// justamente la implementación del método `llamar` de `Procedimiento`, el cual
-// llama a su función contenida. Esto es ineficiente y consume más espacio en
-// la pila de lo necesario, en un futuro agregaré los tipos de continuaciones
-// necesarios para implementar "tail-calls" y optimizaré todas las llamadas.
+// internas y para esto utiliza INICIAR.
 typedef struct pdcrt_continuacion
 {
     enum pdcrt_tipo_de_continuacion
