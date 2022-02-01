@@ -1232,7 +1232,13 @@ pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo
     }
     else
     {
-        printf("mensaje no entendido\n");
+        printf("Mensaje ");
+        pdcrt_escribir_texto(msj.value.t);
+        printf(" no entendido para la closure ");
+        printf(u8"(Procedimiento proc: 0x%zX  env: 0x%zX #%zd)\n",
+               (intptr_t) yo.value.c.proc,
+               (intptr_t) yo.value.c.env,
+               yo.value.c.env->env_size);
         pdcrt_abort();
     }
 
