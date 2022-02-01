@@ -1,0 +1,37 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  ICONST 0
+  MK0CLZ 1
+  DYNCALL 1, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+  PROC 1
+    PARAM ESUP
+    PARAM 0
+    LGET 0
+    -- El número de veces que se va a llamar de forma recursiva a esta
+    -- función. Asegúrate de que sea mayor que la constante
+    -- `PDCRT_TAM_PILA_DE_CONTINUACIONES` en `pdcrt.c`.
+    ICONST 5000
+    LT
+    CHOOSE 1, 2
+    NAME 1
+    LGET 0
+    ICONST 1
+    SUM
+    MK0CLZ 1
+    TMSG 1, 1, 1
+    NAME 2
+    LGET 0
+    RETN 1
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+  #1 STRING "llamar"
+ENDSECTION

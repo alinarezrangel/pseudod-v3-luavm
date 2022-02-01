@@ -143,7 +143,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "POP" / "CHOOSE" / "JMP" / "NAME"
     / "MTRUE" / "CMPEQ" / "CMPNEQ" / "NOT"
     / "ROT" / "GT" / "LT" / "GE" / "LE"
-    / "MSG"
+    / "TMSG" / "MSG"
     / "PRN" / "NL"
     / "SPUSH" / "SPOP"
 
@@ -326,7 +326,7 @@ end
 local REQUIRES_CONTINUATION = {
    "LT", "GT", "LE", "GE",     -- Llamadas a función (operadores)
    "CMPEQ", "CMPNEQ",          -- Llamadas a función (método `igualA`)
-   "MSG", "DYNCALL",           -- Llamadas a función
+   "TMSG", "MSG", "DYNCALL",   -- Llamadas a función
    "SUM", "SUB", "MUL", "DIV", -- Llamadas a función (operadores)
    "NAME", "JMP", "CHOOSE"     -- Control de flujo
 }
@@ -772,6 +772,11 @@ function toc.opcodes.MSG(emit, state, op)
    emit:stmt("return pdcrt_op_msg(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int», «5:int»)",
              state.current_proc.id, state.next_ccid,
              op.Cx, op.Ua, op.Ub)
+end
+
+toc.opschema.TMSG = schema "Cx, Ua, Ub"
+function toc.opcodes.TMSG(emit, state, op)
+   emit:stmt("return pdcrt_op_tail_msg(marco, «1:int», «2:int», «3:int»)", op.Cx, op.Ua, op.Ub)
 end
 
 toc.opschema.SPUSH = schema "Ea, Eb"

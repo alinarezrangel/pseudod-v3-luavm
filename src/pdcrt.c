@@ -442,6 +442,9 @@ pdcrt_continuacion pdcrt_continuacion_tail_enviar_mensaje(
     return cont;
 }
 
+// PDCRT_TAM_PILA_DE_CONTINUACIONES es el nuḿero de marcos que estan en la
+// pila. Si cambias su valor, asegúrate de cambiar la prueba
+// `tests/tailcall.pdasm`.
 #define PDCRT_TAM_PILA_DE_CONTINUACIONES 512
 void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k)
 {
@@ -2247,6 +2250,15 @@ pdcrt_continuacion pdcrt_op_msg(pdcrt_marco* marco, pdcrt_proc_continuacion proc
     pdcrt_objeto mensaje = pdcrt_objeto_desde_texto(marco->contexto->constantes.textos[cid]);
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
     return pdcrt_continuacion_enviar_mensaje(proc, marco, obj, mensaje, args, rets);
+}
+
+pdcrt_continuacion pdcrt_op_tail_msg(pdcrt_marco* marco, int cid, int args, int rets)
+{
+    pdcrt_marco* marco_superior = marco->marco_anterior;
+    pdcrt_deinic_marco(marco);
+    pdcrt_objeto mensaje = pdcrt_objeto_desde_texto(marco_superior->contexto->constantes.textos[cid]);
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco_superior->contexto->pila);
+    return pdcrt_continuacion_tail_enviar_mensaje(marco_superior, obj, mensaje, args, rets);
 }
 
 void pdcrt_op_spush(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup)
