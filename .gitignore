@@ -10,3 +10,7 @@ sample.c
 .projectile
 test-output.txt
 compile_commands.json
+*.gcda
+*.gcno
+*.gcov
+*.objdump

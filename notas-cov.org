@@ -1,0 +1,235 @@
+
+
+
+
+
+
+
+
+
+
+
+
+* Distribución increíblemente desigual de llamadas a ~pdcrt_alojar_en_arena~: 66% alojaciones, 33% desalojaciones, 0.09% redimensiones.
+
+* Al desalojar el alojador de arena, hay 54.6k iteraciones de desalojar, es decir, hay al menos 54.6k alojaciones. (Esto también lo podría haber verificado al activar la información de alojación.)
+
+* 54.6k llamadas a ~pdcrt_alojar_simple~, quizás tenga que optimizarlo.
+
+* 27k llamadas a ~pdcrt_dealojar_simple~. Es curioso que no corresponda al número de llamadas a ~pdcrt_alojar_simple~. Seguro el excedente son los objetos que no son liberados por el GC.
+
+* 99% (3/303 veces) de las llamadas a ~pdcrt_aloj_texto~ son con una longitud mayor a 0.
+
+* DONE ~pdcrt_aloj_texto_desde_c~ (292 llamadas) tiene en su bucle principal 2.9k iteraciones. Debería reemplazarlo por una llamada a ~memcpy~.
+
+* ~pdcrt_dealoj_texto~ no está siendo llamado.
+
+* Continuaciones:
+
+** ~pdcrt_continuacion_iniciar~: 15 veces.
+
+** ~pdcrt_continuacion_normal~: 113.9k veces.
+
+** ~pdcrt_continuacion_devolver~: 86.9k veces.
+
+** ~pdcrt_continuacion_enviar_mensaje~: 86.9k veces.
+
+** ~pdcrt_continuacion_tail_iniciar~: 27k veces.
+
+** ~pdcrt_continuacion_tail_enviar_mensaje~: 5k veces.
+
+** Recuerda que aún no están implementadas las tail-calls, por lo que naturalmente las funciones ~tail_*~ no son tan usadas.
+
+* La causa del 15 anterior es porque son 15 pruebas y las llamadas se acumulan.
+
+* 319.8k iteraciones internas de ~pdcrt_trampolin~.
+
+** ~PDCRT_CONT_INICIAR~: 15 veces.
+
+** ~PDCRT_CONT_CONTINUAR~: 113.9k.
+
+** ~PDCRT_CONT_ENVIAR_MENSAJE~: 86.9k.
+
+** ~PDCRT_CONT_DEVOLVER~: 86.9k.
+
+** ~PDCRT_CONT_TAIL_INICIAR~: 27k.
+
+** ~PDCRT_CONT_TAIL_ENVIAR_MENSAJE~: 5k.
+
+* ~pdcrt_aloj_env~: 27k.
+
+* ~pdcrt_objeto_debe_tener_tipo~: 206.9k veces.
+
+* Tipos:
+
+** ~pdcrt_objeto_entero~: 129.9k.
+
+** ~pdcrt_objeto_float~: 4.
+
+** ~pdcrt_objeto_marca_de_pila~: 27k.
+
+** ~pdcrt_objeto_booleano~: 27.1k.
+
+** ~pdcrt_objeto_nulo~: 178.8k.
+
+** ~pdcrt_objeto_aloj_closure~: 21.9k.
+
+** ~pdcrt_objeto_aloj_texto~: 3.
+
+** ~pdcrt_objeto_aloj_texto_desde_cstr~: 0.
+
+** ~pdcrt_objeto_desde_texto~: 92k.
+
+** ~pdcrt_objeto_aloj_objeto~: 0.
+
+* ~pdcrt_texto_cmp_lit~: 353.5k.
+
+** 131.4k veces los textos eran de longitudes distíntas (caso rápido).
+
+** DONE 222.1k veces los textos tuvieron que ser comparados.
+
+*** Total de 2.1M de iteraciones. Debería usar ~strncmp~.
+
+* ~pdcrt_necesita_args_y_rets~: 65k.
+
+* ~pdcrt_error pdcrt_empujar_en_pila~: 383.8k.
+
+** DONE Esta función no utiliza ~pdcrt_siguiente_capacidad~ pero debería.
+
+* ~pdcrt_sacar_de_pila~: 356.9k.
+
+** DONE Esta función no ~PDCRT_ASSERT~-aserta que ~pila->num_elementos > 0~.
+
+* ~pdcrt_eliminar_elemento_en_pila~: 22k.
+
+* ~pdcrt_insertar_elemento_en_pila~: 27k.
+
+* ~pdcrt_alojar~: 27k.
+
+* ~pdcrt_dealojar~: 27k.
+
+* ~pdcrt_inic_marco~ / ~pdcrt_deinic_marco~: 27k.
+
+** 107.9k iteraciones de ~marco->locales[i] = NULO~
+
+* ~pdcrt_fijar_local~: 75.9k.
+
+* ~pdcrt_obtener_local~: 119.9k
+
+* ~op_open_frame~: 1% de las llamadas tienen un ~padreidx == NIL~. 43.9k iteraciones del bucle ~env.value.c.env->env[i] = NULO~.
+
+* DONE ~op_mtrue~: utiliza ~PDCRT_ASSERT~, pero ~PDCRT_ASSERT~ puede ser desactivado.
+
+* Pruebas que tienen que ser mejoradas:
+
+** ~pdcrt_cima_de_pila~ 0%
+
+** ~pdcrt_realojar~: 0%
+
+** ~pdcrt_depurar_objeto~: 0%
+
+** ~pdcrt_depurar_contexto~: 0%
+
+** ~pdcrt_getopt~: 9%.
+
+** ~pdcrt_procesar_cli~: 60%
+
+** Opcodes:
+
+*** div: 0%
+
+*** gt: 0%
+
+*** le: 0%
+
+*** pop: 0%
+
+*** call: 0%
+
+*** real return / passthru return: 0%
+
+** La igualdad de los siguientes tipos nunca es probada.
+
+*** FIXME float
+
+*** FIXME booleano
+
+*** FIXME marca de pila (¿?)
+
+*** FIXME closure/procedimiento
+
+*** FIXME texto
+
+*** FIXME nulo
+
+** Clonar los siguientes tipos:
+
+*** FIXME enteros.
+
+*** FIXME float.
+
+*** FIXME booleano.
+
+*** FIXME marca de pila.
+
+*** FIXME procedimientos.
+
+*** FIXME texto.
+
+*** FIXME nulo.
+
+** ~comoTexto~ en los siguientes tipos:
+
+*** FIXME enteros.
+
+*** FIXME float.
+
+*** FIXME booleano.
+
+*** FIXME marca de pila.
+
+*** FIXME procedimientos.
+
+*** FIXME texto.
+
+*** FIXME nulo.
+
+** ~distíntoDe~ / ~operador_no=~
+
+*** FIXME enteros.
+
+*** FIXME float.
+
+*** FIXME booleano.
+
+*** FIXME marca de pila.
+
+*** FIXME procedimientos.
+
+*** FIXME texto.
+
+*** FIXME nulo.
+
+** Identidad de los objetos.
+
+** ~comoTexto~ de floats.
+
+** ~negar~ floats.
+
+** ~distíntoDe~ y ~operador_no=~.
+
+** ~truncar~, ~piso~ y ~techo~ en números.
+
+** ~longitud~, ~en~, ~concatenar~, ~subTexto~, ~parteDelTexto~, ~buscarEnReversa~ en textos.
+
+*** ~Texto#buscar: aguja, inic~
+
+**** FIXME Caso cuando ~aguja#longitud > texto#longitud~.
+
+*** ~Texto#formatear: ...valores~
+
+**** FIXME Formato ~{~~}~.
+
+**** FIXME Formato ~{~|%}~
+
+** Marcas de pila: 0% cov.
