@@ -23,7 +23,7 @@ GCOVFLAGS=--branch-probabilities --display-progress --human-readable
 PROFFLAGS=
 
 # Las banderas usadas para compilar.
-CFLAGS=-std=c18 -Wall $(DEBUGFLAGS) $(PROFFLAGS) -march=native $(RTOPTS)
+CFLAGS=-std=c18 -Wall $(DEBUGFLAGS) $(SANFLAGS) $(PROFFLAGS) -march=native $(RTOPTS) -I./src/
 CLIBS=-L. -lpdcrt -lm
 
 
