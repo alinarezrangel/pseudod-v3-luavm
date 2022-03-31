@@ -35,6 +35,26 @@ runtime. Actualmente las únicas existentes son:
 El programa `./run-tests.sh` ejecutará todas las pruebas. `./run.sh` es un
 script de ayuda para el anterior.
 
+## Extensión de GDB ##
+
+Para facilitar el desarrollo del runtime, hay una pequeña extensión en Python
+para [GDB](https://sourceware.org/gdb/onlinedocs/gdb/index.html) en el
+directorio `pdcrt_gdb`. Para poder usar esta extensión tu gdb debe haber sido
+compilado con soporte para Python 3 (Python 2 no está soportado). Después,
+agrega las siguientes líneas a tu archivo `~/.gdbinit`:
+
+```gdb
+python
+import sys
+sys.path.insert(1, 'RUTA_A_ESTE_PROYECTO')
+import pdcrt_gdb.pretty_printer as pdcrtpp
+pdcrtpp.register_pretty_printers(gdb)
+end
+```
+
+Pero reemplaza `RUTA_A_ESTE_PROYECTO` por la ruta absoluta al directorio de
+este proyecto (**no** al directorio `pdcrt_gdb`).
+
 ## Documentación ##
 
 Nada está documentado por ahora.

@@ -675,6 +675,8 @@ typedef pdcrt_continuacion (*pdcrt_recvmsj)(struct pdcrt_marco* marco, pdcrt_obj
 #define PDCRT_NAME_EACT pdcrt_special_eact
 #define PDCRT_NAME_ESUP pdcrt_special_esup
 #define PDCRT_NAME_NIL pdcrt_special_nil
+// NOTA: Si modificas este valor, también actualiza la variable del mismo
+// nombre en `pdcrt_gdb/pretty_printer.py`
 #define PDCRT_NUM_LOCALES_ESP 2
 
 // El entorno de una "closure".
