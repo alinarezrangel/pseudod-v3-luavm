@@ -54,7 +54,13 @@ PT and not the current point."
     (let ((bol (point)))
       (end-of-line)
       (let ((eol (point)))
-        (buffer-substring-no-properties bol eol)))))
+        (string-trim-left (buffer-substring-no-properties bol eol))))))
+
+(defun pseudod-assembler--get-previous-line (&optional pt)
+  (save-mark-and-excursion
+    (if (= (forward-line -1) -1)
+        nil
+      (pseudod-assembler--get-current-line))))
 
 (defun pseudod-assembler--indentation-of-previous-line (&optional pt)
   "Obtain the indentation of the previous line.
@@ -92,15 +98,21 @@ See also `pseudod-assembler--indentation-of-current-line'."
   (save-mark-and-excursion
     (let ((indentation (pseudod-assembler--indentation-of-current-line))
           (code (string-trim-left (pseudod-assembler--get-current-line))))
-      (cond ((string-prefix-p "ENDPROC" code)
-             (indent-line-to (* 2 pseudod-assembler-indentation-level)))
-            ((string-prefix-p "PROC" code)
+      (cond ((or (string-prefix-p "PROC" code)
+                 (string-prefix-p "ENDPROC" code))
              (indent-line-to pseudod-assembler-indentation-level))
             ((or (string-prefix-p "ENDSECTION" code)
                  (string-prefix-p "SECTION" code))
              (indent-line-to 0))
             (t
-             (indent-line-to (indent-next-tab-stop indentation)))))))
+             (let ((previous-line-indent (pseudod-assembler--indentation-of-previous-line))
+                   (previous-line (pseudod-assembler--get-previous-line)))
+               (cond ((not previous-line) (indent-line-to 0))
+                     ((or (string-prefix-p "PROC" previous-line)
+                          (string-prefix-p "SECTION" previous-line))
+                      (indent-line-to (+ previous-line-indent
+                                         pseudod-assembler-indentation-level)))
+                     (t (pseudod-assembler-indent-line-to-previous)))))))))
 
 (defun pseudod-assembler-indent-region (start end)
   "Indent all lines in a region to the next tab stop.
@@ -123,7 +135,7 @@ indentation (or a bigger indentation) then extra tabs are added."
   (interactive)
   (if (= 0 (pseudod-assembler--indentation-of-current-line))
       (progn
-        (pseudod-assembler-indent-line-to-previous)
+        (pseudod-assembler-indent)
         (back-to-indentation))
     (pseudod-assembler-indent)))
 
