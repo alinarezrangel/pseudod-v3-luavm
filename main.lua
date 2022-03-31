@@ -1,5 +1,6 @@
 local re = require "re"
-local v = require "fennelview"
+require "fennel"
+local v = require "fennel.view"
 
 local VER = {1, 0, 0}
 
