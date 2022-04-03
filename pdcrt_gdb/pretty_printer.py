@@ -9,6 +9,8 @@ import re
 import gdb
 
 
+PDCRT_TOBJ_CLOSURE = 3
+ESUP_IDX = 0
 LOCALES_ESP = ['ESUP', 'EACT']
 PDCRT_NUM_LOCALES_ESP = 2
 
@@ -218,6 +220,42 @@ def inspeccionar_marco(arg, from_tty):
                     print('[{}: locales[{}]]: {}'.format(name, i, val['locales'][i]))
                 print()
                 val = val['marco_anterior']
+    except gdb.MemoryError:
+        pass
+
+
+@gdb_command('pdcrt-env', gdb.COMMAND_DATA)
+def inspeccionar_entorno(arg, from_tty):
+    val = gdb.parse_and_eval(arg)
+    try:
+        frame_index = -1
+        while True:
+            frame_index = frame_index + 1
+            val = dereference_everything(val)
+            tag = val.type.strip_typedefs().tag
+            if tag == 'pdcrt_env':
+                print('#{}'.format(frame_index))
+                size = int(val['env_size'])
+                for i in range(size):
+                    if i < PDCRT_NUM_LOCALES_ESP:
+                        name = LOCALES_ESP[i]
+                    else:
+                        name = int(i - PDCRT_NUM_LOCALES_ESP)
+                    print('[{}: env[{}]]: {}'.format(name, i, val['env'][i]))
+                print()
+                if size < PDCRT_NUM_LOCALES_ESP:
+                    print('Marco inválido: tiene menos de {} elementos'.format(PDCRT_NUM_LOCALES_ESP))
+                else:
+                    val = val['env'][ESUP_IDX]
+            elif tag == 'pdcrt_objeto':
+                if val['tag'] != PDCRT_TOBJ_CLOSURE:
+                    print('ESUP en el pdcrt_env no apunta a un objeto de tipo CLOSURE')
+                    break
+                val = val['value']['c']['env']
+                frame_index = frame_index - 1
+            else:
+                print('El valor no es ni un pdcrt_env ni un pdcrt_objeto de tipo CLOSURE')
+                break
     except gdb.MemoryError:
         pass
 
