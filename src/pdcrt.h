@@ -901,6 +901,7 @@ typedef struct pdcrt_marco
     PDCRT_ARR(num_locales + PDCRT_NUM_LOCALES_ESP) pdcrt_objeto* locales;
     size_t num_locales;
     PDCRT_NULL struct pdcrt_marco* marco_anterior;
+    int num_valores_a_devolver;
 } pdcrt_marco;
 
 // Inicializa y desinicializa un marco. `num_locales` es el número de locales,
@@ -909,7 +910,7 @@ typedef struct pdcrt_marco
 //
 // `marco_anterior` es el marco que activo a este o `NULL` si ningún marco
 // activó a este.
-pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_t num_locales, PDCRT_NULL pdcrt_marco* marco_anterior);
+pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_t num_locales, PDCRT_NULL pdcrt_marco* marco_anterior, int num_valores_a_devolver);
 void pdcrt_deinic_marco(pdcrt_marco* marco);
 
 // Fija el valor de una variable local.
@@ -958,7 +959,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
         exit(PDCRT_SALIDA_ERROR);                                       \
     }                                                                   \
     pdcrt_procesar_cli(ctx, argc, argv);                                \
-    if((pderrno = pdcrt_inic_marco(&marco_real, ctx, nlocals, NULL)))   \
+    if((pderrno = pdcrt_inic_marco(&marco_real, ctx, nlocals, NULL, 0))) \
     {                                                                   \
         puts(pdcrt_perror(pderrno));                                    \
         exit(PDCRT_SALIDA_ERROR);                                       \
@@ -1015,7 +1016,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
     pdcrt_marco* marco = name##marco_actual;                            \
     do                                                                  \
     {                                                                   \
-        if((pderrno = pdcrt_inic_marco(marco, ctx, nlocals, name##marco_anterior))) \
+        if((pderrno = pdcrt_inic_marco(marco, ctx, nlocals, name##marco_anterior, name##nrets))) \
         {                                                               \
             puts(pdcrt_perror(pderrno));                                \
             exit(PDCRT_SALIDA_ERROR);                                   \

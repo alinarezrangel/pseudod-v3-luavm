@@ -1955,7 +1955,7 @@ void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[])
 
 // Marcos:
 
-pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_t num_locales, PDCRT_NULL pdcrt_marco* marco_anterior)
+pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_t num_locales, PDCRT_NULL pdcrt_marco* marco_anterior, int num_valores_a_devolver)
 {
     size_t num_real_de_locales = num_locales + PDCRT_NUM_LOCALES_ESP;
     marco->locales = pdcrt_alojar(contexto, sizeof(pdcrt_objeto) * num_real_de_locales);
@@ -1966,6 +1966,7 @@ pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_
     }
     marco->contexto = contexto;
     marco->marco_anterior = marco_anterior;
+    marco->num_valores_a_devolver = num_valores_a_devolver;
     marco->num_locales = num_real_de_locales;
     for(size_t i = 0; i < marco->num_locales; i++)
     {
@@ -2233,7 +2234,23 @@ void pdcrt_op_retn(pdcrt_marco* marco, int n)
             pdcrt_abort();
         }
     }
-    pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, n);
+
+    if(n > marco->num_valores_a_devolver)
+    {
+        for(size_t i = n - marco->num_valores_a_devolver; i > 0; i--)
+        {
+            pdcrt_sacar_de_pila(&marco->contexto->pila);
+        }
+    }
+    else if(n < marco->num_valores_a_devolver)
+    {
+        for(size_t i = marco->num_valores_a_devolver - n; i > 0; i--)
+        {
+            pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, n, pdcrt_objeto_nulo());
+        }
+    }
+
+    pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, marco->num_valores_a_devolver);
     pdcrt_objeto_debe_tener_tipo(marca, PDCRT_TOBJ_MARCA_DE_PILA);
 }
 
@@ -2269,9 +2286,9 @@ void pdcrt_op_rot(pdcrt_marco* marco, int n)
         pdcrt_pila* pila = &marco->contexto->pila;
         PDCRT_ASSERT(pila->num_elementos > (size_t)n);
         // Guarda el elemento TOP-N
-        pdcrt_objeto obj = pila->elementos[pila->num_elementos - (size_t)n];
+        pdcrt_objeto obj = pila->elementos[pila->num_elementos - (size_t)n - 1];
         // Mueve todos los elementos de I a I-1
-        for(size_t i = pila->num_elementos - (size_t)n; i < (pila->num_elementos - 1); i++)
+        for(size_t i = pila->num_elementos - (size_t)n - 1; i < (pila->num_elementos - 1); i++)
         {
             pila->elementos[i] = pila->elementos[i + 1];
         }
