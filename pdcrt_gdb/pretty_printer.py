@@ -134,6 +134,7 @@ class PDCRT_Marco:
     def children(self):
         yield 'contexto', self.val['contexto']
         yield 'marco_anterior', self.val['marco_anterior']
+        yield 'num_valores_a_devolver', self.val['num_valores_a_devolver']
         size = self._num_locales() + PDCRT_NUM_LOCALES_ESP
         for i in range(size):
             if i < PDCRT_NUM_LOCALES_ESP:
@@ -207,7 +208,7 @@ def inspeccionar_marco(arg, from_tty):
                 print('El valor no es ni apunta a un pdcrt_marco')
                 break
             else:
-                print('#{}: contexto = {}, marco_anterior = {}'.format(frame_index, val['contexto'], val['marco_anterior']))
+                print('#{}: contexto = {}, marco_anterior = {}, num_valores_a_devolver = {}'.format(frame_index, val['contexto'], val['marco_anterior'], val['num_valores_a_devolver']))
                 size = int(val['num_locales'])
                 for i in range(size):
                     if i < PDCRT_NUM_LOCALES_ESP:
