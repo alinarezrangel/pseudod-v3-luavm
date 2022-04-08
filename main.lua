@@ -139,7 +139,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "SUM" / "SUB" / "MUL" / "DIV"
     / "RETN" / "DYNCALL"
     / "MKCLZ" / "MK0CLZ"
-    / "OPNFRM" / "EINIT" / "CLSFRM"
+    / "OPNFRM" / "EINIT" / "ENEW" / "CLSFRM"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
     / "POP" / "CHOOSE" / "JMP" / "NAME"
     / "MTRUE" / "CMPEQ" / "CMPNEQ" / "NOT"
@@ -685,6 +685,11 @@ end
 toc.opschema.OPNFRM = schema "Ex, ?Ey, Ux"
 function toc.opcodes.OPNFRM(emit, state, op)
    emit:stmt("PDCRT_SET_LVAR(«1:localid», pdcrt_op_open_frame(marco, «2:?localid», «3:int»))", op.Ex, op.Ey, op.Ux)
+end
+
+toc.opschema.ENEW = schema "Ex, Ui"
+function toc.opcodes.ENEW(emit, state, op)
+   emit:stmt("pdcrt_op_einit(marco, PDCRT_GET_LVAR(«1:localid»), «2:int», pdcrt_objeto_nulo())", op.Ex, op.Ui)
 end
 
 toc.opschema.EINIT = schema "Ex, Ui, Lx"

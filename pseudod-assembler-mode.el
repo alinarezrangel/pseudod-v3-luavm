@@ -142,7 +142,7 @@ indentation (or a bigger indentation) then extra tabs are added."
 ;; Major Mode:
 
 (defconst pseudod-assembler-font-lock-keywords
-  '(("\\<\\(\\(END\\)?\\(SECTION\\|PROC\\)\\|LOCAL\\|PARAM\\|RETN\\|L[SG]ETC?\\|[IFLB]CONST\\|\\(OPN\\|CLS\\)FRM\\|EINIT\\|ROT\\|T?MSG\\|SUM\\|SUB\\|MUL\\|DIV\\|NAME\\|CHOOSE\\|[GL][ET]\\|JMP\\|DYNCALL\\|MTRUE\\|CMPN?EQ\\|NOT\\|MK0?CLZ\\|PRN\\|NL\\|PDVM\\|PLATFORM\\|STRING\\|BIG\\(INT\\|DEC\\)\\|S?POP\\|SPUSH\\)\\>" . font-lock-keyword-face)
+  '(("\\<\\(\\(END\\)?\\(SECTION\\|PROC\\)\\|LOCAL\\|PARAM\\|RETN\\|L[SG]ETC?\\|[IFLB]CONST\\|\\(OPN\\|CLS\\)FRM\\|E\\(INIT\\|NEW\\)\\|ROT\\|T?MSG\\|SUM\\|SUB\\|MUL\\|DIV\\|NAME\\|CHOOSE\\|[GL][ET]\\|JMP\\|DYNCALL\\|MTRUE\\|CMPN?EQ\\|NOT\\|MK0?CLZ\\|PRN\\|NL\\|PDVM\\|PLATFORM\\|STRING\\|BIG\\(INT\\|DEC\\)\\|S?POP\\|SPUSH\\)\\>" . font-lock-keyword-face)
     ("\\([,#()]\\)" . font-lock-keyword-face))
   "Font locking for pdasm keywords.")
 
