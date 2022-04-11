@@ -6,7 +6,7 @@ SECTION "code"
   ICONST 5
   ICONST 1
   MK0CLZ 0
-  DYNCALL 1, 1
+  DYNCALL 2, 1
   PRN
   NL
 ENDSECTION
@@ -14,7 +14,6 @@ ENDSECTION
 SECTION "procedures"
   -- (x, y) => (x + y) ^ 2
   PROC 0
-    PARAM ESUP
     PARAM 0
     PARAM 1
     LOCAL 2
