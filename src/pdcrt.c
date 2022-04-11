@@ -2107,6 +2107,11 @@ pdcrt_continuacion pdcrt_op_le(pdcrt_marco* marco, pdcrt_proc_continuacion proc)
     PDCRT_OP(marco, operador_menorOIgualA, proc);
 }
 
+pdcrt_continuacion pdcrt_op_opeq(pdcrt_marco* marco, pdcrt_proc_continuacion proc)
+{
+    PDCRT_OP(marco, operador_igualA, proc);
+}
+
 #undef PDCRT_OP
 
 void pdcrt_op_pop(pdcrt_marco* marco)

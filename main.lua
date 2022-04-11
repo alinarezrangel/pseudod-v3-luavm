@@ -143,7 +143,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
     / "POP" / "CHOOSE" / "JMP" / "NAME"
     / "MTRUE" / "CMPEQ" / "CMPNEQ" / "NOT"
-    / "ROT" / "GT" / "LT" / "GE" / "LE"
+    / "ROT" / "GT" / "LT" / "GE" / "LE" / "OPEQ"
     / "TMSG" / "MSG"
     / "PRN" / "NL"
     / "SPUSH" / "SPOP"
@@ -325,11 +325,11 @@ end
 
 
 local REQUIRES_CONTINUATION = {
-   "LT", "GT", "LE", "GE",     -- Llamadas a función (operadores)
-   "CMPEQ", "CMPNEQ",          -- Llamadas a función (método `igualA`)
-   "TMSG", "MSG", "DYNCALL",   -- Llamadas a función
-   "SUM", "SUB", "MUL", "DIV", -- Llamadas a función (operadores)
-   "NAME", "JMP", "CHOOSE"     -- Control de flujo
+   "LT", "GT", "LE", "GE", "OPEQ",  -- Llamadas a función (operadores)
+   "CMPEQ", "CMPNEQ",               -- Llamadas a función (método `igualA`)
+   "TMSG", "MSG", "DYNCALL",        -- Llamadas a función
+   "SUM", "SUB", "MUL", "DIV",      -- Llamadas a función (operadores)
+   "NAME", "JMP", "CHOOSE"          -- Control de flujo
 }
 
 local FALLS_THROUGHT = {
@@ -659,6 +659,12 @@ end
 toc.opschema.LE = schema ""
 function toc.opcodes.LE(emit, state, op)
    emit:stmt("return pdcrt_op_le(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
+end
+
+toc.opschema.OPEQ = schema ""
+function toc.opcodes.OPEQ(emit, state, op)
+   emit:stmt("return pdcrt_op_opeq(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 

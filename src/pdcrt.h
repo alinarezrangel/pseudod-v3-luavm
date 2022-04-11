@@ -1092,6 +1092,7 @@ pdcrt_continuacion pdcrt_op_gt(pdcrt_marco* marco, pdcrt_proc_continuacion proc)
 pdcrt_continuacion pdcrt_op_ge(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
 pdcrt_continuacion pdcrt_op_lt(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
 pdcrt_continuacion pdcrt_op_le(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
+pdcrt_continuacion pdcrt_op_opeq(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
 
 void pdcrt_op_pop(pdcrt_marco* marco);
 
