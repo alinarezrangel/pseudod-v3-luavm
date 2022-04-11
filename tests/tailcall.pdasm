@@ -11,7 +11,6 @@ ENDSECTION
 
 SECTION "procedures"
   PROC 1
-    PARAM ESUP
     PARAM 0
     LGET 0
     -- El número de veces que se va a llamar de forma recursiva a esta

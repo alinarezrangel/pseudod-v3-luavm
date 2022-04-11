@@ -923,6 +923,10 @@ pdcrt_objeto pdcrt_obtener_local(pdcrt_marco* marco, pdcrt_local_index n);
 // mostrar. `info` es un texto adicional que se mostrará en la salida.
 void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* info);
 
+// Ajusta la pila para que una función recién llamada que recibió #nargs
+// argumentos pero pedía #nparams parámetros pueda ejecutarse.
+pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t nparams);
+
 // La macro `PDCRT_RASTREAR_MARCO(marco, procname, info)` emitirá una llamada a
 // `pdcrt_mostrar_marco` si `PDCRT_DBG_RASTREAR_MARCOS` está definido, o se
 // expandirá a un statment vacío si no.
@@ -967,7 +971,11 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
     do {} while(0)
 
 #define PDCRT_RUN(proc)                                                 \
-        pdcrt_trampolin(marco, pdcrt_continuacion_iniciar((proc), &pdprocm_cont, marco, 0, 0))
+        do                                                              \
+        {                                                               \
+            pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_nulo()); \
+            pdcrt_trampolin(marco, pdcrt_continuacion_iniciar((proc), &pdprocm_cont, marco, 1, 0)); \
+        } while(0)
 
 #define PDCRT_MAIN_CONT_DECLR()                                     \
         pdcrt_continuacion pdprocm_cont(struct pdcrt_marco* marco);
@@ -1010,7 +1018,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
     pdcrt_continuacion pdproc_##name(pdcrt_marco* name##marco_actual, pdcrt_marco* name##marco_anterior, int name##nargs, int name##nrets) // {}
 #define PDCRT_CONT(name, k)                                             \
     pdcrt_continuacion pdprock_##name##_k##k(pdcrt_marco* name##marco_actual) // {}
-#define PDCRT_PROC_PRELUDE(name, nlocals)                               \
+#define PDCRT_PROC_PRELUDE(name, nparams, nlocals)                      \
     pdcrt_error pderrno;                                                \
     pdcrt_contexto* ctx = name##marco_anterior->contexto;               \
     pdcrt_marco* marco = name##marco_actual;                            \
@@ -1021,12 +1029,10 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
             puts(pdcrt_perror(pderrno));                                \
             exit(PDCRT_SALIDA_ERROR);                                   \
         }                                                               \
-        pdcrt_empujar_en_pila(&ctx->pila, ctx->alojador, pdcrt_objeto_marca_de_pila()); \
+        pdcrt_fijar_local(marco, PDCRT_ID_ESUP, pdcrt_ajustar_parametros(marco, name##nargs, nparams)); \
         PDCRT_RASTREAR_MARCO(marco, #name, "preludio");                 \
     }                                                                   \
     while(0)
-#define PDCRT_ASSERT_PARAMS(nparams)            \
-    pdcrt_assert_params(marco, nparams)
 #define PDCRT_PARAM(idx, param)                                     \
     pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
 #define PDCRT_CONT_PRELUDE(name, k)                     \
@@ -1102,8 +1108,6 @@ void pdcrt_op_close_frame(pdcrt_marco* marco, pdcrt_objeto env);
 
 void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc);
 void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc);
-
-void pdcrt_assert_params(pdcrt_marco* marco, int nparams);
 
 pdcrt_continuacion pdcrt_op_dyncall(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int acepta, int devuelve);
 

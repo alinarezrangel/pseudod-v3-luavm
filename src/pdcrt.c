@@ -2021,6 +2021,25 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
     fprintf(out, "|  %s\n", info);
 }
 
+pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t nparams)
+{
+    PDCRT_ASSERT(nargs >= 1);
+    pdcrt_objeto esup = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    nargs -= 1;
+    while(nargs < nparams)
+    {
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_nulo()));
+        nargs += 1;
+    }
+    while(nargs > nparams)
+    {
+        (void) pdcrt_sacar_de_pila(&marco->contexto->pila);
+        nargs -= 1;
+    }
+    pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, nparams, pdcrt_objeto_marca_de_pila());
+    return esup;
+}
+
 
 // Opcodes:
 
@@ -2183,31 +2202,6 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
     clz.recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
     no_falla(pdcrt_aloj_env(&clz.value.c.env, marco->contexto->alojador, 0));
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
-}
-
-void pdcrt_assert_params(pdcrt_marco* marco, int nparams)
-{
-    pdcrt_objeto marca = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    if(marca.tag != PDCRT_TOBJ_MARCA_DE_PILA)
-    {
-        fprintf(stderr, "Se esperaba una marca de pila pero se obtuvo un %s\n", pdcrt_tipo_como_texto(marca.tag));
-        pdcrt_abort();
-    }
-    if(marco->contexto->pila.num_elementos < (size_t) nparams)
-    {
-        fprintf(stderr, "Se esperaban al menos %d elementos.\n", nparams);
-        pdcrt_abort();
-    }
-    for(size_t i = marco->contexto->pila.num_elementos - nparams; i < marco->contexto->pila.num_elementos; i++)
-    {
-        pdcrt_objeto obj = marco->contexto->pila.elementos[i];
-        if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA)
-        {
-            fprintf(stderr, "Faltaron elementos en el marco de llamada\n");
-            pdcrt_abort();
-        }
-    }
-    pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, nparams, marca);
 }
 
 

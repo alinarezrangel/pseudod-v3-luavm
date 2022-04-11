@@ -1,0 +1,72 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  MK0CLZ 1
+  DYNCALL 0, 1
+  PRN
+  NL
+
+  ICONST 1
+  MK0CLZ 1
+  DYNCALL 1, 1
+  PRN
+  NL
+
+  MK0CLZ 2
+  DYNCALL 0, 0
+
+  ICONST 1
+  MK0CLZ 2
+  DYNCALL 1, 0
+
+  ICONST 1
+  ICONST 2
+  MK0CLZ 2
+  DYNCALL 2, 1
+  PRN
+  NL
+
+  ICONST 5
+  ICONST 4
+  MK0CLZ 3
+  DYNCALL 2, 1
+  PRN
+  NL
+
+  ICONST 5
+  ICONST 4
+  ICONST 100
+  ICONST 1000
+  MK0CLZ 3
+  DYNCALL 4, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+  PROC 1
+    ICONST 1
+    RETN 1
+  ENDPROC
+
+  PROC 2
+    PARAM 0
+    LGET 0
+    PRN
+    NL
+    RETN 0
+  ENDPROC
+
+  PROC 3
+    PARAM 0
+    PARAM 1
+    LGET 0
+    LGET 1
+    MUL
+    RETN 1
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+ENDSECTION

@@ -32,7 +32,6 @@ ENDSECTION
 
 SECTION "procedures"
   PROC 0 -- EsPar: x
-    PARAM ESUP
     PARAM 0
 
     -- necesitas x >= 0
@@ -62,7 +61,6 @@ SECTION "procedures"
   ENDPROC
 
   PROC 1 -- EsImpar: x
-    PARAM ESUP
     PARAM 0
 
     -- necesitas x >= 1

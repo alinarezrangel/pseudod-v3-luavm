@@ -20,7 +20,6 @@ ENDSECTION
 
 SECTION "procedures"
   PROC 1
-    PARAM ESUP
     PARAM 0
     LOCAL 1
     OPNFRM EACT, ESUP, 1

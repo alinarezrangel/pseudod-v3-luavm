@@ -842,8 +842,7 @@ function toc.compparts(emit, state, proc)
 
    log.dbg("emitting main proc for %s", proc.id)
    emit:opentoplevel("PDCRT_PROC(«1:localname») {", proc.id)
-   emit:stmt("PDCRT_PROC_PRELUDE(«1:localname», «2:int»)", proc.id, #proc.params + #proc.locals)
-   emit:stmt("PDCRT_ASSERT_PARAMS(«1:int»)", #proc.params)
+   emit:stmt("PDCRT_PROC_PRELUDE(«1:localname», «2:int», «3:int»)", proc.id, #proc.params, #proc.params + #proc.locals)
    for i = 1, #proc.params do
       local p = proc.params[i]
       emit:stmt("PDCRT_PARAM(«1:localid», «1:localname»)", p[2])

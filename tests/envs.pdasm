@@ -44,7 +44,6 @@ ENDSECTION
 
 SECTION "procedures"
   PROC 0
-    PARAM ESUP
     PARAM 0
     OPNFRM EACT, ESUP, 0
     CLSFRM EACT
@@ -71,7 +70,6 @@ SECTION "procedures"
   ENDPROC
 
   PROC 1
-    PARAM ESUP
     PARAM 0
     OPNFRM EACT, ESUP, 0
     CLSFRM EACT
