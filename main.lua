@@ -1,6 +1,4 @@
 local re = require "re"
-require "fennel"
-local v = require "fennel.view"
 
 local VER = {1, 0, 0}
 
@@ -162,6 +160,8 @@ token <- str / [^%s"]+
 ]==]
 
 local function pv(...)
+   require "fennel"
+   local v = require "fennel.view"
    for i = 1, select("#", ...) do
       local x = select(i, ...)
       if i > 1 then
