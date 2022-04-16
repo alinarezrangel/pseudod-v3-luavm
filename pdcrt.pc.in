@@ -1,0 +1,9 @@
+prefix=$(PREFIX)
+includedir=$(INCLUDEDIR)
+libdir=$(LIBDIR)
+
+Name: pdcrt
+Description: The runtime of the PseudoD C compiler backend.
+Version: $(VERSION)
+Cflags: $(CFLAGS)
+Libs: $(CLIBS)
