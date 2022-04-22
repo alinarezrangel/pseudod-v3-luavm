@@ -2286,16 +2286,8 @@ void pdcrt_op_rot(pdcrt_marco* marco, int n)
     {
         PDCRT_ASSERT(n > 0);
         pdcrt_pila* pila = &marco->contexto->pila;
-        PDCRT_ASSERT(pila->num_elementos > (size_t)n);
-        // Guarda el elemento TOP-N
-        pdcrt_objeto obj = pila->elementos[pila->num_elementos - (size_t)n - 1];
-        // Mueve todos los elementos de I a I-1
-        for(size_t i = pila->num_elementos - (size_t)n - 1; i < (pila->num_elementos - 1); i++)
-        {
-            pila->elementos[i] = pila->elementos[i + 1];
-        }
-        // Restaura el elemento guardado
-        pila->elementos[pila->num_elementos - 1] = obj;
+        pdcrt_objeto obj = pdcrt_eliminar_elemento_en_pila(pila, n);
+        no_falla(pdcrt_empujar_en_pila(pila, marco->contexto->alojador, obj));
     }
 }
 
