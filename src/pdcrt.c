@@ -2209,7 +2209,6 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
 }
 
-
 pdcrt_continuacion pdcrt_op_dyncall(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int acepta, int devuelve)
 {
     pdcrt_objeto cima = pdcrt_sacar_de_pila(&marco->contexto->pila);
@@ -2219,6 +2218,10 @@ pdcrt_continuacion pdcrt_op_dyncall(pdcrt_marco* marco, pdcrt_proc_continuacion 
 
 void pdcrt_op_call(pdcrt_marco* marco, pdcrt_proc_t proc, int acepta, int devuelve)
 {
+    (void) marco;
+    (void) proc;
+    (void) acepta;
+    (void) devuelve;
     pdcrt_no_implementado("Opcode CALL");
 }
 
