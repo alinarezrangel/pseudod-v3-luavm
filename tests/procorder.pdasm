@@ -1,0 +1,28 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  ICONST 0
+  ICONST 1
+  MK0CLZ 1
+  DYNCALL 2, 0
+ENDSECTION
+
+SECTION "procedures"
+  PROC 1
+    PARAM 0
+    PARAM 1
+    LGET 0
+    ICONST 0
+    OPEQ
+    MTRUE
+    LGET 1
+    ICONST 1
+    OPEQ
+    MTRUE
+    RETN 0
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+ENDSECTION
