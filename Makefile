@@ -20,7 +20,7 @@ RTOPTS=-DPDCRT_OPT_GNU=1
 SANFLAGS=-fsanitize=address -fsanitize=undefined
 
 # Opciones de depuración para GCC:
-DEBUGFLAGS=-g
+DEBUGFLAGS=-g3
 
 # Opciones para activar el code-coverage en GCC. Recuerda no activar --coverage
 # si tienes optimizaciones activas.
