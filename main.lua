@@ -149,7 +149,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
 procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
 proc <- {| '' -> 'proc'
-           "PROC" rs id {| '' -> 'params'  (rs param)* |} code rs "ENDPROC" |}
+           "PROC" rs id {| ('' -> 'method' rs 'METHOD' / '' -> 'no_method') |} {| '' -> 'params'  (rs param)* |} code rs "ENDPROC" |}
 param <- {| {"PARAM"} rs (id / envs) |}
 
 unknownsec <- "SECTION" ws str (ws token)* rs "SECTION"
@@ -291,15 +291,16 @@ local function prepproc(proc)
    assert(proc[1] == "proc", "procedure required")
    local c = {}
    c.id = processoparg(proc[2])
-   c.params = sliceseq(proc[3], 2, #proc[3])
+   c.method = proc[3][1] == 'method'
+   c.params = sliceseq(proc[4], 2, #proc[4])
    for i = 1, #c.params do
       c.params[i] = opcode(c.params[i])
    end
-   c.locals = sliceseq(proc[4], 2, #proc[4])
+   c.locals = sliceseq(proc[5], 2, #proc[5])
    for i = 1, #c.locals do
       c.locals[i] = opcode(c.locals[i])
    end
-   c.opcodes = sliceseq(proc[5], 2, #proc[5])
+   c.opcodes = sliceseq(proc[6], 2, #proc[6])
    for i = 1, #c.opcodes do
       c.opcodes[i] = opcode(c.opcodes[i])
    end
@@ -718,6 +719,11 @@ function toc.opcodes.MK0CLZ(emit, state, op)
    emit:stmt("pdcrt_op_mk0clz(marco, «1:procname»)", op.Px)
 end
 
+toc.opschema.MKOBJ = schema "Ua, Px"
+function toc.opcodes.MKOBJ(emit, state, op)
+   emit:stmt("pdcrt_op_mkobj(marco, «1:int», «2:procname»)", op.Ua, op.Px)
+end
+
 toc.opschema.MKARR = schema "Ua"
 function toc.opcodes.MKARR(emit, state, op)
    emit:stmt("pdcrt_op_mkarr(marco, «1:int»)", op.Ua)
@@ -853,7 +859,16 @@ function toc.compparts(emit, state, proc)
 
    log.dbg("emitting main proc for %s", proc.id)
    emit:opentoplevel("PDCRT_PROC(«1:localname») {", proc.id)
-   emit:stmt("PDCRT_PROC_PRELUDE(«1:localname», «2:int», «3:int»)", proc.id, #proc.params, #proc.params + #proc.locals)
+   local nyo
+   if proc.method then
+      nyo = 1
+   else
+      nyo = 0
+   end
+   emit:stmt("PDCRT_PROC_PRELUDE(«1:localname», «2:int», «3:int»)", proc.id, #proc.params, #proc.params + #proc.locals + nyo)
+   if proc.method then
+      emit:stmt("PDCRT_PROC_METHOD()")
+   end
    for i = #proc.params, 1, -1 do
       local p = proc.params[i]
       emit:stmt("PDCRT_PARAM(«1:localid», «1:localname»)", p[2])
