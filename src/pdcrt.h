@@ -290,6 +290,9 @@ pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojad
 // Desaloja un texto.
 void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto);
 
+struct pdcrt_arreglo;
+typedef struct pdcrt_arreglo pdcrt_arreglo;
+
 // El tipo `pdcrt_objeto`.
 //
 // `pdcrt_objeto` es el tipo que el runtime utiliza para manipular y
@@ -379,7 +382,9 @@ typedef struct pdcrt_objeto
         PDCRT_TOBJ_TEXTO = 4,
         PDCRT_TOBJ_OBJETO = 5,
         PDCRT_TOBJ_BOOLEANO = 6,
-        PDCRT_TOBJ_NULO = 7
+        PDCRT_TOBJ_NULO = 7,
+        PDCRT_TOBJ_ARREGLO = 8,
+        PDCRT_TOBJ_VOIDPTR = 9
     } tag;
     union
     {
@@ -388,12 +393,39 @@ typedef struct pdcrt_objeto
         pdcrt_closure c;
         pdcrt_impl_obj o;
         pdcrt_texto* t;
+        pdcrt_arreglo* a;
         bool b;
+        void* p;
     } value;
     pdcrt_funcion_generica recv;
 } pdcrt_objeto;
 
 typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
+
+typedef struct pdcrt_arreglo
+{
+    PDCRT_ARR(capacidad) pdcrt_objeto* elementos;
+    size_t capacidad;
+    size_t longitud;
+} pdcrt_arreglo;
+
+pdcrt_error pdcrt_aloj_arreglo(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, size_t capacidad);
+void pdcrt_dealoj_arreglo(pdcrt_alojador alojador, pdcrt_arreglo* arr);
+pdcrt_error pdcrt_aloj_arreglo_vacio(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr);
+pdcrt_error pdcrt_aloj_arreglo_con_1(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, pdcrt_objeto el0);
+pdcrt_error pdcrt_aloj_arreglo_con_2(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, pdcrt_objeto el0, pdcrt_objeto el1);
+pdcrt_error pdcrt_realoj_arreglo(pdcrt_alojador alojador, pdcrt_arreglo* arr, size_t nueva_capacidad);
+void pdcrt_arreglo_fijar_elemento(pdcrt_arreglo* arr, size_t indice, pdcrt_objeto nuevo_elemento);
+pdcrt_objeto pdcrt_arreglo_obtener_elemento(pdcrt_arreglo* arr, size_t indice);
+pdcrt_error pdcrt_arreglo_concatenar(pdcrt_alojador alojador, pdcrt_arreglo* arr_final, pdcrt_arreglo* arr_fuente);
+pdcrt_error pdcrt_arreglo_agregar_al_final(pdcrt_alojador alojador, pdcrt_arreglo* arr, pdcrt_objeto el);
+pdcrt_error pdcrt_arreglo_mover_elementos(
+    pdcrt_arreglo* fuente,
+    size_t inicio_fuente,
+    size_t final_fuente,
+    pdcrt_arreglo* destino,
+    size_t inicio_destino
+);
 
 
 // Una continuación.
@@ -729,6 +761,8 @@ pdcrt_objeto pdcrt_objeto_marca_de_pila(void);
 pdcrt_objeto pdcrt_objeto_booleano(bool v);
 // Crea un objeto nulo.
 pdcrt_objeto pdcrt_objeto_nulo(void);
+// Crea un objeto con un puntero.
+pdcrt_objeto pdcrt_objeto_voidptr(void*);
 
 // Aloja un objeto closure.
 //
@@ -741,6 +775,11 @@ pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador 
 pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, const char* cstr);
 // Crea un objeto desde un texto.
 pdcrt_objeto pdcrt_objeto_desde_texto(pdcrt_texto* texto);
+// Crea un objeto desde un arreglo ya existente.
+pdcrt_objeto pdcrt_objeto_desde_arreglo(pdcrt_arreglo* arreglo);
+// Aloja un objeto de tipo arreglo. El arreglo estará vacío pero tendrá la
+// capacidad dada.
+pdcrt_error pdcrt_objeto_aloj_arreglo(pdcrt_alojador alojador, size_t capacidad, PDCRT_OUT pdcrt_objeto* out);
 // Aloja un objeto "real".
 pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, pdcrt_recvmsj recv, size_t num_attrs);
 
@@ -764,6 +803,9 @@ pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo
 pdcrt_continuacion pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_voidptr(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 
 // Formatear:
@@ -1035,6 +1077,7 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
     while(0)
 #define PDCRT_PARAM(idx, param)                                     \
     pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
+#define PDCRT_PROC_METHOD()
 #define PDCRT_CONT_PRELUDE(name, k)                     \
     pdcrt_marco* marco = name##marco_actual;            \
     PDCRT_RASTREAR_MARCO(marco, #name, "continuar");
@@ -1109,6 +1152,8 @@ void pdcrt_op_close_frame(pdcrt_marco* marco, pdcrt_objeto env);
 
 void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc);
 void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc);
+void pdcrt_op_mkobj(pdcrt_marco* marco, int natrs, pdcrt_proc_t proc);
+void pdcrt_op_mkarr(pdcrt_marco* marco, size_t tam);
 
 pdcrt_continuacion pdcrt_op_dyncall(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int acepta, int devuelve);
 

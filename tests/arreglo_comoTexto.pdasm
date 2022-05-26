@@ -1,0 +1,22 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  ICONST 1
+  ICONST 2
+  ICONST 3
+  ICONST 4
+  ICONST 5
+  MKARR 5
+  MSG 0, 0, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "comoTexto"
+ENDSECTION
+

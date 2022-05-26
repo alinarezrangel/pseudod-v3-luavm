@@ -136,7 +136,7 @@ local <- {| {"LOCAL"} rs (id / envs) |}
 OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "SUM" / "SUB" / "MUL" / "DIV"
     / "RETN" / "DYNCALL"
-    / "MKCLZ" / "MK0CLZ"
+    / "MKCLZ" / "MK0CLZ" / "MKOBJ" / "MKARR"
     / "OPNFRM" / "EINIT" / "ENEW" / "CLSFRM"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
     / "POP" / "CHOOSE" / "JMP" / "NAME"
@@ -716,6 +716,11 @@ end
 toc.opschema.MK0CLZ = schema "Px"
 function toc.opcodes.MK0CLZ(emit, state, op)
    emit:stmt("pdcrt_op_mk0clz(marco, «1:procname»)", op.Px)
+end
+
+toc.opschema.MKARR = schema "Ua"
+function toc.opcodes.MKARR(emit, state, op)
+   emit:stmt("pdcrt_op_mkarr(marco, «1:int»)", op.Ua)
 end
 
 toc.opschema.DYNCALL = schema "Ux, Uy"

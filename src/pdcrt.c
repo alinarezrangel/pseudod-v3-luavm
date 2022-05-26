@@ -394,6 +394,131 @@ static void pdcrt_escribir_texto_max(pdcrt_texto* texto, size_t max)
     }
 }
 
+pdcrt_error pdcrt_aloj_arreglo(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, size_t capacidad)
+{
+    arr->elementos = pdcrt_alojar_simple(alojador, capacidad * sizeof(pdcrt_objeto));
+    if(!arr->elementos)
+    {
+        return PDCRT_ENOMEM;
+    }
+    arr->longitud = 0;
+    arr->capacidad = capacidad;
+    return PDCRT_OK;
+}
+
+void pdcrt_dealoj_arreglo(pdcrt_alojador alojador, pdcrt_arreglo* arr)
+{
+    pdcrt_dealojar_simple(alojador, arr->elementos, arr->capacidad * sizeof(pdcrt_objeto));
+    arr->capacidad = 0;
+    arr->longitud = 0;
+}
+
+pdcrt_error pdcrt_aloj_arreglo_vacio(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr)
+{
+    return pdcrt_aloj_arreglo(alojador, arr, 0);
+}
+
+pdcrt_error pdcrt_aloj_arreglo_con_1(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, pdcrt_objeto el0)
+{
+    pdcrt_error pderrno = pdcrt_aloj_arreglo(alojador, arr, 1);
+    if(pderrno != PDCRT_OK)
+    {
+        return pderrno;
+    }
+    arr->longitud = 1;
+    arr->elementos[0] = el0;
+    return PDCRT_OK;
+}
+
+pdcrt_error pdcrt_aloj_arreglo_con_2(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, pdcrt_objeto el0, pdcrt_objeto el1)
+{
+    pdcrt_error pderrno = pdcrt_aloj_arreglo(alojador, arr, 2);
+    if(pderrno != PDCRT_OK)
+    {
+        return pderrno;
+    }
+    arr->longitud = 2;
+    arr->elementos[0] = el0;
+    arr->elementos[1] = el1;
+    return PDCRT_OK;
+}
+
+pdcrt_error pdcrt_realoj_arreglo(pdcrt_alojador alojador, pdcrt_arreglo* arr, size_t nueva_capacidad)
+{
+    PDCRT_ASSERT(nueva_capacidad >= arr->longitud);
+    pdcrt_objeto* nuevos_elementos = pdcrt_realojar_simple(alojador, arr->elementos, arr->capacidad * sizeof(pdcrt_objeto), nueva_capacidad * sizeof(pdcrt_objeto));
+    if(!nuevos_elementos)
+    {
+        return PDCRT_ENOMEM;
+    }
+    arr->elementos = nuevos_elementos;
+    arr->capacidad = nueva_capacidad;
+    return PDCRT_OK;
+}
+
+void pdcrt_arreglo_fijar_elemento(pdcrt_arreglo* arr, size_t indice, pdcrt_objeto nuevo_elemento)
+{
+    PDCRT_ASSERT(indice < arr->longitud);
+    arr->elementos[indice] = nuevo_elemento;
+}
+
+pdcrt_objeto pdcrt_arreglo_obtener_elemento(pdcrt_arreglo* arr, size_t indice)
+{
+    PDCRT_ASSERT(indice < arr->longitud);
+    return arr->elementos[indice];
+}
+
+pdcrt_error pdcrt_arreglo_concatenar(pdcrt_alojador alojador, pdcrt_arreglo* arr_final, pdcrt_arreglo* arr_fuente)
+{
+    pdcrt_error pderrno = pdcrt_realoj_arreglo(alojador, arr_final, arr_final->capacidad + arr_fuente->capacidad);
+    if(pderrno != PDCRT_OK)
+    {
+        return pderrno;
+    }
+    for(size_t i = 0; i < arr_fuente->longitud; i++)
+    {
+        arr_final->elementos[arr_final->longitud + i] = arr_fuente->elementos[i];
+    }
+    arr_final->longitud += arr_fuente->longitud;
+    return PDCRT_OK;
+}
+
+pdcrt_error pdcrt_arreglo_agregar_al_final(pdcrt_alojador alojador, pdcrt_arreglo* arr, pdcrt_objeto el)
+{
+    if(arr->longitud >= arr->capacidad)
+    {
+        size_t nueva_capacidad = pdcrt_siguiente_capacidad(arr->capacidad, arr->longitud, 1);
+        pdcrt_error pderrno = pdcrt_realoj_arreglo(alojador, arr, nueva_capacidad);
+        if(pderrno != PDCRT_OK)
+        {
+            return pderrno;
+        }
+    }
+    PDCRT_ASSERT(arr->longitud < arr->capacidad);
+    arr->elementos[arr->longitud] = el;
+    arr->longitud += 1;
+    return PDCRT_OK;
+}
+
+pdcrt_error pdcrt_arreglo_mover_elementos(
+    pdcrt_arreglo* fuente,
+    size_t inicio_fuente,
+    size_t final_fuente,
+    pdcrt_arreglo* destino,
+    size_t inicio_destino
+)
+{
+    PDCRT_ASSERT(final_fuente <= fuente->longitud);
+    PDCRT_ASSERT(inicio_fuente < fuente->longitud);
+    PDCRT_ASSERT(inicio_destino < destino->longitud);
+    PDCRT_ASSERT((final_fuente - inicio_fuente) <= fuente->longitud);
+    for(size_t i = inicio_fuente; i < final_fuente; i++)
+    {
+        destino->elementos[inicio_destino + (i - inicio_fuente)] = fuente->elementos[i];
+    }
+    return PDCRT_OK;
+}
+
 
 // Continuaciones:
 
@@ -677,6 +802,15 @@ pdcrt_objeto pdcrt_objeto_nulo(void)
     return obj;
 }
 
+pdcrt_objeto pdcrt_objeto_voidptr(void* ptr)
+{
+    pdcrt_objeto obj;
+    obj.tag = PDCRT_TOBJ_VOIDPTR;
+    obj.value.p = ptr;
+    obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_voidptr;
+    return obj;
+}
+
 pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc, size_t env_size, pdcrt_objeto* obj)
 {
     obj->tag = PDCRT_TOBJ_CLOSURE;
@@ -697,6 +831,33 @@ pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcr
     obj->tag = PDCRT_TOBJ_TEXTO;
     obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
     return pdcrt_aloj_texto_desde_c(&obj->value.t, alojador, cstr);
+}
+
+pdcrt_objeto pdcrt_objeto_desde_arreglo(pdcrt_arreglo* arreglo)
+{
+    pdcrt_objeto obj;
+    obj.tag = PDCRT_TOBJ_ARREGLO;
+    obj.value.a = arreglo;
+    obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_arreglo;
+    return obj;
+}
+
+pdcrt_error pdcrt_objeto_aloj_arreglo(pdcrt_alojador alojador, size_t capacidad, PDCRT_OUT pdcrt_objeto* out)
+{
+    out->recv = (pdcrt_funcion_generica) &pdcrt_recv_arreglo;
+    out->value.a = pdcrt_alojar_simple(alojador, sizeof(pdcrt_arreglo));
+    if(!out->value.a)
+    {
+        return PDCRT_ENOMEM;
+    }
+    out->tag = PDCRT_TOBJ_ARREGLO;
+    pdcrt_error pderrno = pdcrt_aloj_arreglo(alojador, out->value.a, capacidad);
+    if(pderrno != PDCRT_OK)
+    {
+        pdcrt_dealojar_simple(alojador, out->value.a, sizeof(pdcrt_arreglo));
+        return pderrno;
+    }
+    return PDCRT_OK;
 }
 
 pdcrt_objeto pdcrt_objeto_desde_texto(pdcrt_texto* texto)
@@ -769,6 +930,71 @@ bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b)
     default:
         return pdcrt_objeto_iguales(a, b);
     }
+}
+
+
+struct pdcrt_constructor_de_texto
+{
+    PDCRT_ARR(capacidad) char* contenido;
+    size_t longitud;
+    size_t capacidad;
+};
+
+static void pdcrt_inic_constructor_de_texto(PDCRT_OUT struct pdcrt_constructor_de_texto* cons, pdcrt_alojador alojador, size_t capacidad)
+{
+    cons->longitud = 0;
+    cons->capacidad = capacidad;
+    cons->contenido = NULL;
+    if(cons->capacidad > 0)
+    {
+        cons->contenido = pdcrt_alojar_simple(alojador, sizeof(char) * cons->capacidad);
+        if(cons->contenido == NULL)
+        {
+            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
+            no_falla(PDCRT_ENOMEM);
+        }
+    }
+}
+
+static void pdcrt_constructor_agregar(pdcrt_alojador alojador, struct pdcrt_constructor_de_texto* cons, char* contenido, size_t longitud)
+{
+    if((cons->longitud + longitud) >= cons->capacidad)
+    {
+        size_t nueva_cap = pdcrt_siguiente_capacidad(cons->capacidad, cons->longitud, longitud);
+        char* nuevo = pdcrt_realojar_simple(alojador, cons->contenido, cons->capacidad * sizeof(char), nueva_cap * sizeof(char));
+        if(nuevo == NULL)
+        {
+            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
+            no_falla(PDCRT_ENOMEM);
+        }
+        cons->contenido = nuevo;
+        cons->capacidad = nueva_cap;
+    }
+    memcpy(cons->contenido + cons->longitud, contenido, longitud);
+    cons->longitud += longitud;
+    PDCRT_ASSERT(cons->longitud <= cons->capacidad);
+}
+
+static void pdcrt_finalizar_constructor(pdcrt_alojador alojador, struct pdcrt_constructor_de_texto* cons, PDCRT_OUT pdcrt_texto** res)
+{
+    no_falla(pdcrt_aloj_texto(res, alojador, cons->longitud));
+    if((*res)->contenido == NULL || cons->contenido == NULL)
+    {
+        PDCRT_ASSERT(cons->longitud == 0);
+    }
+    else
+    {
+        PDCRT_ASSERT(cons->longitud > 0);
+        memcpy((*res)->contenido, cons->contenido, cons->longitud);
+    }
+}
+
+static void pdcrt_deainic_constructor_de_texto(pdcrt_alojador alojador, struct pdcrt_constructor_de_texto* cons)
+{
+    pdcrt_dealojar_simple(alojador, cons->contenido, cons->capacidad * sizeof(char));
+    cons->contenido = NULL;
+    cons->capacidad = 0;
+    cons->longitud = 0;
 }
 
 
@@ -1464,72 +1690,130 @@ pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, p
     return pdcrt_continuacion_devolver();
 }
 
-
-// Formatear:
-
-struct pdcrt_constructor_de_texto
+pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    PDCRT_ARR(capacidad) char* contenido;
-    size_t longitud;
-    size_t capacidad;
-};
-
-static void pdcrt_inic_constructor_de_texto(PDCRT_OUT struct pdcrt_constructor_de_texto* cons, pdcrt_alojador alojador, size_t capacidad)
-{
-    cons->longitud = 0;
-    cons->capacidad = capacidad;
-    cons->contenido = NULL;
-    if(cons->capacidad > 0)
-    {
-        cons->contenido = pdcrt_alojar_simple(alojador, sizeof(char) * cons->capacidad);
-        if(cons->contenido == NULL)
-        {
-            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
-            no_falla(PDCRT_ENOMEM);
-        }
-    }
+    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_OBJETO);
+    pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, args, yo);
+    pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, args, msj);
+    pdcrt_marco* marco_superior = marco->marco_anterior;
+    return pdcrt_continuacion_tail_iniciar(yo.value.o.recv, marco_superior, args + 2, rets);
 }
 
-static void pdcrt_constructor_agregar(pdcrt_alojador alojador, struct pdcrt_constructor_de_texto* cons, char* contenido, size_t longitud)
-{
-    if((cons->longitud + longitud) >= cons->capacidad)
-    {
-        size_t nueva_cap = pdcrt_siguiente_capacidad(cons->capacidad, cons->longitud, longitud);
-        char* nuevo = pdcrt_realojar_simple(alojador, cons->contenido, cons->capacidad * sizeof(char), nueva_cap * sizeof(char));
-        if(nuevo == NULL)
-        {
-            PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
-            no_falla(PDCRT_ENOMEM);
-        }
-        cons->contenido = nuevo;
-        cons->capacidad = nueva_cap;
-    }
-    memcpy(cons->contenido + cons->longitud, contenido, longitud);
-    cons->longitud += longitud;
-    PDCRT_ASSERT(cons->longitud <= cons->capacidad);
-}
+static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_1(struct pdcrt_marco* marco);
+static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_2(struct pdcrt_marco* marco);
 
-static void pdcrt_finalizar_constructor(pdcrt_alojador alojador, struct pdcrt_constructor_de_texto* cons, PDCRT_OUT pdcrt_texto** res)
+pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    no_falla(pdcrt_aloj_texto(res, alojador, cons->longitud));
-    if((*res)->contenido == NULL || cons->contenido == NULL)
+    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_ARREGLO);
+    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    if(pdcrt_texto_cmp_lit(msj.value.t, "agregarAlFinal") == 0)
     {
-        PDCRT_ASSERT(cons->longitud == 0);
+        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_objeto el = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        no_falla(pdcrt_arreglo_agregar_al_final(marco->contexto->alojador, yo.value.a, el));
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_nulo()));
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "longitud") == 0)
+    {
+        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero((int) yo.value.a->longitud)));
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
+    {
+        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        struct pdcrt_constructor_de_texto* cons = pdcrt_alojar_simple(marco->contexto->alojador, sizeof(struct pdcrt_constructor_de_texto));
+        PDCRT_ASSERT(cons != NULL);
+        pdcrt_inic_constructor_de_texto(cons, marco->contexto->alojador, yo.value.a->longitud * 4);
+        pdcrt_constructor_agregar(marco->contexto->alojador, cons, "(Arreglo#crearCon: ", sizeof("(Arreglo#crearCon: ") - 1);
+        no_falla(pdcrt_inic_marco(marco, marco->contexto, 3, marco, 1));
+        pdcrt_fijar_local(marco, 0, pdcrt_objeto_voidptr(cons));
+        pdcrt_fijar_local(marco, 1, pdcrt_objeto_entero(0));
+        pdcrt_fijar_local(marco, 2, yo);
+        return pdcrt_continuacion_normal(&pdcrt_recv_arreglo_continuacion_comoTexto_1, marco);
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "en") == 0)
+    {
+        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_objeto obj_indice = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo(obj_indice, PDCRT_TOBJ_ENTERO);
+        PDCRT_ASSERT(obj_indice.value.i >= 0);
+        size_t indice = obj_indice.value.i;
+        PDCRT_ASSERT(indice < yo.value.a->longitud);
+        pdcrt_objeto elemento = yo.value.a->elementos[indice];
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, elemento));
+        return pdcrt_continuacion_devolver();
     }
     else
     {
-        PDCRT_ASSERT(cons->longitud > 0);
-        memcpy((*res)->contenido, cons->contenido, cons->longitud);
+        printf("Mensaje ");
+        pdcrt_escribir_texto(msj.value.t);
+        printf(" no entendido para el arreglo\n");
+        pdcrt_abort();
+    }
+    return pdcrt_continuacion_devolver();
+}
+
+static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_1(struct pdcrt_marco* marco)
+{
+    pdcrt_objeto cons_obj = pdcrt_obtener_local(marco, 0);
+    pdcrt_objeto cnt = pdcrt_obtener_local(marco, 1);
+    pdcrt_objeto yo = pdcrt_obtener_local(marco, 2);
+    pdcrt_objeto_debe_tener_tipo(cons_obj, PDCRT_TOBJ_VOIDPTR);
+    pdcrt_objeto_debe_tener_tipo(cnt, PDCRT_TOBJ_ENTERO);
+    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_ARREGLO);
+    struct pdcrt_constructor_de_texto* cons = cons_obj.value.p;
+    if((size_t)cnt.value.i < yo.value.a->longitud)
+    {
+        pdcrt_fijar_local(marco, 1, pdcrt_objeto_entero(cnt.value.i + 1));
+        pdcrt_objeto elemento = yo.value.a->elementos[cnt.value.i];
+        pdcrt_objeto mensaje = pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_comoTexto);
+        return pdcrt_continuacion_enviar_mensaje(pdcrt_recv_arreglo_continuacion_comoTexto_2, marco, elemento, mensaje, 0, 1);
+    }
+    else
+    {
+        pdcrt_texto* resultado;
+        pdcrt_constructor_agregar(marco->contexto->alojador, cons, ")", 1);
+        pdcrt_finalizar_constructor(marco->contexto->alojador, cons, &resultado);
+        pdcrt_deainic_constructor_de_texto(marco->contexto->alojador, cons);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(resultado)));
+        pdcrt_deinic_marco(marco);
+        return pdcrt_continuacion_devolver();
     }
 }
 
-static void pdcrt_deainic_constructor_de_texto(pdcrt_alojador alojador, struct pdcrt_constructor_de_texto* cons)
+static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_2(struct pdcrt_marco* marco)
 {
-    pdcrt_dealojar_simple(alojador, cons->contenido, cons->capacidad * sizeof(char));
-    cons->contenido = NULL;
-    cons->capacidad = 0;
-    cons->longitud = 0;
+    pdcrt_objeto cons_obj = pdcrt_obtener_local(marco, 0);
+    pdcrt_objeto cnt = pdcrt_obtener_local(marco, 1);
+    pdcrt_objeto yo = pdcrt_obtener_local(marco, 2);
+    pdcrt_objeto_debe_tener_tipo(cons_obj, PDCRT_TOBJ_VOIDPTR);
+    pdcrt_objeto_debe_tener_tipo(cnt, PDCRT_TOBJ_ENTERO);
+    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_ARREGLO);
+    struct pdcrt_constructor_de_texto* cons = cons_obj.value.p;
+    pdcrt_objeto res = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto_debe_tener_tipo(res, PDCRT_TOBJ_TEXTO);
+    if(cnt.value.i > 1)
+    {
+        pdcrt_constructor_agregar(marco->contexto->alojador, cons, ", ", 2);
+    }
+    pdcrt_constructor_agregar(marco->contexto->alojador, cons, res.value.t->contenido, res.value.t->longitud);
+    return pdcrt_continuacion_normal(pdcrt_recv_arreglo_continuacion_comoTexto_1, marco);
 }
+
+pdcrt_continuacion pdcrt_recv_voidptr(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+{
+    (void) marco;
+    (void) args;
+    (void) rets;
+    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_VOIDPTR);
+    printf("Mensaje ");
+    pdcrt_escribir_texto(msj.value.t);
+    printf(" no entendido para el puntero a C %p\n", yo.value.p);
+    pdcrt_abort();
+}
+
+
+// Formatear:
 
 pdcrt_error pdcrt_formatear_texto(struct pdcrt_marco* marco,
                                   PDCRT_OUT pdcrt_texto** res,
@@ -2207,6 +2491,28 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
     clz.recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
     no_falla(pdcrt_aloj_env(&clz.value.c.env, marco->contexto->alojador, 0));
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
+}
+
+void pdcrt_op_mkobj(pdcrt_marco* marco, int natrs, pdcrt_proc_t proc)
+{
+    pdcrt_objeto clz;
+    clz.tag = PDCRT_TOBJ_CLOSURE;
+    clz.value.c.proc = (pdcrt_funcion_generica) proc;
+    clz.recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
+    no_falla(pdcrt_aloj_env(&clz.value.c.env, marco->contexto->alojador, natrs));
+}
+
+void pdcrt_op_mkarr(pdcrt_marco* marco, size_t tam)
+{
+    pdcrt_objeto arr;
+    no_falla(pdcrt_objeto_aloj_arreglo(marco->contexto->alojador, tam, &arr));
+    arr.value.a->longitud = tam;
+    for(size_t i = 0; i < tam; i++)
+    {
+        pdcrt_objeto elemento = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        arr.value.a->elementos[tam - i - 1] = elemento;
+    }
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, arr));
 }
 
 pdcrt_continuacion pdcrt_op_dyncall(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int acepta, int devuelve)
