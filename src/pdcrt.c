@@ -468,7 +468,9 @@ pdcrt_objeto pdcrt_arreglo_obtener_elemento(pdcrt_arreglo* arr, size_t indice)
     return arr->elementos[indice];
 }
 
-pdcrt_error pdcrt_arreglo_concatenar(pdcrt_alojador alojador, pdcrt_arreglo* arr_final, pdcrt_arreglo* arr_fuente)
+pdcrt_error pdcrt_arreglo_concatenar(pdcrt_alojador alojador,
+                                     pdcrt_arreglo* arr_final,
+                                     pdcrt_arreglo* arr_fuente)
 {
     pdcrt_error pderrno = pdcrt_realoj_arreglo(alojador, arr_final, arr_final->capacidad + arr_fuente->capacidad);
     if(pderrno != PDCRT_OK)
@@ -483,7 +485,9 @@ pdcrt_error pdcrt_arreglo_concatenar(pdcrt_alojador alojador, pdcrt_arreglo* arr
     return PDCRT_OK;
 }
 
-pdcrt_error pdcrt_arreglo_agregar_al_final(pdcrt_alojador alojador, pdcrt_arreglo* arr, pdcrt_objeto el)
+pdcrt_error pdcrt_arreglo_agregar_al_final(pdcrt_alojador alojador,
+                                           pdcrt_arreglo* arr,
+                                           pdcrt_objeto el)
 {
     if(arr->longitud >= arr->capacidad)
     {
@@ -509,8 +513,9 @@ pdcrt_error pdcrt_arreglo_mover_elementos(
 )
 {
     PDCRT_ASSERT(final_fuente <= fuente->longitud);
-    PDCRT_ASSERT(inicio_fuente < fuente->longitud);
-    PDCRT_ASSERT(inicio_destino < destino->longitud);
+    PDCRT_ASSERT(inicio_fuente <= fuente->longitud);
+    PDCRT_ASSERT(inicio_destino <= destino->longitud);
+    PDCRT_ASSERT(final_fuente >= inicio_fuente);
     PDCRT_ASSERT((final_fuente - inicio_fuente) <= fuente->longitud);
     for(size_t i = inicio_fuente; i < final_fuente; i++)
     {

@@ -402,6 +402,11 @@ typedef struct pdcrt_objeto
 
 typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
 
+// Un arreglo de objetos.
+//
+// Los arreglos son utilizados por los objetos de tipo arreglo. Consisten de
+// una capacidad y una longitud. Los objetos en el rango
+// `elementos[longitud..capacidad]` no tienen un valor definido.
 typedef struct pdcrt_arreglo
 {
     PDCRT_ARR(capacidad) pdcrt_objeto* elementos;
@@ -409,16 +414,60 @@ typedef struct pdcrt_arreglo
     size_t longitud;
 } pdcrt_arreglo;
 
+// Aloja un nuevo arreglo con una capacidad dada. Su longitud es 0.
 pdcrt_error pdcrt_aloj_arreglo(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, size_t capacidad);
+// Desaloja un arreglo.
 void pdcrt_dealoj_arreglo(pdcrt_alojador alojador, pdcrt_arreglo* arr);
+
+// Aloja y devuelve un arreglo vacío.
 pdcrt_error pdcrt_aloj_arreglo_vacio(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr);
+// Aloja y devuelve un arreglo con un solo elemento.
 pdcrt_error pdcrt_aloj_arreglo_con_1(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, pdcrt_objeto el0);
+// Aloja y devuelve en arreglo con dos elementos.
 pdcrt_error pdcrt_aloj_arreglo_con_2(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, pdcrt_objeto el0, pdcrt_objeto el1);
+
+// Realoja un arreglo.
+//
+// Cambia la capacidad del arreglo para que sea
+// `nueva_capacidad`. `nueva_capacidad` tiene que ser mayor o igual a la
+// longitud del arreglo, es decir, este método nunca elimina elementos del
+// arreglo. Sin embargo, la nueva capacidad puede ser menor que la capacidad
+// actual (en cuyo caso se liberará la memoria excedente) o mayor (en cuyo caso
+// se alojará más memoria).
 pdcrt_error pdcrt_realoj_arreglo(pdcrt_alojador alojador, pdcrt_arreglo* arr, size_t nueva_capacidad);
+
+// Fija un elemento de un arreglo. Esta función se asegura que `indice` tiene
+// un valor válido.
 void pdcrt_arreglo_fijar_elemento(pdcrt_arreglo* arr, size_t indice, pdcrt_objeto nuevo_elemento);
+// Obtiene el elemento en el índice dado. También se asegura de que `indice`
+// tenga un valor válido.
 pdcrt_objeto pdcrt_arreglo_obtener_elemento(pdcrt_arreglo* arr, size_t indice);
-pdcrt_error pdcrt_arreglo_concatenar(pdcrt_alojador alojador, pdcrt_arreglo* arr_final, pdcrt_arreglo* arr_fuente);
-pdcrt_error pdcrt_arreglo_agregar_al_final(pdcrt_alojador alojador, pdcrt_arreglo* arr, pdcrt_objeto el);
+
+// Concatena dos arreglos de forma destructiva.
+//
+// Extiende el tamaño de `arr_final` (con `pdcrt_realoj_arreglo`) para que
+// pueda almacenar al menos `arr_fuente->longitud` elementos adicionales y
+// después copia los elementos de `arr_fuente` al final de `arr_final`.
+pdcrt_error pdcrt_arreglo_concatenar(pdcrt_alojador alojador,
+                                     pdcrt_arreglo* arr_final,
+                                     pdcrt_arreglo* arr_fuente);
+// Agrega un elemento al final de un arreglo.
+//
+// Esto realoja el arreglo si es necesario.
+pdcrt_error pdcrt_arreglo_agregar_al_final(pdcrt_alojador alojador,
+                                           pdcrt_arreglo* arr,
+                                           pdcrt_objeto el);
+
+// Mueve varios elementos de un arreglo a otro.
+//
+// Específicamente, mueve todos los elementos del arreglo `fuente` que estén
+// entre los índices `inicio_fuente` y `final_fuente` al arreglo `destino`
+// comenzando por el índice `inicio_destino`.
+//
+// Por ejemplo, si `fuente` es un arreglo con los elementos `"A", "B", "C",
+// "D"` y `destino` es un arreglo con los elementos `0, 1, 2, 3`, entonces al
+// ejecutar `pdcrt_arreglo_mover_elementos(fuente, 1, 3, destino, 1)` dejará a
+// `destino` con los elementos `0, "B", "C", 2, 3`.
 pdcrt_error pdcrt_arreglo_mover_elementos(
     pdcrt_arreglo* fuente,
     size_t inicio_fuente,
