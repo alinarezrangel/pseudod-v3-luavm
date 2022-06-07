@@ -1023,7 +1023,7 @@ static int pdcrt_texto_cmp_lit(pdcrt_texto* lhs, const char* rhs)
 
 static void pdcrt_necesita_args_y_rets(int args, int rets, int eargs, int erets)
 {
-    if(args != eargs && rets != erets)
+    if(args != eargs || rets != erets)
     {
         fprintf(stderr,
                 "Error: Se esperaban %d argumentos y %d valores devueltos, pero se obtuvieron %d argumentos y %d valores devueltos\n",

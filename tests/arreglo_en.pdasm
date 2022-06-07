@@ -10,7 +10,7 @@ SECTION "code"
   MKARR 5
   ICONST 2
   ROT 1
-  MSG 0, 0, 1
+  MSG 0, 1, 1
   PRN
   NL
 ENDSECTION
