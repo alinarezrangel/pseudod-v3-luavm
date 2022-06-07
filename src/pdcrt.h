@@ -203,13 +203,14 @@ typedef struct pdcrt_alojador
 // Un alojador simple que utiliza `malloc`, `realloc` y `free`.
 pdcrt_alojador pdcrt_alojador_de_malloc(void);
 
-// Un alojador de arena. A medida que se aloja memoria en el, este solo la
+// Un alojador grupal. A medida que se aloja memoria en el, este solo la
 // acumula hasta que al final, cuando se llame a
 // `pdcrt_dealoj_alojador_de_arena` toda la memoria que fue alojada será
 // desalojada.
 //
-// Nota: Técnicamente hablando esto no es un alojador de arena sino un alojador
-// grupal.
+// Nota: el nombre de esta función está mal, debido a un descuido de mi parte,
+// se llama `pdcrt_aloj_alojador_de_arena` en vez de
+// `pdcrt_aloj_alojador_grupal`.
 pdcrt_error pdcrt_aloj_alojador_de_arena(pdcrt_alojador* aloj);
 void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj);
 
@@ -277,7 +278,7 @@ typedef struct pdcrt_impl_obj
 //
 // También nota que `contenido` no tiene `const` en ninguna parte: esto es para
 // simplificar la inicialización de los textos. Sin embargo, tu siempre
-// deberías tratarlo como si estuviese declarado con `PDCRT_NULL
+// deberías tratarlo como si estuviese declarado como `PDCRT_NULL
 // PDCRT_ARR(longitud) const char* const contenido;`.
 //
 // Como caso especial, un texto vacío puede tener `NULL` como `contenido`.
@@ -309,21 +310,21 @@ typedef struct pdcrt_arreglo pdcrt_arreglo;
 // su definición.
 //
 // `pdcrt_objeto` implementa un patrón conocido como "handler". Es decir,
-// aunque `pdcrt_objeto` siempre se manejará "by-value" en la pila de C,
-// `pdcrt_objeto` realmente representa un puntero. Imagínalo como si
+// aunque `pdcrt_objeto` siempre se manejará "por-valor" ("by-value") en la
+// pila de C, `pdcrt_objeto` realmente representa un puntero. Imagínalo como si
 // `pdcrt_objeto` fuese un typedef para `void*`: tu igual dices `pdcrt_objeto
 // a, b, c;` pero `a`, `b` y `c` son "referencias", no valores.
 //
 // Por motivos de eficiencia, `pdcrt_objeto` tiene varios campos que sí están
 // "by-value" dentro de este. Tu puedes agregar cualquier cantidad de campos
 // "by-value" a `pdcrt_objeto` con la única condición de que estos deben ser
-// inmutables: ya que `pdcrt_objeto` es una referencia al objeto real,
-// agregarle un campo a este que no sea un puntero es equivalente a si en vez
-// de pasar un puntero a `T` pasases el `T` mismo. El código será equivalente
-// si y solo si nunca modificas `T` ya que las modificaciones a punteros son
-// visibles para todos los demás que posean también un puntero al mismo objeto,
-// mientras que modificar un valor en la pila solo te permitirá ver los cambios
-// a ti.
+// (conceptualmente) inmutables: ya que `pdcrt_objeto` es una referencia al
+// objeto real, agregarle un campo a este que no sea un puntero es lo mismo que
+// si en vez de pasar un puntero a `T` pasases el mismo `T`. El código será
+// equivalente si y solo si nunca modificas `T` ya que las modificaciones a
+// punteros son visibles para todos los demás que también posean un puntero al
+// mismo objeto, mientras que modificar un valor en la pila solo te permitirá
+// ver los cambios a ti.
 //
 // Por esto es que `pdcrt_objeto` contiene campos para un entero y un double:
 // en PseudoD los números son inmutables así que no importa si están a través
@@ -340,45 +341,6 @@ typedef struct pdcrt_arreglo pdcrt_arreglo;
 //
 // Como consecuencia de todo esto, ten mucho cuidado si en algún momento creas
 // un puntero a `pdcrt_objeto`: esto es casi siempre erróneo.
-//
-// # Recibir mensajes #
-//
-// Los objetos pueden recibir mensajes. Notarás que a diferencia de otras
-// implementaciones de lenguajes orientados a objetos, no hay una función
-// "enviar_mensaje(obj, msj, ...)". Gracias a que PseudoD es un compilador y no
-// un intérprete, podemos compilar cada "receptor de mensajes" a su propia
-// función y al llamarlos como "obj.receptor(obj, msj, ...)" la cache de saltos
-// del procesador actuará como la "monomorfización de instrucciones" de una VM
-// tradicional.
-//
-// Para mantener la cache de saltos "limpia", hay que evitar:
-//
-// 1. Envío centralizado de mensajes: siempre escribe `obj.recv(...)`, no crees
-// una función que lo haga por ti. La macro `PDCRT_ENVIAR_MENSAJE` automatiza
-// parte de esto pero el hecho de que es una macro y no una función es muy
-// importante.
-//
-// 2. Funciones centralizadas para múltiples tipos: si tienes una función
-// `hacer_x_en_textos(pdcrt_objeto x)` y una `hacer_y_en_numeros(pdcrt_objeto
-// y)` la cache podrá especializar los saltos a `obj.recv` en estos en base al
-// tipo en tiempo de ejecución. Si en cambio tienes una única
-// `hacer_x_o_y(pdcrt_objeto x)` entonces la cache tendrá que ser compartida
-// para ambos tipos.
-//
-// Finalmente, todo este sistema de abusar la cache de saltos como un sistema
-// de monomorfización de opcodes es **teórico**. No he medido que tanto afecta
-// al código (¡Quizás afecta a los programas de forma negativa!). **Creo** que
-// va a funcionar en base a lo (poco) que sé de los CPUs modernos y al hecho de
-// que es básicamente una versión ligeramente más dinámica de un vtable (y sé
-// que los vtables si tienen las ventajas que he mencionado). Sin embargo, no
-// puedo asegurar que esto funciona hasta que no mida el rendimiento con y sin
-// este sistema de forma exhaustiva.
-//
-// Finalmente, debido a que el tipo de la función a la que `recv` apunta es
-// recursivo y C no permite esto, `recv` está declarado como un puntero a
-// `pdcrt_funcion_generica`, sin embargo, siempre debes convertirlo a un
-// puntero a `pdcrt_recvmsj` antes de usarlo. La macro `PDCRT_CONV_RECV` sirve
-// para esto.
 typedef struct pdcrt_objeto
 {
     enum pdcrt_tipo_de_objeto
@@ -489,15 +451,15 @@ pdcrt_error pdcrt_arreglo_mover_elementos(
 
 // Una continuación.
 //
-// El runtime de PseudoD está implementado con continuaciones. Actualmente
-// utiliza un sistema "stack-less", pero en un futuro quiero hacer que use un
-// recolector de basura "Chenney on the MTA".
+// El runtime de PseudoD está implementado con continuaciones. Aún no está
+// listo y estoy utilizando una pila para las llamadas a función, pero en un
+// futuro quiero hacer que use un recolector de basura "Chenney on the MTA".
 //
 // A diferencia de un sistema en CPS ("continuation-passing style") real, el
 // runtime actualmente solo implementa uno "stack-less". La diferencia es que
 // aquí las funciones no toman una continuación a la cual pasar el valor de
 // retorno, en cambio, un trampolín mantiene manualmente un stack en
-// memoria. Las continuaciones solo exísten "localmente" dentro de las
+// memoria. Las continuaciones solo existen "localmente" dentro de las
 // funciones. En un futuro cambiaré todo para que utilice CPS.
 //
 // Existen 4 "tipos" de continuaciones:
@@ -719,8 +681,8 @@ pdcrt_continuacion pdcrt_continuacion_tail_enviar_mensaje(
 // que llama a esta función asumirá que esta siempre consumirá `args` valores y
 // devolverá `rets`.
 //
-// 3. El valor de retorno aún no se está usando, pero en un futuro significará
-// lo mismo que en `pdcrt_proc_t`.
+// 3. Tal como con `pdcrt_proc_t`, `marco` no está inicializado al principio de
+// la llamada.
 typedef pdcrt_continuacion (*pdcrt_recvmsj)(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 // Convierte un puntero a una función genérica `pdcrt_funcion_generica` a un
