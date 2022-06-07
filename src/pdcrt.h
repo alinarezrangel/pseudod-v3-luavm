@@ -54,6 +54,11 @@
 // arreglo.
 #define PDCRT_ARR(campo_tam)
 
+// Indica que el puntero realmente tiene el tipo `ty`, pero que como C no
+// permite declaraciones circulares (nisiquiera entre punteros) entonces no se
+// pudo declarar así.
+#define PDCRT_TIPO_REAL(ty)
+
 
 // Macros de depuración.
 //
@@ -248,12 +253,16 @@ typedef void (*pdcrt_funcion_generica)(void);
 //
 // Las closures no "poseen" su `env`: un mismo `env` puede ser compartido por
 // varias `pdcrt_closure`s.
+//
+// Más abajo se explica que es un `pdcrt_proc_t` (básicamente es una función de
+// PseudoD).
 typedef struct pdcrt_closure
 {
-    pdcrt_funcion_generica proc; // tipo real: pdcrt_proc_t
+    PDCRT_TIPO_REAL(pdcrt_proc_t) pdcrt_funcion_generica proc;
     struct pdcrt_env* env;
 } pdcrt_closure;
 
+// TODO: Termina las variables de tipo objeto.
 typedef struct pdcrt_impl_obj
 {
     void* recv;
@@ -387,16 +396,18 @@ typedef struct pdcrt_objeto
     } tag;
     union
     {
-        int i;
-        float f;
-        pdcrt_closure c;
-        pdcrt_impl_obj o;
-        pdcrt_texto* t;
-        pdcrt_arreglo* a;
-        bool b;
-        void* p;
+        int i; // entero
+        float f; // float
+        pdcrt_closure c; // closure
+        pdcrt_impl_obj o; // objeto
+        pdcrt_texto* t; // texto
+        pdcrt_arreglo* a; // arreglo
+        bool b; // booleano
+        void* p; // voidptr
     } value;
-    pdcrt_funcion_generica recv;
+
+    // Esta función es la que recibe los mensajes del objeto.
+    PDCRT_TIPO_REAL(pdcrt_recvmsj) pdcrt_funcion_generica recv;
 } pdcrt_objeto;
 
 typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
@@ -547,8 +558,8 @@ typedef struct pdcrt_continuacion
         //   por `proc`.
         struct
         {
-            pdcrt_funcion_generica proc; // tipo real: pdcrt_proc_t
-            pdcrt_funcion_generica cont; // tipo real: pdcrt_proc_continuacion
+            PDCRT_TIPO_REAL(pdcrt_proc_t) pdcrt_funcion_generica proc;
+            PDCRT_TIPO_REAL(pdcrt_proc_continuacion) pdcrt_funcion_generica cont;
             struct pdcrt_marco* marco_superior;
             int args;
             int rets;
@@ -563,7 +574,7 @@ typedef struct pdcrt_continuacion
         //   la continuación.
         struct
         {
-            pdcrt_funcion_generica proc; // tipo real: pdcrt_proc_continuacion
+            PDCRT_TIPO_REAL(pdcrt_proc_continuacion) pdcrt_funcion_generica proc;
             struct pdcrt_marco* marco_actual;
         } continuar;
 
@@ -580,7 +591,7 @@ typedef struct pdcrt_continuacion
         // - `args` y `rets` tienen el mismo significado que en `iniciar`.
         struct
         {
-            pdcrt_funcion_generica recv; // tipo real: pdcrt_proc_continuacion
+            PDCRT_TIPO_REAL(pdcrt_proc_continuacion) pdcrt_funcion_generica recv;
             struct pdcrt_marco* marco;
             struct pdcrt_objeto yo;
             struct pdcrt_objeto mensaje;
@@ -598,7 +609,7 @@ typedef struct pdcrt_continuacion
         // memoria sin desalojar.
         struct
         {
-            pdcrt_funcion_generica proc; // tipo real: pdcrt_proc_t
+            PDCRT_TIPO_REAL(pdcrt_proc_continuacion) pdcrt_funcion_generica proc;
             struct pdcrt_marco* marco_superior;
             int args;
             int rets;
