@@ -127,7 +127,6 @@ typedef enum pdcrt_error
 {
     PDCRT_OK = 0,
     PDCRT_ENOMEM = 1,
-    PDCRT_WPARTIALMEM = 2,
 } pdcrt_error;
 
 // Devuelve una representación textual de un código de error. El puntero
