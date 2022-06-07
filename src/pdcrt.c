@@ -1738,7 +1738,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "en") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
         pdcrt_objeto obj_indice = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(obj_indice, PDCRT_TOBJ_ENTERO);
         PDCRT_ASSERT(obj_indice.value.i >= 0);
@@ -1746,6 +1746,18 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
         PDCRT_ASSERT(indice < yo.value.a->longitud);
         pdcrt_objeto elemento = yo.value.a->elementos[indice];
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, elemento));
+        return pdcrt_continuacion_devolver();
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "fijarEn") == 0)
+    {
+        pdcrt_necesita_args_y_rets(args, rets, 2, 0);
+        pdcrt_objeto obj_valor = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto obj_indice = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo(obj_indice, PDCRT_TOBJ_ENTERO);
+        PDCRT_ASSERT(obj_indice.value.i >= 0);
+        size_t indice = obj_indice.value.i;
+        PDCRT_ASSERT(indice < yo.value.a->longitud);
+        yo.value.a->elementos[indice] = obj_valor;
         return pdcrt_continuacion_devolver();
     }
     else

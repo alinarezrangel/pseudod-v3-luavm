@@ -1,6 +1,6 @@
 #!/usr/bin/env lunash
 
-alset tests fib arit envs par procs str2num txtbuscar fmt boole sumador spush inittonull proccont contbase tailcall retn einit procargs procorder arreglo_comoTexto arreglo_en
+alset tests fib arit envs par procs str2num txtbuscar fmt boole sumador spush inittonull proccont contbase tailcall retn einit procargs procorder arreglo_comoTexto arreglo_en arreglo_fijarEn
 
 for test_name in @tests [
     echo 'Running' $test_name
