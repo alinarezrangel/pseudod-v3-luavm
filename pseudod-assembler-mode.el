@@ -185,7 +185,7 @@ indentation (or a bigger indentation) then extra tabs are added."
   (setq-local tab-width pseudod-assembler-indentation-level)
   (setq-local electric-indent-inhibit t)
   (setq-local comment-start "--")
-  (setq-local comment-end "\n")
+  (setq-local comment-end "")
   (setq-local comment-padding " ")
   (setq-local comment-start-skip nil)
   (setq-local comment-use-syntax t))
