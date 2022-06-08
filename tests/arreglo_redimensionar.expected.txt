@@ -1,0 +1,4 @@
+(Arreglo#crearCon: 1, 2, 3, 4)
+(Arreglo#crearCon: 1, 2)
+(Arreglo#crearCon: 1, 2, NULO, NULO, NULO)
+(Arreglo#crearCon: 1, 2, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO, NULO)

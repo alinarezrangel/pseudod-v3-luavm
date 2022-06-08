@@ -1,0 +1,59 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  ICONST 1
+  ICONST 2
+  ICONST 3
+  ICONST 4
+  MKARR 4
+  LSET 0
+
+  -- Escribe el arreglo antes de modificarlo
+  LGET 0
+  MSG 0, 0, 1
+  PRN
+  NL
+
+  -- Redimensiónalo: quita elementos
+  LGET 0
+  ICONST 2
+  ROT 1
+  MSG 1, 1, 0
+  LGET 0
+  MSG 0, 0, 1
+  PRN
+  NL
+
+  -- Redimensiónalo: agrega elementos
+  LGET 0
+  ICONST 5
+  ROT 1
+  MSG 1, 1, 0
+  LGET 0
+  MSG 0, 0, 1
+  PRN
+  NL
+
+  -- Redimensiónalo: agrega elementos.
+  --
+  -- Esta vez agregamos muchos elementos para probar la condición `nuevo-tamaño
+  -- > capacidad`.
+  LGET 0
+  ICONST 40
+  ROT 1
+  MSG 1, 1, 0
+  LGET 0
+  MSG 0, 0, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "comoTexto"
+  #1 STRING "redimensionar"
+ENDSECTION
