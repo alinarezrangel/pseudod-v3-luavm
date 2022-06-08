@@ -430,6 +430,19 @@ pdcrt_error pdcrt_arreglo_agregar_al_final(pdcrt_alojador alojador,
                                            pdcrt_arreglo* arr,
                                            pdcrt_objeto el);
 
+// Redimensiona un arreglo.
+//
+// Si la `nueva_longitud` es menor que la longitud actual, elimina elementos
+// del final.
+//
+// Si la `nueva_longitud` es mayor que la longitud actual, agrega NULOs al
+// final.
+//
+// Esta función trata de no alojar memoria a menos que sea necesario.
+pdcrt_error pdcrt_arreglo_redimensionar(pdcrt_alojador alojador,
+                                        pdcrt_arreglo* arr,
+                                        size_t nueva_longitud);
+
 // Mueve varios elementos de un arreglo a otro.
 //
 // Específicamente, mueve todos los elementos del arreglo `fuente` que estén

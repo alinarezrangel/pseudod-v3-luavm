@@ -504,6 +504,35 @@ pdcrt_error pdcrt_arreglo_agregar_al_final(pdcrt_alojador alojador,
     return PDCRT_OK;
 }
 
+pdcrt_error pdcrt_arreglo_redimensionar(pdcrt_alojador alojador,
+                                        pdcrt_arreglo* arr,
+                                        size_t nueva_longitud)
+{
+    if(nueva_longitud < arr->longitud)
+    {
+        arr->longitud = nueva_longitud;
+    }
+    else if(nueva_longitud > arr->longitud)
+    {
+        if(nueva_longitud > arr->capacidad)
+        {
+            size_t nueva_capacidad = pdcrt_siguiente_capacidad(arr->capacidad, arr->longitud, (nueva_longitud - arr->capacidad));
+            pdcrt_error pderrno = pdcrt_realoj_arreglo(alojador, arr, nueva_capacidad);
+            if(pderrno != PDCRT_OK)
+            {
+                return pderrno;
+            }
+            arr->capacidad = nueva_capacidad;
+        }
+        for(size_t i = arr->longitud; i < nueva_longitud; i++)
+        {
+            arr->elementos[i] = pdcrt_objeto_nulo();
+        }
+        arr->longitud = nueva_longitud;
+    }
+    return PDCRT_OK;
+}
+
 pdcrt_error pdcrt_arreglo_mover_elementos(
     pdcrt_arreglo* fuente,
     size_t inicio_fuente,
@@ -1758,6 +1787,16 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
         size_t indice = obj_indice.value.i;
         PDCRT_ASSERT(indice < yo.value.a->longitud);
         yo.value.a->elementos[indice] = obj_valor;
+        return pdcrt_continuacion_devolver();
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "redimensionar") == 0)
+    {
+        pdcrt_necesita_args_y_rets(args, rets, 1, 0);
+        pdcrt_objeto nueva_longitud_obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo(nueva_longitud_obj, PDCRT_TOBJ_ENTERO);
+        PDCRT_ASSERT(nueva_longitud_obj.value.i >= 0);
+        size_t nueva_longitud = nueva_longitud_obj.value.i;
+        no_falla(pdcrt_arreglo_redimensionar(marco->contexto->alojador, yo.value.a, nueva_longitud));
         return pdcrt_continuacion_devolver();
     }
     else
