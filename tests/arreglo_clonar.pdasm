@@ -1,0 +1,88 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  LOCAL 1
+
+  -- Crea un arreglo con 4 elementos y fija las variables 0 y 1 a este
+  -- arreglo. Como ambas variables comparten el mismo arreglo al modificar
+  -- alguna la otra se verá afectada.
+  ICONST 1
+  ICONST 2
+  ICONST 3
+  ICONST 4
+  MKARR 4
+  LSET 0
+  LGET 0
+  LSET 1
+
+  -- Escribimos las variables. Deben ser iguales.
+  LGET 0
+  MSG 1, 0, 1
+  PRN
+  NL
+  LGET 1
+  MSG 1, 0, 1
+  PRN
+  NL
+
+  -- Modificamos el segundo elemento de 0. Esto debe afectar a 1.
+  LGET 0
+  ICONST 1
+  ICONST 10
+  ROT 2
+  MSG 2, 2, 0
+
+  -- Escribimos las variables. Aún deben ser iguales.
+  LGET 0
+  MSG 1, 0, 1
+  PRN
+  NL
+  LGET 1
+  MSG 1, 0, 1
+  PRN
+  NL
+
+  -- `fijar v1 a v0#\clonar\`
+  LGET 0
+  MSG 0, 0, 1
+  LSET 1
+
+  -- Escribimos las variables. Deben ser iguales.
+  LGET 0
+  MSG 1, 0, 1
+  PRN
+  NL
+  LGET 1
+  MSG 1, 0, 1
+  PRN
+  NL
+
+  -- Modificamos el cuarto elemento de la variable 1. Como las variables 0 y 1
+  -- ya no comparten su valor, este cambio no afecta a 0.
+  LGET 1
+  ICONST 3
+  ICONST -3
+  ROT 2
+  MSG 2, 2, 0
+
+  -- Escribimos las variables. Deben ser diferentes.
+  LGET 0
+  MSG 1, 0, 1
+  PRN
+  NL
+  LGET 1
+  MSG 1, 0, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "clonar"
+  #1 STRING "comoTexto"
+  #2 STRING "fijarEn"
+ENDSECTION
