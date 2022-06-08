@@ -1733,6 +1733,10 @@ pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, pdcrt_objeto yo,
     return pdcrt_continuacion_tail_iniciar(yo.value.o.recv, marco_superior, args + 2, rets);
 }
 
+static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_0(struct pdcrt_marco* marco,
+                                                                      struct pdcrt_marco* marco_superior,
+                                                                      int args,
+                                                                      int rets);
 static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_1(struct pdcrt_marco* marco);
 static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_2(struct pdcrt_marco* marco);
 
@@ -1755,15 +1759,8 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
         pdcrt_necesita_args_y_rets(args, rets, 0, 1);
-        struct pdcrt_constructor_de_texto* cons = pdcrt_alojar_simple(marco->contexto->alojador, sizeof(struct pdcrt_constructor_de_texto));
-        PDCRT_ASSERT(cons != NULL);
-        pdcrt_inic_constructor_de_texto(cons, marco->contexto->alojador, yo.value.a->longitud * 4);
-        pdcrt_constructor_agregar(marco->contexto->alojador, cons, "(Arreglo#crearCon: ", sizeof("(Arreglo#crearCon: ") - 1);
-        no_falla(pdcrt_inic_marco(marco, marco->contexto, 3, marco, 1));
-        pdcrt_fijar_local(marco, 0, pdcrt_objeto_voidptr(cons));
-        pdcrt_fijar_local(marco, 1, pdcrt_objeto_entero(0));
-        pdcrt_fijar_local(marco, 2, yo);
-        return pdcrt_continuacion_normal(&pdcrt_recv_arreglo_continuacion_comoTexto_1, marco);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        return pdcrt_continuacion_tail_iniciar(&pdcrt_recv_arreglo_continuacion_comoTexto_0, marco, 1, 1);
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "en") == 0)
     {
@@ -1807,6 +1804,24 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
         pdcrt_abort();
     }
     return pdcrt_continuacion_devolver();
+}
+
+static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_0(struct pdcrt_marco* marco,
+                                                                      struct pdcrt_marco* marco_superior,
+                                                                      int args,
+                                                                      int rets)
+{
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 3, marco_superior, 1));
+    pdcrt_objeto yo = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_ARREGLO);
+    struct pdcrt_constructor_de_texto* cons = pdcrt_alojar_simple(marco->contexto->alojador, sizeof(struct pdcrt_constructor_de_texto));
+    PDCRT_ASSERT(cons != NULL);
+    pdcrt_inic_constructor_de_texto(cons, marco->contexto->alojador, yo.value.a->longitud * 4);
+    pdcrt_constructor_agregar(marco->contexto->alojador, cons, "(Arreglo#crearCon: ", sizeof("(Arreglo#crearCon: ") - 1);
+    pdcrt_fijar_local(marco, 0, pdcrt_objeto_voidptr(cons));
+    pdcrt_fijar_local(marco, 1, pdcrt_objeto_entero(0));
+    pdcrt_fijar_local(marco, 2, yo);
+    return pdcrt_continuacion_normal(&pdcrt_recv_arreglo_continuacion_comoTexto_1, marco);
 }
 
 static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_1(struct pdcrt_marco* marco)
