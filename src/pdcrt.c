@@ -118,7 +118,12 @@ _Noreturn static void pdcrt_inalcanzable(void)
 static size_t pdcrt_siguiente_capacidad(size_t cap_actual, size_t tam_actual, size_t req_adicional)
 {
     size_t base = cap_actual == 0? 1 : 0;
-    return 2 * (cap_actual + base + ((tam_actual + req_adicional) - cap_actual));
+    size_t tam_deseado = tam_actual + req_adicional;
+    size_t cap_base = 2 * (cap_actual + base);
+    PDCRT_ASSERT(cap_base >= cap_actual);
+    // Si `tam_deseado >= cap_base` entonces el nuevo tamaño `cap_base` aún no
+    // podría hospedar a `req_adicional` elementos nuevos.
+    return cap_base + (tam_deseado < cap_base? 0 : (tam_deseado - cap_actual));
 }
 
 
@@ -396,13 +401,13 @@ static void pdcrt_escribir_texto_max(pdcrt_texto* texto, size_t max)
 
 pdcrt_error pdcrt_aloj_arreglo(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, size_t capacidad)
 {
-    arr->elementos = pdcrt_alojar_simple(alojador, capacidad * sizeof(pdcrt_objeto));
+    arr->capacidad = pdcrt_siguiente_capacidad(capacidad, 0, 0);
+    arr->elementos = pdcrt_alojar_simple(alojador, arr->capacidad * sizeof(pdcrt_objeto));
     if(!arr->elementos)
     {
         return PDCRT_ENOMEM;
     }
     arr->longitud = 0;
-    arr->capacidad = capacidad;
     return PDCRT_OK;
 }
 
@@ -1729,8 +1734,7 @@ pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, pdcrt_objeto yo,
     pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_OBJETO);
     pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, args, yo);
     pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, args, msj);
-    pdcrt_marco* marco_superior = marco->marco_anterior;
-    return pdcrt_continuacion_tail_iniciar(yo.value.o.recv, marco_superior, args + 2, rets);
+    return pdcrt_continuacion_tail_iniciar(yo.value.o.recv, marco, args + 2, rets);
 }
 
 static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_0(struct pdcrt_marco* marco,
@@ -1752,15 +1756,16 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "agregarAlFinal") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_necesita_args_y_rets(args, rets, 1, 0);
         pdcrt_objeto el = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_arreglo_agregar_al_final(marco->contexto->alojador, yo.value.a, el));
-        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_nulo()));
+        return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "longitud") == 0)
     {
         pdcrt_necesita_args_y_rets(args, rets, 0, 1);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero((int) yo.value.a->longitud)));
+        return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
@@ -2441,7 +2446,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
     fprintf(out, "|  %s\n", info);
 }
 
-pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t nparams)
+pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t nparams, bool variadic)
 {
     PDCRT_ASSERT(nargs >= 1);
     pdcrt_objeto esup = pdcrt_sacar_de_pila(&marco->contexto->pila);
@@ -2451,12 +2456,12 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_nulo()));
         nargs += 1;
     }
-    while(nargs > nparams)
+    while(nargs > nparams && !variadic)
     {
         (void) pdcrt_sacar_de_pila(&marco->contexto->pila);
         nargs -= 1;
     }
-    pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, nparams, pdcrt_objeto_marca_de_pila());
+    pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, variadic? nargs : nparams, pdcrt_objeto_marca_de_pila());
     return esup;
 }
 

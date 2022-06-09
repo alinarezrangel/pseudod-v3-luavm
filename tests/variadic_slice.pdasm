@@ -1,0 +1,94 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  MK0CLZ 1
+  LSET 0
+
+  LGET 0
+  ICONST 1
+  ICONST 3
+  ICONST 0
+  ICONST 1
+  ICONST 2
+  ICONST 3
+  ICONST 4
+  ROT 7
+  DYNCALL 7, 1
+  MSG 1, 0, 1
+  PRN
+  NL
+
+  LGET 0
+  ICONST 2
+  ICONST 5
+  ICONST 4
+  ICONST 3
+  ICONST 2
+  ICONST 1
+  ICONST 0
+  ROT 7
+  DYNCALL 7, 1
+  MSG 1, 0, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+  PROC 1 -- procedimiento p1: v0, v1, ...v2
+    PARAM 0
+    PARAM 1
+    VARIADIC 2
+    LOCAL 2
+    LOCAL 3
+    LOCAL 4
+
+    -- fijar v3 a Arreglo#vacio
+    MKARR 0
+    LSET 3
+
+    -- fijar v4 a v0
+    LGET 0
+    LSET 4
+
+    -- mientras v4 < v1
+    NAME 1
+    LGET 4
+    LGET 1
+    LT
+    CHOOSE 2, 3
+    NAME 2
+
+    -- v2#en: v4
+    LGET 2
+    LGET 4
+    ROT 1
+    MSG 2, 1, 1
+
+    -- v3#agregarAlFinal: ^
+    LGET 3
+    MSG 3, 1, 0
+
+    -- fijar v4 a v4 + 1
+    LGET 4
+    ICONST 1
+    SUM
+    LSET 4
+
+    -- finmientras
+    JMP 1
+
+    -- devolver v3
+    NAME 3
+    LGET 3
+    RETN 1
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "longitud"
+  #1 STRING "comoTexto"
+  #2 STRING "en"
+  #3 STRING "agregarAlFinal"
+ENDSECTION

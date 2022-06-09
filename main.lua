@@ -149,8 +149,13 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
 procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
 proc <- {| '' -> 'proc'
-           "PROC" rs id {| ('' -> 'method' rs 'METHOD' / '' -> 'no_method') |} {| '' -> 'params'  (rs param)* |} code rs "ENDPROC" |}
+           "PROC" rs id
+           {| ('' -> 'method' rs 'METHOD' / '' -> 'no_method') |}
+           {| '' -> 'params' (rs param)* |}
+           {| ('' -> 'variadic' rs variadic  / '' -> 'no_variadic') |}
+           code rs "ENDPROC" |}
 param <- {| {"PARAM"} rs (id / envs) |}
+variadic <- "VARIADIC" rs id
 
 unknownsec <- "SECTION" ws str (ws token)* rs "SECTION"
 token <- str / [^%s"]+
@@ -296,11 +301,16 @@ local function prepproc(proc)
    for i = 1, #c.params do
       c.params[i] = opcode(c.params[i])
    end
-   c.locals = sliceseq(proc[5], 2, #proc[5])
+   if proc[5][1] == "variadic" then
+      c.variadic = processoparg(proc[5][2])
+   else
+      c.variadic = nil
+   end
+   c.locals = sliceseq(proc[6], 2, #proc[6])
    for i = 1, #c.locals do
       c.locals[i] = opcode(c.locals[i])
    end
-   c.opcodes = sliceseq(proc[6], 2, #proc[6])
+   c.opcodes = sliceseq(proc[7], 2, #proc[7])
    for i = 1, #c.opcodes do
       c.opcodes[i] = opcode(c.opcodes[i])
    end
@@ -460,6 +470,13 @@ function toc.makeemitter()
          -- Emit arg as a C integer. tostring() is not correct, but should do
          -- for now
          return tostring(arg)
+      elseif spec == "bool" then
+         assert(type(arg) == "boolean")
+         if arg then
+            return "true"
+         else
+            return "false"
+         end
       elseif spec == "flt" then
          assert(not optional and math.type(arg) == "float", "expected float")
          -- Same caveat
@@ -865,17 +882,20 @@ function toc.compparts(emit, state, proc)
    else
       nyo = 0
    end
-   emit:stmt("PDCRT_PROC_PRELUDE(«1:localname», «2:int», «3:int»)", proc.id, #proc.params, #proc.params + #proc.locals + nyo)
+   emit:stmt("PDCRT_PROC_PRELUDE(«1:localname», «2:int», «3:int», «4:bool»)", proc.id, #proc.params, #proc.params + #proc.locals + nyo, proc.variadic ~= nil)
    if proc.method then
       emit:stmt("PDCRT_PROC_METHOD()")
-   end
-   for i = #proc.params, 1, -1 do
-      local p = proc.params[i]
-      emit:stmt("PDCRT_PARAM(«1:localid», «1:localname»)", p[2])
    end
    for i = 1, #proc.locals do
       local p = proc.locals[i]
       emit:stmt("PDCRT_LOCAL(«1:localid», «1:localname»)", p[2])
+   end
+   if proc.variadic then
+      emit:stmt("PDCRT_PROC_VARIADIC(«1:localname», «2:int», «3:localid»)", proc.id, #proc.params, proc.variadic)
+   end
+   for i = #proc.params, 1, -1 do
+      local p = proc.params[i]
+      emit:stmt("PDCRT_PARAM(«1:localid», «1:localname»)", p[2])
    end
    if #proc.parts > 0 then
       log.dbg("emitting main part for procedure %s", proc.id)

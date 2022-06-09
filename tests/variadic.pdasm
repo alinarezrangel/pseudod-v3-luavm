@@ -1,0 +1,43 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  MK0CLZ 1
+  LSET 0
+
+  LGET 0
+  ICONST 1
+  ICONST 2
+  ICONST 3
+  ICONST 4
+  ICONST 5
+  ICONST 6
+  ROT 6
+  DYNCALL 6, 1
+  PRN
+  NL
+
+  LGET 0
+  ICONST 1
+  ROT 1
+  DYNCALL 1, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+  PROC 1
+    PARAM 0
+    VARIADIC 1
+    LOCAL 1
+    LGET 1
+    MSG 0, 0, 1
+    RETN 1
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "longitud"
+  #1 STRING "comoTexto"
+ENDSECTION

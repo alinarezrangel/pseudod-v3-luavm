@@ -1001,7 +1001,7 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
 
 // Ajusta la pila para que una función recién llamada que recibió #nargs
 // argumentos pero pedía #nparams parámetros pueda ejecutarse.
-pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t nparams);
+pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t nparams, bool variadic);
 
 // La macro `PDCRT_RASTREAR_MARCO(marco, procname, info)` emitirá una llamada a
 // `pdcrt_mostrar_marco` si `PDCRT_DBG_RASTREAR_MARCOS` está definido, o se
@@ -1094,7 +1094,7 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
     pdcrt_continuacion pdproc_##name(pdcrt_marco* name##marco_actual, pdcrt_marco* name##marco_anterior, int name##nargs, int name##nrets) // {}
 #define PDCRT_CONT(name, k)                                             \
     pdcrt_continuacion pdprock_##name##_k##k(pdcrt_marco* name##marco_actual) // {}
-#define PDCRT_PROC_PRELUDE(name, nparams, nlocals)                      \
+#define PDCRT_PROC_PRELUDE(name, nparams, nlocals, isvariadic)          \
     pdcrt_error pderrno;                                                \
     pdcrt_contexto* ctx = name##marco_anterior->contexto;               \
     pdcrt_marco* marco = name##marco_actual;                            \
@@ -1105,13 +1105,22 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
             puts(pdcrt_perror(pderrno));                                \
             exit(PDCRT_SALIDA_ERROR);                                   \
         }                                                               \
-        pdcrt_fijar_local(marco, PDCRT_ID_ESUP, pdcrt_ajustar_parametros(marco, name##nargs, nparams)); \
+        pdcrt_fijar_local(marco, PDCRT_ID_ESUP, pdcrt_ajustar_parametros(marco, name##nargs, nparams, isvariadic)); \
         PDCRT_RASTREAR_MARCO(marco, #name, "preludio");                 \
     }                                                                   \
     while(0)
 #define PDCRT_PARAM(idx, param)                                     \
     pdcrt_fijar_local(marco, idx, pdcrt_sacar_de_pila(&ctx->pila))
 #define PDCRT_PROC_METHOD()
+#define PDCRT_PROC_VARIADIC(name, nparams, localid)                     \
+    do                                                                  \
+    {                                                                   \
+        size_t nargs = name##nargs;                                     \
+        nargs = (nargs == 0)? 0 : nargs - 1;                            \
+        pdcrt_op_mkarr(marco, (nargs < nparams)? 0 : (nargs - nparams)); \
+        pdcrt_fijar_local(marco, localid, pdcrt_sacar_de_pila(&marco->contexto->pila)); \
+    }                                                                   \
+    while(0)
 #define PDCRT_CONT_PRELUDE(name, k)                     \
     pdcrt_marco* marco = name##marco_actual;            \
     PDCRT_RASTREAR_MARCO(marco, #name, "continuar");

@@ -1,0 +1,2 @@
+(Arreglo#crearCon: 1, 2)
+(Arreglo#crearCon: 2, 1, 0)
