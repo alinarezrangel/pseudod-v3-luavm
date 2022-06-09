@@ -10,6 +10,7 @@ for test_name in @tests [
         echo Success
     ] [
         echo Failure
+        rr record ./sample
         : @(exit 1)
     ]
 ]
