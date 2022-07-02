@@ -136,12 +136,13 @@ local <- {| {"LOCAL"} rs (id / envs) |}
 OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "SUM" / "SUB" / "MUL" / "DIV"
     / "RETN" / "DYNCALL"
-    / "MKCLZ" / "MK0CLZ" / "MKOBJ" / "MKARR"
+    / "MKCLZ" / "MK0CLZ" / "MKARR"
     / "OPNFRM" / "EINIT" / "ENEW" / "CLSFRM"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
     / "POP" / "CHOOSE" / "JMP" / "NAME"
     / "MTRUE" / "CMPEQ" / "CMPNEQ" / "NOT"
     / "ROT" / "GT" / "LT" / "GE" / "LE" / "OPEQ"
+    / "CLZ2OBJ" / "OBJ2CLZ"
     / "TMSG" / "MSG"
     / "PRN" / "NL"
     / "SPUSH" / "SPOP"
@@ -736,11 +737,6 @@ function toc.opcodes.MK0CLZ(emit, state, op)
    emit:stmt("pdcrt_op_mk0clz(marco, «1:procname»)", op.Px)
 end
 
-toc.opschema.MKOBJ = schema "Ua, Px"
-function toc.opcodes.MKOBJ(emit, state, op)
-   emit:stmt("pdcrt_op_mkobj(marco, «1:int», «2:procname»)", op.Ua, op.Px)
-end
-
 toc.opschema.MKARR = schema "Ua"
 function toc.opcodes.MKARR(emit, state, op)
    emit:stmt("pdcrt_op_mkarr(marco, «1:int»)", op.Ua)
@@ -812,6 +808,16 @@ function toc.opcodes.MSG(emit, state, op)
    emit:stmt("return pdcrt_op_msg(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int», «5:int»)",
              state.current_proc.id, state.next_ccid,
              op.Cx, op.Ua, op.Ub)
+end
+
+toc.opschema.CLZ2OBJ = schema ""
+function toc.opcodes.CLZ2OBJ(emit, state, op)
+   emit:stmt("pdcrt_op_clztoobj(marco)")
+end
+
+toc.opschema.OBJ2CLZ = schema ""
+function toc.opcodes.OBJ2CLZ(emit, state, op)
+   emit:stmt("pdcrt_op_objtoclz(marco)")
 end
 
 toc.opschema.TMSG = schema "Cx, Ua, Ub"
@@ -1014,8 +1020,10 @@ local function main(input, config)
    log.info("compiling the file")
    local secs = sectionstotable(assert(re.match(input, r), "could not parse bytecode"))
    log.info("done compiling")
-   assert(tonumber(secs.version[1]) == VER[1], "major version must be 1")
-   assert(tonumber(secs.version[2]) <= VER[2], "minor version must be 0 or less")
+   assert(tonumber(secs.version[1]) == VER[1],
+          "major version must be " .. tostring(VER[1]))
+   assert(tonumber(secs.version[2]) <= VER[2],
+          "minor version must be " .. tostring(VER[2]) .. " or less")
    log.info("validated the version")
    if secs.procedures_section then
       local P = {}

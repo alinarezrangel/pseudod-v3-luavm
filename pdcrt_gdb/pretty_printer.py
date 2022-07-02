@@ -39,9 +39,11 @@ class PDCRT_Objeto:
         2: (None, False),
         3: ('c', False),
         4: ('t', True),
-        5: ('o', False),
+        5: ('c', False),
         6: ('b', False),
         7: (None, False),
+        8: ('a', True),
+        9: ('p', False),
     }
 
     def __init__(self, val):
@@ -161,6 +163,21 @@ class PDCRT_Pila:
             yield '[{}]'.format(i), self.val['elementos'][i]
 
 
+class PDCRT_Arreglo:
+    def __init__(self, val):
+        self.val = val
+
+    def display_hint(self):
+        return 'array'
+
+    def to_string(self):
+        return '{} con {} (de {}) elementos'.format(str(self.val.type), self.val['longitud'], self.val['capacidad'])
+
+    def children(self):
+        for i in range(int(self.val['longitud'])):
+            yield '[{}]'.format(i), self.val['elementos'][i]
+
+
 def lookup_function(val):
     if val.type.strip_typedefs().tag == 'pdcrt_texto':
         return PDCRT_Texto(val)
@@ -174,6 +191,8 @@ def lookup_function(val):
         return PDCRT_Marco(val)
     elif val.type.strip_typedefs().tag == 'pdcrt_pila':
         return PDCRT_Pila(val)
+    elif val.type.strip_typedefs().tag == 'pdcrt_arreglo':
+        return PDCRT_Arreglo(val)
     else:
         return None
 

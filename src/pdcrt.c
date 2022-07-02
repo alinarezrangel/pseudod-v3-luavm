@@ -910,10 +910,13 @@ pdcrt_objeto pdcrt_objeto_desde_texto(pdcrt_texto* texto)
 
 pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, pdcrt_recvmsj recv, size_t num_attrs)
 {
-    obj->tag = PDCRT_TOBJ_OBJETO;
-    obj->value.o.recv = recv;
-    obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_marca_de_pila;
-    return pdcrt_aloj_env(&obj->value.o.attrs, alojador, num_attrs);
+    PDCRT_ASSERT(false);
+    /* obj->tag = PDCRT_TOBJ_OBJETO; */
+    /* obj->value.c.proc = (pdcrt_funcion_generica) recv; */
+    /* obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_objeto; */
+    /* return pdcrt_aloj_env(&obj->value.o.attrs, alojador, num_attrs); */
+    // TODO
+    return PDCRT_ENOMEM;
 }
 
 
@@ -1732,9 +1735,9 @@ pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, p
 pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
     pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_OBJETO);
-    pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, args, yo);
     pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, args, msj);
-    return pdcrt_continuacion_tail_iniciar(yo.value.o.recv, marco, args + 2, rets);
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+    return pdcrt_continuacion_tail_iniciar((pdcrt_proc_t) yo.value.c.proc, marco, args + 2, rets);
 }
 
 static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_0(struct pdcrt_marco* marco,
@@ -2554,15 +2557,20 @@ void pdcrt_op_lget(pdcrt_marco* marco, pdcrt_objeto v)
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, v));
 }
 
+static void pdcrt_objeto_debe_tener_closure(pdcrt_objeto obj)
+{
+    pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
+}
+
 void pdcrt_op_lsetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind)
 {
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
     for(size_t i = 0; i < alt; i++)
     {
-        pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
+        pdcrt_objeto_debe_tener_closure(env);
         env = env.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
     }
-    pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
+    pdcrt_objeto_debe_tener_closure(env);
     env.value.c.env->env[((pdcrt_local_index) ind) + PDCRT_NUM_LOCALES_ESP] = obj;
 }
 
@@ -2570,11 +2578,13 @@ void pdcrt_op_lgetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind
 {
     for(size_t i = 0; i < alt; i++)
     {
-        pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
+        pdcrt_objeto_debe_tener_closure(env);
         env = env.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
     }
-    pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, env.value.c.env->env[((pdcrt_local_index) ind) + PDCRT_NUM_LOCALES_ESP]));
+    pdcrt_objeto_debe_tener_closure(env);
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila,
+                                   marco->contexto->alojador,
+                                   env.value.c.env->env[((pdcrt_local_index) ind) + PDCRT_NUM_LOCALES_ESP]));
 }
 
 pdcrt_objeto pdcrt_op_open_frame(pdcrt_marco* marco, pdcrt_local_index padreidx, size_t tam)
@@ -2601,7 +2611,7 @@ pdcrt_objeto pdcrt_op_open_frame(pdcrt_marco* marco, pdcrt_local_index padreidx,
 void pdcrt_op_einit(pdcrt_marco* marco, pdcrt_objeto env, size_t i, pdcrt_objeto local)
 {
     (void) marco;
-    pdcrt_objeto_debe_tener_tipo(env, PDCRT_TOBJ_CLOSURE);
+    pdcrt_objeto_debe_tener_closure(env);
     env.value.c.env->env[i + PDCRT_NUM_LOCALES_ESP] = local;
 }
 
@@ -2615,7 +2625,7 @@ void pdcrt_op_close_frame(pdcrt_marco* marco, pdcrt_objeto env)
 void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc)
 {
     pdcrt_objeto cima = pdcrt_obtener_local(marco, env);
-    pdcrt_objeto_debe_tener_tipo(cima, PDCRT_TOBJ_CLOSURE);
+    pdcrt_objeto_debe_tener_closure(cima);
     pdcrt_objeto nuevo_env;
     nuevo_env.tag = PDCRT_TOBJ_CLOSURE;
     nuevo_env.value.c.env = cima.value.c.env;
@@ -2632,15 +2642,6 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
     clz.recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
     no_falla(pdcrt_aloj_env(&clz.value.c.env, marco->contexto->alojador, 0));
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
-}
-
-void pdcrt_op_mkobj(pdcrt_marco* marco, int natrs, pdcrt_proc_t proc)
-{
-    pdcrt_objeto clz;
-    clz.tag = PDCRT_TOBJ_CLOSURE;
-    clz.value.c.proc = (pdcrt_funcion_generica) proc;
-    clz.recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
-    no_falla(pdcrt_aloj_env(&clz.value.c.env, marco->contexto->alojador, natrs));
 }
 
 void pdcrt_op_mkarr(pdcrt_marco* marco, size_t tam)
@@ -2831,12 +2832,12 @@ void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index
 {
     pdcrt_objeto o_eact = pdcrt_obtener_local(marco, eact);
     pdcrt_objeto o_esup = pdcrt_obtener_local(marco, esup);
-    pdcrt_objeto_debe_tener_tipo(o_eact, PDCRT_TOBJ_CLOSURE);
-    pdcrt_objeto_debe_tener_tipo(o_esup, PDCRT_TOBJ_CLOSURE);
+    pdcrt_objeto_debe_tener_closure(o_eact);
+    pdcrt_objeto_debe_tener_closure(o_esup);
     PDCRT_ASSERT(o_eact.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP].value.c.env == o_esup.value.c.env);
     o_esup = o_esup.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
     o_eact = o_eact.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
-    pdcrt_objeto_debe_tener_tipo(o_eact, PDCRT_TOBJ_CLOSURE);
+    pdcrt_objeto_debe_tener_closure(o_eact);
     // No es necesario verificar que ESUP sea una CLOSURE porque el primer EACT
     // de un procedimiento no tiene ESUP, o en otras palabras: si EACT es el
     // primero del procedimiento (lo que corresponde con `SPOP`-ear al ámbito
@@ -2844,4 +2845,22 @@ void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index
     pdcrt_fijar_local(marco, eact, o_eact);
     pdcrt_fijar_local(marco, esup, o_esup);
     PDCRT_RASTREAR_MARCO(marco, "<unk>", "SPOP");
+}
+
+void pdcrt_op_clztoobj(pdcrt_marco* marco)
+{
+    pdcrt_objeto clz = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto_debe_tener_tipo(clz, PDCRT_TOBJ_CLOSURE);
+    clz.tag = PDCRT_TOBJ_OBJETO;
+    clz.recv = (pdcrt_funcion_generica) &pdcrt_recv_objeto;
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
+}
+
+void pdcrt_op_objtoclz(pdcrt_marco* marco)
+{
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_OBJETO);
+    obj.tag = PDCRT_TOBJ_CLOSURE;
+    obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, obj));
 }

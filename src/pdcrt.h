@@ -263,13 +263,6 @@ typedef struct pdcrt_closure
     struct pdcrt_env* env;
 } pdcrt_closure;
 
-// TODO: Termina las variables de tipo objeto.
-typedef struct pdcrt_impl_obj
-{
-    void* recv;
-    struct pdcrt_env* attrs;
-} pdcrt_impl_obj;
-
 // Un texto.
 //
 // Contiene cero o más carácteres codificados con UTF-8 en `contenido`. Estos
@@ -360,8 +353,7 @@ typedef struct pdcrt_objeto
     {
         int i; // entero
         float f; // float
-        pdcrt_closure c; // closure
-        pdcrt_impl_obj o; // objeto
+        pdcrt_closure c; // closure y objetos
         pdcrt_texto* t; // texto
         pdcrt_arreglo* a; // arreglo
         bool b; // booleano
@@ -1195,7 +1187,6 @@ void pdcrt_op_close_frame(pdcrt_marco* marco, pdcrt_objeto env);
 
 void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc);
 void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc);
-void pdcrt_op_mkobj(pdcrt_marco* marco, int natrs, pdcrt_proc_t proc);
 void pdcrt_op_mkarr(pdcrt_marco* marco, size_t tam);
 
 pdcrt_continuacion pdcrt_op_dyncall(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int acepta, int devuelve);
@@ -1227,5 +1218,8 @@ pdcrt_continuacion pdcrt_op_tail_msg(pdcrt_marco* marco, int cid, int args, int 
 
 void pdcrt_op_spush(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup);
 void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup);
+
+void pdcrt_op_clztoobj(pdcrt_marco* marco);
+void pdcrt_op_objtoclz(pdcrt_marco* marco);
 
 #endif /* PDCRT_H */

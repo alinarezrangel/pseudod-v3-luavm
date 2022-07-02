@@ -1,0 +1,81 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  OPNFRM EACT, NIL, 0
+  CLSFRM EACT
+
+  MKCLZ EACT, 1
+  DYNCALL 0, 1
+  LSET 0
+
+  LGET 0
+  MSG 0, 0, 0
+
+  LGET 0
+  ICONST 1
+  ROT 1
+  MSG 1, 1, 0
+
+  LGET 0
+  MSG 0, 0, 0
+
+  LGET 0
+  ICONST 3
+  ROT 1
+  MSG 1, 1, 0
+
+  LGET 0
+  MSG 0, 0, 0
+ENDSECTION
+
+SECTION "procedures"
+  PROC 1
+    LOCAL 0
+    ICONST 0
+    LSET 0
+    OPNFRM EACT, ESUP, 1
+    EINIT EACT, 0, 0
+    CLSFRM EACT
+    MKCLZ EACT, 2
+    CLZ2OBJ
+    RETN 1
+  ENDPROC
+
+  PROC 2
+    PARAM 0 -- msj
+    VARIADIC 1 -- args
+    LOCAL 1
+    OPNFRM EACT, ESUP, 0
+    CLSFRM EACT
+
+    LCONST 0
+    LGET 0
+    OPEQ
+    CHOOSE 1, 2
+    NAME 1
+
+    LGETC EACT, 1, 0
+    PRN
+    NL
+    RETN 0
+
+    NAME 2
+
+    LGET 1
+    ICONST 0
+    ROT 1
+    MSG 2, 1, 1
+    LGETC EACT, 1, 0
+    SUM
+    LSETC EACT, 1, 0
+    RETN 0
+ ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "escribirEstado"
+  #1 STRING "incrementar"
+  #2 STRING "en"
+ENDSECTION
