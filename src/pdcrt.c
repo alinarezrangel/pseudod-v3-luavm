@@ -46,10 +46,11 @@ const char* pdcrt_perror(pdcrt_error err)
     return errores[err];
 }
 
-// Como abort() pero termina con un código de salida `PDCRT_SALIDA_ERROR`.
+// Envoltura de `abort()`. En un futuro esto hará más cosas (como guardar una
+// imagen del programa).
 _Noreturn static void pdcrt_abort(void)
 {
-    exit(PDCRT_SALIDA_ERROR);
+    abort();
 }
 
 static void pdcrt_notifica_error_interno(void)
