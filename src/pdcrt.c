@@ -1574,6 +1574,14 @@ pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(!pdcrt_objeto_iguales(yo, rhs))));
         return pdcrt_continuacion_devolver();
     }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "comoObjeto") == 0)
+    {
+        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        yo.tag = PDCRT_TOBJ_OBJETO;
+        yo.recv = (pdcrt_funcion_generica) &pdcrt_recv_objeto;
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        return pdcrt_continuacion_devolver();
+    }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "clonar") == 0)
     {
         pdcrt_necesita_args_y_rets(args, rets, 0, 1);
