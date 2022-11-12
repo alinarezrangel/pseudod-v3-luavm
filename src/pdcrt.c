@@ -996,41 +996,68 @@ bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b)
     {
         return false;
     }
-    else
+    switch(a.tag)
     {
-        switch(a.tag)
+    case PDCRT_TOBJ_TEXTO:
+        if(a.value.t->longitud != b.value.t->longitud)
+            return false;
+        for(size_t i = 0; i < a.value.t->longitud; i++)
         {
-        case PDCRT_TOBJ_ENTERO:
-            return a.value.i == b.value.i;
-        case PDCRT_TOBJ_FLOAT:
-            return a.value.f == b.value.f;
-        case PDCRT_TOBJ_BOOLEANO:
-            return a.value.b == b.value.b;
-        case PDCRT_TOBJ_MARCA_DE_PILA:
-            return true;
-        case PDCRT_TOBJ_CLOSURE:
-        case PDCRT_TOBJ_OBJETO:
-            return (a.value.c.proc == b.value.c.proc) && (a.value.c.env == b.value.c.env);
-        case PDCRT_TOBJ_TEXTO:
-            if(a.value.t->longitud != b.value.t->longitud)
+            if(a.value.t->contenido[i] != b.value.t->contenido[i])
                 return false;
-            for(size_t i = 0; i < a.value.t->longitud; i++)
+        }
+        return true;
+    case PDCRT_TOBJ_CLOSURE:
+    case PDCRT_TOBJ_OBJETO:
+        if(a.value.c.proc != b.value.c.proc)
+        {
+            return false;
+        }
+        else if(a.value.c.env == b.value.c.env)
+        {
+            return true;
+        }
+        else if(a.value.c.env->env_size != b.value.c.env->env_size)
+        {
+            return false;
+        }
+        else
+        {
+            for(size_t i = 0; i < a.value.c.env->env_size; i++)
             {
-                if(a.value.t->contenido[i] != b.value.t->contenido[i])
+                pdcrt_objeto oa = a.value.c.env->env[i];
+                pdcrt_objeto ob = b.value.c.env->env[i];
+                if(!pdcrt_objeto_iguales(oa, ob))
+                {
                     return false;
+                }
             }
             return true;
-        case PDCRT_TOBJ_NULO:
-            return true;
-        case PDCRT_TOBJ_ARREGLO:
-            return a.value.a == b.value.a;
-        case PDCRT_TOBJ_VOIDPTR:
-            return a.value.p == b.value.p;
-        case PDCRT_TOBJ_ESPACIO_DE_NOMBRES:
-            return a.value.e == b.value.e;
-        default:
-            pdcrt_inalcanzable();
         }
+    case PDCRT_TOBJ_ARREGLO:
+        if(a.value.a->longitud != b.value.a->longitud)
+        {
+            return false;
+        }
+        else if(a.value.a == b.value.a)
+        {
+            return true;
+        }
+        else
+        {
+            for(size_t i = 0; i < a.value.a->longitud; i++)
+            {
+                pdcrt_objeto oa = a.value.a->elementos[i];
+                pdcrt_objeto ob = b.value.a->elementos[i];
+                if(!pdcrt_objeto_iguales(oa, ob))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+    default:
+        return pdcrt_objeto_identicos(a, b);
     }
 }
 
@@ -1044,8 +1071,27 @@ bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b)
     {
     case PDCRT_TOBJ_TEXTO:
         return a.value.t == b.value.t;
+    case PDCRT_TOBJ_NULO:
+        return true;
+    case PDCRT_TOBJ_ARREGLO:
+        return a.value.a == b.value.a;
+    case PDCRT_TOBJ_VOIDPTR:
+        return a.value.p == b.value.p;
+    case PDCRT_TOBJ_ESPACIO_DE_NOMBRES:
+        return a.value.e == b.value.e;
+    case PDCRT_TOBJ_ENTERO:
+        return a.value.i == b.value.i;
+    case PDCRT_TOBJ_FLOAT:
+        return a.value.f == b.value.f;
+    case PDCRT_TOBJ_BOOLEANO:
+        return a.value.b == b.value.b;
+    case PDCRT_TOBJ_MARCA_DE_PILA:
+        return true;
+    case PDCRT_TOBJ_CLOSURE:
+    case PDCRT_TOBJ_OBJETO:
+        return (a.value.c.proc == b.value.c.proc) && (a.value.c.env == b.value.c.env);
     default:
-        return pdcrt_objeto_iguales(a, b);
+        pdcrt_inalcanzable();
     }
 }
 
