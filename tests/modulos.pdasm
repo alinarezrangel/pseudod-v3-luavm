@@ -1,0 +1,67 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  LOCAL 1
+
+  IMPORT 1
+  SAVEIMPORT 1
+  LSET 0
+
+  LGET 0
+  MSG 0, 0, 1
+  PRN
+  NL
+  LGET 0
+  MSG 1, 0, 1
+  PRN
+  NL
+  LGET 0
+  MSG 2, 0, 1
+  PRN
+  NL
+
+  IMPORT 1
+  SAVEIMPORT 1
+  LSET 1
+
+  LGET 0
+  LGET 1
+  CMPREFEQ
+  MTRUE
+  ICONST -1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+  PROC 1
+    LOCAL 0
+    LOCAL 1
+    LOCAL 2
+    MODULE 1
+    ICONST 1
+    LSET 0
+    ICONST 2
+    LSET 1
+    ICONST 3
+    LSET 2
+    LCONST 3
+    PRN
+    NL
+    OPNEXP 3
+    EXP 0, 0, 0
+    EXP 1, 1, 0
+    EXP 2, 2, 0
+    CLSEXP
+    RETN 1
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "hola"
+  #1 STRING "mundo"
+  #2 STRING "queTal"
+  #3 STRING "importado"
+ENDSECTION

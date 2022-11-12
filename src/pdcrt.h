@@ -130,8 +130,9 @@
 // las funciones de pdcrt utiliza `errno`.
 typedef enum pdcrt_error
 {
-    PDCRT_OK = 0,
-    PDCRT_ENOMEM = 1,
+    PDCRT_OK = 0,       // Ok
+    PDCRT_ENOMEM = 1,   // No se pudo alojar memoria.
+    PDCRT_EINVALOP = 2, // Operación inválida.
 } pdcrt_error;
 
 // Devuelve una representación textual de un código de error. El puntero
@@ -173,7 +174,7 @@ const char* pdcrt_perror(pdcrt_error err);
 // a tus alojadores.
 //
 // Un detalle que debes tener en cuenta con esta API es que no es posible
-// alojar/dealojar un bloque de tamaño 0, específicamente tratar de alojar un
+// alojar/desalojar un bloque de tamaño 0, específicamente tratar de alojar un
 // bloque de tamaño 0 cuenta como *comportamiento indefinido*. En todas las
 // llamadas a un alojador tendrás que recordar esto. (Esto es diferente de como
 // `malloc` funciona: `malloc` explícitamente indica que puede devolver `NULL`
@@ -291,6 +292,11 @@ pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador aloja
 pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, const char* cstr);
 // Desaloja un texto.
 void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto);
+// Determina si dos textos son iguales.
+bool pdcrt_textos_son_iguales(pdcrt_texto* a, pdcrt_texto* b);
+
+struct pdcrt_espacio_de_nombres;
+typedef struct pdcrt_espacio_de_nombres pdcrt_espacio_de_nombres;
 
 struct pdcrt_arreglo;
 typedef struct pdcrt_arreglo pdcrt_arreglo;
@@ -347,7 +353,8 @@ typedef struct pdcrt_objeto
         PDCRT_TOBJ_BOOLEANO = 6,
         PDCRT_TOBJ_NULO = 7,
         PDCRT_TOBJ_ARREGLO = 8,
-        PDCRT_TOBJ_VOIDPTR = 9
+        PDCRT_TOBJ_VOIDPTR = 9,
+        PDCRT_TOBJ_ESPACIO_DE_NOMBRES = 10,
     } tag;
     union
     {
@@ -356,6 +363,7 @@ typedef struct pdcrt_objeto
         pdcrt_closure c; // closure y objetos
         pdcrt_texto* t; // texto
         pdcrt_arreglo* a; // arreglo
+        pdcrt_espacio_de_nombres* e; // espacio de nombres
         bool b; // booleano
         void* p; // voidptr
     } value;
@@ -365,6 +373,57 @@ typedef struct pdcrt_objeto
 } pdcrt_objeto;
 
 typedef enum pdcrt_tipo_de_objeto pdcrt_tipo_de_objeto;
+
+struct pdcrt_edn_triple;
+typedef struct pdcrt_edn_triple pdcrt_edn_triple;
+
+// Un espacio de nombres.
+//
+// Los espacios de nombres son objetos sencillos que son devueltos por los
+// módulos después de ser importados. Consisten de una lista de triples de la
+// forma `Nombre, Es Autoejecutable, Valor` donde `Nombre` es un texto (el
+// nombre del elemento exportado), `Es Autoejecutable` es un booleano que
+// indica si es autoejecutable o no y `Valor` es el objeto que está siendo
+// exportado.
+typedef struct pdcrt_espacio_de_nombres
+{
+    PDCRT_NULL PDCRT_ARR(num_nombres) pdcrt_edn_triple* nombres;
+    size_t num_nombres;
+    size_t ultimo_nombre_creado; // Cuando se está creando un espacio de
+                                 // nombres, este comienza vacío y
+                                 // progresivamente se va «llenando». Este
+                                 // número contiene el índice donde se debería
+                                 // agregar el siguiente nombre. Cuando se
+                                 // termina de construir al espacio de nombres
+                                 // este número será igual a `num_nombres`.
+} pdcrt_espacio_de_nombres;
+
+// Cada uno de los triples anteriormente descritos.
+typedef struct pdcrt_edn_triple
+{
+    pdcrt_texto* nombre;
+    bool es_autoejecutable;
+    pdcrt_objeto valor;
+} pdcrt_edn_triple;
+
+// Aloja un nuevo espacio de nombres.
+//
+// Este espacio de nombres tendrá `num` triples *sin inicializar*. Usar
+// cualquiera de estos antes de agregarlos caurará un *comportamiento
+// indefinído*.
+pdcrt_error pdcrt_aloj_espacio_de_nombres(pdcrt_alojador alojador, PDCRT_OUT pdcrt_espacio_de_nombres** espacio, size_t num);
+// Desaloja un espacio de nombres. No desaloja los textos ni los objetos
+// contenidos en los triples de dicho espacio.
+void pdcrt_dealoj_espacio_de_nombres(pdcrt_alojador alojador, pdcrt_espacio_de_nombres** espacio);
+// Agrega un nombre al espacio de nombres.
+//
+// Llamar a esta función más de `espacio->num_nombre` veces es un error, sin
+// embargo, como esta función no devuelve un `pdcrt_error` este error no puede
+// ser detectado y solo abortará el proceso.
+void pdcrt_agregar_nombre_al_espacio_de_nombres(pdcrt_espacio_de_nombres* espacio,
+                                                pdcrt_texto* nombre,
+                                                bool es_autoejecutable,
+                                                pdcrt_objeto valor);
 
 // Un arreglo de objetos.
 //
@@ -808,6 +867,8 @@ pdcrt_objeto pdcrt_objeto_desde_arreglo(pdcrt_arreglo* arreglo);
 pdcrt_error pdcrt_objeto_aloj_arreglo(pdcrt_alojador alojador, size_t capacidad, PDCRT_OUT pdcrt_objeto* out);
 // Aloja un objeto "real".
 pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, pdcrt_recvmsj recv, size_t num_attrs);
+// Aloja un espacio de nombres.
+pdcrt_error pdcrt_objeto_aloj_espacio_de_nombres(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t num_nombres);
 
 // Las siguientes funciones implementan los conceptos de igualdad/desigualdad
 // de PseudoD. Te recomiendo que veas el "Reporte del lenguaje de programación
@@ -831,6 +892,7 @@ pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto y
 pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_espacio_de_nombres(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 pdcrt_continuacion pdcrt_recv_voidptr(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 
@@ -911,6 +973,71 @@ pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_const
 // Registra una constante textual en la lista. La lista es expandida en la
 // medida necesaria para que la operación funcione.
 pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto);
+// Desaloja la lista de constantes.
+void pdcrt_dealoj_constantes(pdcrt_alojador alojador, pdcrt_constantes* consts);
+
+
+// Un módulo. Este tipo contiene tanto los datos necesarios para buscar un
+// módulo como la caché del espacio de nombres que se obtuvo al importarlo.
+typedef struct pdcrt_modulo
+{
+    // El nombre del módulo.
+    //
+    // **Nota**: Los nombres de los módulos son comparados por *identidad*,
+    // específicamente, los punteros al `pdcrt_texto` son comparados
+    // **directamente** (el registro no usa `pdcrt_objeto_identicos`). Esto
+    // significa que dos textos con el mismo contenido pero con identidades de
+    // C distíntas serán considerados desiguales. Esto es un bug y será
+    // corregido en el futuro.
+    pdcrt_texto* nombre;
+    // El «cuerpo» del módulo es el procedimiento que se debe llamar para
+    // ejecutarlo y obtener su espacio de nombres.
+    pdcrt_proc_t cuerpo;
+    // El espacio de nombres, como un objeto. Si el módulo no ha sido llamado
+    // será `NULO`.
+    pdcrt_objeto valor;
+} pdcrt_modulo;
+
+// El registro de módulo.
+//
+// A diferencia de la lista de constantes, el registro de módulos no «posee» a
+// sus módulos. Estos son alojados por el ensamblador en un espacio global cuya
+// dirección de memoria es usada después para inicializar el registro mediante
+// `pdcrt_inic_registro_de_modulos_con_arreglo`.
+//
+// Esto no solo significa que el registro de módulos no requirer ser
+// desinicializado, sino que además no es posible agregar más módulos al
+// registro después de iniciado el programa. Esto es una falla del sistema
+// actual ya que prohibe el «desarrollo basado en un REPL» y en un futuro
+// eliminaré esta restricción.
+typedef struct pdcrt_registro_de_modulos
+{
+    PDCRT_NULL PDCRT_ARR(num_modulos) pdcrt_modulo* modulos;
+    size_t num_modulos;
+} pdcrt_registro_de_modulos;
+
+// Inicializa un registro sin módulos.
+pdcrt_error pdcrt_inic_registro_de_modulos(PDCRT_OUT pdcrt_registro_de_modulos* registro);
+// Inicializa un registro desde una lista de módulos dada. Este arreglo debe
+// «vivir» lo suficiente como para ser usado por el resto del runtime.
+//
+// Es equivalente a usar `pdcrt_inic_registro_de_modulos` seguido de
+// `pdcrt_agregar_bloque_de_modulos`.
+pdcrt_error pdcrt_inic_registro_de_modulos_con_arreglo(pdcrt_modulo* modulos, size_t num_modulos, PDCRT_OUT pdcrt_registro_de_modulos* registro);
+// Fija el arreglo de módulos del registro al dado.
+//
+// Tal como con `pdcrt_inic_registro_de_modulos_con_arreglo` este arreglo debe
+// «vivir» lo suficiente para que el resto del programa lo use.
+//
+// Esta operación puede fallar con una «operación inválida» si al registro ya
+// le agregaron un bloque de módulos.
+pdcrt_error pdcrt_agregar_bloque_de_modulos(pdcrt_registro_de_modulos* registro, pdcrt_modulo* modulos, size_t num_modulos);
+// Obtiene un módulo dado del registro.
+//
+// Busca un módulo con el mismo nombre que `nombre`. Si lo encuentra, asigna un
+// puntero a este a `*modulo` y devuelve verdadero. De lo contrario asigna
+// `NULL` a `*modulo` y devuelve falso.
+bool pdcrt_obtener_modulo(pdcrt_registro_de_modulos* registro, pdcrt_texto* nombre, PDCRT_OUT pdcrt_modulo** modulo);
 
 
 // El contexto del intérprete.
@@ -919,13 +1046,15 @@ pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_con
 // programa, como la pila, el alojador, la lista de constantes e información de
 // depuración.
 //
-// El contexto "posee" la pila y la lista de constantes: al desalojar el
-// contexto también se desalojará la pila y la lista de constantes.
+// El contexto "posee" la pila, la lista de constantes y el registro de
+// módulos: al desalojar el contexto también se desalojará la pila, la lista
+// de constantes y el registro de módulos.
 typedef struct pdcrt_contexto
 {
     pdcrt_pila pila;
     pdcrt_alojador alojador;
     pdcrt_constantes constantes;
+    pdcrt_registro_de_modulos registro;
 } pdcrt_contexto;
 
 // Variantes de las funciones con el mismo nombre pero sin el `_simple` al
@@ -1221,5 +1350,12 @@ void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index
 
 void pdcrt_op_clztoobj(pdcrt_marco* marco);
 void pdcrt_op_objtoclz(pdcrt_marco* marco);
+
+void pdcrt_op_opnexp(pdcrt_marco* marco, size_t num_exp);
+void pdcrt_op_clsexp(pdcrt_marco* marco);
+void pdcrt_op_exp(pdcrt_marco* marco, int idx, pdcrt_local_index local, bool autoejec);
+
+pdcrt_continuacion pdcrt_op_import(pdcrt_marco* marco, int cid, pdcrt_proc_continuacion proc);
+void pdcrt_op_saveimport(pdcrt_marco* marco, int cid);
 
 #endif /* PDCRT_H */

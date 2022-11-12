@@ -25,9 +25,6 @@ local WARNINGS = {
    {"redefined-constant", "redef-const", {"redefined_constant"},
     "Advierte cuando se redefina una constante."},
 
-   {"procedure-doesnt-exists", "undef-proc", {"procedure_doesnt_exists"},
-    "Advierte cuando se refiera a un procedimiento que no exísta."},
-
    {"redefined-procedure", "redef-proc", {"redefined_procedure"},
     "Advierte cuando se redefina un procedimiento."},
 
@@ -37,21 +34,21 @@ local WARNINGS = {
    {"no-constant-pool", "no-const-pool", {"no_constant_pool"},
     "Advierte si no hay una sección de \"lista de constantes\"."},
 
-   {"no-constants-section", "no-const-sec", {"no_constant_section"},
-    "Advierte si no hay sección de constantes."},
-
-   {"no-code-section", "no-code-sec", {"no_code_section"},
-    "Advierte si no hay sección de código."},
-
    {"empty-function", "empty-fn", {"empty_function"},
     "Advierte si se encuentra una función vacía."},
+
+   {"no-modules", "no-mods", {"no_modules"},
+    "Advierte si se declaró ningún módulo."},
+
+   {"out-of-range-constant", "oor-const", {"oor_const"},
+    "Advierte si el ID de alguna constante está fuera del rango válido."},
 
    {"future", "future", {"future"},
     "Advierte sobre cosas que van a cambiar en un futuro."},
 
-   {"useful", "useful", {"redefined_constant", "redefined_procedure", "procedure_doesnt_exists",
-                         "no_procedure_section", "no_code_section", "no_constant_pool",
-                         "empty_function", "future"},
+   {"useful", "useful", {"redefined_constant", "redefined_procedure",
+                         "no_procedure_section", "no_constant_pool",
+                         "empty_function", "future", "oor_const"},
     "Activa advertencias útiles durante el desarrollo."},
 
    {"all", "all", {--[[ el código más adelante llena este campo ]]},
@@ -124,7 +121,7 @@ constant <- {| '' -> 'constant'
 
 codesec <- {| '' -> 'code_section'
               "SECTION" ws '"code"' code rs "ENDSECTION" |}
-opcode <- {| {OP} (rs oparg (ws "," ws oparg)*)? |}
+opcode <- {| {OP} ![a-zA-Z0-9_] (rs oparg (ws "," ws oparg)*)? |}
 oparg <- nil / envs / flt / int / str
 nil <- {| {:type: '' -> 'nil' :} 'NIL' |}
 envs <- {| {:type: '' -> 'env' :} { 'ESUP' / 'EACT' } |}
@@ -140,11 +137,12 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "OPNFRM" / "EINIT" / "ENEW" / "CLSFRM"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
     / "POP" / "CHOOSE" / "JMP" / "NAME"
-    / "MTRUE" / "CMPEQ" / "CMPNEQ" / "NOT"
+    / "MTRUE" / "CMPEQ" / "CMPNEQ" / "CMPREFEQ" / "NOT"
     / "ROT" / "GT" / "LT" / "GE" / "LE" / "OPEQ"
     / "CLZ2OBJ" / "OBJ2CLZ"
     / "TMSG" / "MSG"
     / "PRN" / "NL"
+    / "OPNEXP" / "CLSEXP" / "EXP" / "IMPORT" / "SAVEIMPORT" / "MODULE"
     / "SPUSH" / "SPOP"
 
 procsec <- {| '' -> 'procedures_section'
@@ -158,7 +156,7 @@ proc <- {| '' -> 'proc'
 param <- {| {"PARAM"} rs (id / envs) |}
 variadic <- "VARIADIC" rs id
 
-unknownsec <- "SECTION" ws str (ws token)* rs "SECTION"
+unknownsec <- "SECTION" ws str (ws token)* rs "ENDSECTION"
 token <- str / [^%s"]+
 
 -- Grammar end.
@@ -327,6 +325,9 @@ local function processconstpool(cpool)
       if pool[id] ~= nil then
          warnabout("redefined_constant", "redefined constant %d", id)
       end
+      if id < 0 or id > (#cpool - 1) then
+         warnabout("oor_const", "constant with ID %d is out of range", id)
+      end
       pool[id] = {
          type = c[3],
          value = processoparg(c[4]),
@@ -337,11 +338,12 @@ end
 
 
 local REQUIRES_CONTINUATION = {
-   "LT", "GT", "LE", "GE", "OPEQ",  -- Llamadas a función (operadores)
-   "CMPEQ", "CMPNEQ",               -- Llamadas a función (método `igualA`)
-   "TMSG", "MSG", "DYNCALL",        -- Llamadas a función
-   "SUM", "SUB", "MUL", "DIV",      -- Llamadas a función (operadores)
-   "NAME", "JMP", "CHOOSE"          -- Control de flujo
+   "LT", "GT", "LE", "GE", "OPEQ", -- Llamadas a función (operadores)
+   "CMPEQ", "CMPNEQ", "CMPREFEQ",  -- Llamadas a función (método `igualA`)
+   "TMSG", "MSG", "DYNCALL",       -- Llamadas a función
+   "SUM", "SUB", "MUL", "DIV",     -- Llamadas a función (operadores)
+   "IMPORT",                       -- Importar un módulo (control de flujo)
+   "NAME", "JMP", "CHOOSE"         -- Control de flujo
 }
 
 local FALLS_THROUGHT = {
@@ -413,7 +415,7 @@ s <- %s
 ws <- s*
 arg <- {| {mod?} {type} {name?} |}
 mod <- '?'
-type <- [LPFCTEUI]
+type <- [LPFCTEUIB]
 name <- [a-z][a-z0-9]*
 
 ]=]
@@ -444,6 +446,9 @@ local function schema(s)
                assert(math.type(oel) == "integer", "expected integer")
             elseif sel[2] == "F" then
                assert(math.type(oel) == "float", "expected float")
+            elseif sel[2] == "B" then
+               assert(math.type(oel) == "integer" and (oel == 0 or oel == 1), "expected bool (1 or 0)")
+               oel = oel == 1
             else
                error("unreachable")
             end
@@ -452,6 +457,33 @@ local function schema(s)
             op[sel[2] .. sel[3]] = oel
          end
       end
+   end
+end
+
+local function autoescape_raw(code)
+   return { raw = code }
+end
+
+local function autoescape_to_c(value)
+   if type(value) == "number" then
+      -- Véase la advertencia de `_formatsingle()` más abajo.
+      return tostring(value)
+   elseif type(value) == "boolean" then
+      -- No es necesario usar las macros TRUE y FALSE ya que pdcrt.h incluye
+      -- `<stdbool.h>`
+      if value then
+         return "true"
+      else
+         return "false"
+      end
+   elseif type(value) == "string" then
+      return escapecstr(value)
+   elseif type(value) == "nil" then
+      return "NULL"
+   elseif type(value) == "table" and type(value.raw) == "string" then
+      return value.raw
+   else
+      error("could not automatically escape value to C: " .. tostring(value))
    end
 end
 
@@ -466,13 +498,31 @@ function toc.makeemitter()
          spec = spec:sub(2)
          optional = true
       end
+      if spec:sub(1, 1) == "*" then
+         spec = spec:sub(2)
+         local ornil = false
+         if optional then
+            ornil = arg == nil
+         end
+         assert(type(arg) == "table" or ornil, "expected table for array")
+         if optional and arg == nil then
+            return "NULL"
+         else
+            local parts = {}
+            for i = 1, #arg do
+               parts[i] = self:_formatsingle(arg[i], spec)
+            end
+            return ("{%s}"):format(table.concat(parts, ", "))
+         end
+      end
+
       if spec == "int" then
          assert(not optional and math.type(arg) == "integer", "expected integer")
-         -- Emit arg as a C integer. tostring() is not correct, but should do
-         -- for now
+         -- Emite el argumento como un entero de C. `tostring()` no es correcto
+         -- (lo convierte a un entero de Lua) pero debería funcionar por ahora.
          return tostring(arg)
       elseif spec == "bool" then
-         assert(type(arg) == "boolean")
+         assert(not optional and type(arg) == "boolean")
          if arg then
             return "true"
          else
@@ -480,9 +530,10 @@ function toc.makeemitter()
          end
       elseif spec == "flt" then
          assert(not optional and math.type(arg) == "float", "expected float")
-         -- Same caveat
+         -- Lo mismo que con `int`.
          return tostring(arg)
       elseif spec == "localname" then
+         assert(not optional, "«localname» cannot be optional")
          local isspecial = false
          if arg == ESUP or arg == EACT then
             isspecial = true
@@ -514,30 +565,30 @@ function toc.makeemitter()
             return tostring(arg)
          end
       elseif spec == "procid" then
-         assert(math.type(arg) == "integer" and arg >= 0, "expected procedure id")
+         assert(not optional and math.type(arg) == "integer" and arg >= 0, "expected procedure id")
          return tostring(arg)
       elseif spec == "procname" then
-         assert(math.type(arg) == "integer" and arg >= 0, "expected procedure id")
+         assert(not optional and math.type(arg) == "integer" and arg >= 0, "expected procedure id")
          return ("PDCRT_PROC_NAME(name_%s)"):format(tostring(arg))
       elseif spec == "labelid" then
-         assert(math.type(arg) == "integer" and arg >= 0, "expected label")
+         assert(not optional and math.type(arg) == "integer" and arg >= 0, "expected label")
          return tostring(arg)
       elseif spec == "contproc" then
-         assert(math.type(arg) == "integer" and arg >= 0, "expected continuation procedure")
+         assert(not optional and math.type(arg) == "integer" and arg >= 0, "expected continuation procedure")
          return "name_" .. tostring(arg)
       elseif spec == "contname" then
-         assert(math.type(arg) == "integer" and arg >= 0, "expected continuation id")
+         assert(not optional and math.type(arg) == "integer" and arg >= 0, "expected continuation id")
          return "k" .. tostring(arg)
       elseif spec == "strlit" then
-         assert(type(arg) == "string", "expected string")
+         assert(not optional and type(arg) == "string", "expected string")
          return '"' .. escapecstr(arg) .. '"'
-      elseif spec == "bool" then
-         assert(type(arg) == "boolean", "expected boolean")
-         if arg then
-            return "true"
-         else
-            return "false"
+      elseif spec == "structlit" then
+         assert(not optional and type(arg) == "table", "expected table for «structlit»")
+         local fields = {}
+         for name, value in pairs(arg) do
+            fields[#fields + 1] = (".%s = %s"):format(name, autoescape_to_c(value))
          end
+         return ("{%s}"):format(table.concat(fields, ", "))
       else
          error("unknown specifier " .. spec)
       end
@@ -546,7 +597,7 @@ function toc.makeemitter()
    function emit:_basic(fmt, ...)
       local last = 1
       local res = {}
-      for prefixpos, argpos, spec, suffixpos in string.gmatch(fmt, "()«([0-9]+):([?]*%w+)»()") do
+      for prefixpos, argpos, spec, suffixpos in string.gmatch(fmt, "()«([0-9]+):([?%*]*%w+)»()") do
          local prefix = string.sub(fmt, last, prefixpos - 1)
          last = suffixpos
          local arg = select(argpos, ...)
@@ -601,10 +652,9 @@ function toc.opcodes.ICONST(emit, state, op)
    emit:stmt("pdcrt_op_iconst(marco, «1:int»)", op.Ix)
 end
 
-toc.opschema.BCONST = schema "Ix"
+toc.opschema.BCONST = schema "Bx"
 function toc.opcodes.BCONST(emit, state, op)
-   assert(op.Ix == 0 or op.Ix == 1, "argument of BCONST must be 0 or 1")
-   emit:stmt("pdcrt_op_bconst(marco, «1:bool»)", op.Ix == 1)
+   emit:stmt("pdcrt_op_bconst(marco, «1:bool»)", op.Bx)
 end
 
 toc.opschema.LCONST = schema "Cx"
@@ -762,7 +812,7 @@ end
 
 toc.opschema.NAME = schema "Tx"
 function toc.opcodes.NAME(emit, state, op)
-   -- Nothing to do
+   -- Nada que hacer.
 end
 
 toc.opschema.JMP = schema "Tx"
@@ -803,6 +853,12 @@ function toc.opcodes.CMPNEQ(emit, state, op)
              state.current_proc.id, state.next_ccid)
 end
 
+toc.opschema.CMPREFEQ = schema ""
+function toc.opcodes.CMPREFEQ(emit, state, op)
+   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_REFEQ, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+             state.current_proc.id, state.next_ccid)
+end
+
 toc.opschema.MSG = schema "Cx, Ua, Ub"
 function toc.opcodes.MSG(emit, state, op)
    emit:stmt("return pdcrt_op_msg(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int», «5:int»)",
@@ -839,7 +895,46 @@ function toc.opcodes.SPOP(emit, state, op)
    emit:stmt("pdcrt_op_spop(marco, PDCRT_ID_EACT, PDCRT_ID_ESUP)")
 end
 
--- Opcodes end.
+toc.opschema.OPNEXP = schema "Ua"
+function toc.opcodes.OPNEXP(emit, state, op)
+   emit:stmt("pdcrt_op_opnexp(marco, «1:int»)", op.Ua)
+end
+
+toc.opschema.CLSEXP = schema ""
+function toc.opcodes.CLSEXP(emit, state, op)
+   emit:stmt("pdcrt_op_clsexp(marco)")
+end
+
+toc.opschema.EXP = schema "Cx, La, Bx"
+function toc.opcodes.EXP(emit, state, op)
+   emit:stmt("pdcrt_op_exp(marco, «1:int», «2:int», «3:bool»)", op.Cx, op.La, op.Bx)
+end
+
+toc.opschema.IMPORT = schema "Cx"
+function toc.opcodes.IMPORT(emit, state, op)
+   local c = state.constants[op.Cx]
+   assert(c.type == "string", "constant passed to IMPORT opcode must be a string.")
+   emit:comment(("IMPORT %d: %s"):format(op.Cx, c.value))
+   emit:stmt("return pdcrt_op_import(marco, «1:int», PDCRT_CONT_NAME(«2:contproc», «3:contname»))",
+             op.Cx, state.current_proc.id, state.next_ccid)
+end
+
+toc.opschema.SAVEIMPORT = schema "Cx"
+function toc.opcodes.SAVEIMPORT(emit, state, op)
+   local c = state.constants[op.Cx]
+   assert(c.type == "string", "constant passed to SAVEIMPORT opcode must be a string.")
+   emit:comment(("SAVEIMPORT %d: %s"):format(op.Cx, c.value))
+   emit:stmt("pdcrt_op_saveimport(marco, «1:int»)", op.Cx)
+end
+
+toc.opschema.MODULE = schema "Cx"
+function toc.opcodes.MODULE(emit, state, op)
+   local c = state.constants[op.Cx]
+   assert(c.type == "string", "constant passed to MODULE opcode must be a string.")
+   emit:comment(("MODULO %d: %s"):format(op.Cx, c.value))
+end
+
+-- Fin de los opcodes.
 
 function toc.opcode(emit, state, op)
    local errm = "opcode ".. op[1] .. " not implemented"
@@ -854,6 +949,48 @@ function toc.compconsts(emit, state)
       else
          error("not implemented constant type " .. c.type)
       end
+   end
+end
+
+local function gen_module_table(state)
+   local module_table = {}
+   for id, proc in pairs(state.procedures) do
+      for i = 1, #proc.parts do
+         local part = proc.parts[i]
+         for j = 1, #part do
+            local opcode = part[j]
+            if opcode[1] == "MODULE" then
+               local Cx = opcode[2]
+               local c = state.constants[Cx]
+               assert(c.type == "string")
+               assert(
+                  not module_table[Cx],
+                  ("redeclared module %s at proc %s (previous was %s)"):format(Cx, id, module_table[Cx])
+               )
+               module_table[Cx] = id
+            end
+         end
+      end
+   end
+   return module_table
+end
+
+function toc.compmoduletbl(emit, state)
+   local module_table = gen_module_table(state)
+   if not next(module_table) then
+      warnabout("no_modules", "No se declaró ningún módulo")
+      emit:stmt("pdcrt_inic_registro_de_modulos(&ctx->registro)")
+   else
+      local modules = {}
+      for Cx, procid in pairs(module_table) do
+         modules[#modules + 1] = {
+            nombre = autoescape_raw(emit:expr("marco->contexto->constantes.textos[«1:int»]", Cx)),
+            cuerpo = autoescape_raw(emit:expr("«1:procname»", procid)),
+            valor = autoescape_raw(emit:expr("pdcrt_objeto_nulo()")),
+         }
+      end
+      emit:stmt("pdcrt_modulo modulos[«1:int»] = «2:*structlit»", #modules, modules)
+      emit:stmt("pdcrt_inic_registro_de_modulos_con_arreglo(modulos, «1:int», &ctx->registro)", #modules)
    end
 end
 
@@ -939,9 +1076,9 @@ function toc.compparts(emit, state, proc)
    end
 end
 
--- The procedure IDs above BASE_RESERVED_PROC_IDS are reserved.
+-- Los IDs de procedimientos por encima de BASE_RESERVED_PROC_IDS están reservados.
 local BASE_RESERVED_PROC_IDS = 4294967296
--- Proc. ID used for the main procedure.
+-- El ID de procedimiento que se usará para el procedimiento principal.
 local MAIN_PROC_ID = BASE_RESERVED_PROC_IDS
 
 function toc.compcode(emit, state)
@@ -960,6 +1097,7 @@ function toc.compcode(emit, state)
    emit:opentoplevel("PDCRT_MAIN() {")
    emit:stmt("PDCRT_MAIN_PRELUDE(«1:int»)", 0)
    toc.compconsts(emit, state)
+   toc.compmoduletbl(emit, state)
    emit:stmt("PDCRT_RUN(«1:procname»)", MAIN_PROC_ID)
    emit:closetoplevel("}")
    emit:toplevelstmt("PDCRT_MAIN_CONT()")
@@ -1092,24 +1230,37 @@ local sample = [=[
 PDVM 1.0
 PLATFORM "pdcrt"
 
+MODULE "inicio"
+
 SECTION "code"
-  MK0CLZ 1
-  DYNCALL 0, 0
+  LOCAL 0
+  LOCAL 1
+  LOCAL 2
+  ICONST 0
+  LSET 0
+  ICONST 1
+  LSET 1
+  ICONST 2
+  LSET 2
+  OPNEXP 3
+  EXP 0, 0
+  EXP 1, 1
+  EXP 2, 2
+  CLSEXP
 ENDSECTION
 
 SECTION "procedures"
-  PROC 1
-    MK0CLZ 1
-    DYNCALL 0, 0
-  ENDPROC
 ENDSECTION
 
 SECTION "constant pool"
+  #0 STRING "Hola"
+  #1 STRING "Mundo"
+  #2 STRING "QueTal"
 ENDSECTION
 
 ]=]
 
--- Sample end.
+-- Fin del ejemplo.
 
 local function makeparsecli(opts)
    local function parser(cli)
@@ -1162,6 +1313,7 @@ local parser = makeparsecli {
    {"V", "verbose", 0, "Muestra salida adicional."},
    {"s", "sample", 0, "Compila el programa de prueba."},
    {"W", "warning", 1, "Activa las advertencias especificadas (separadas por comas)."},
+   {"l", "link", 0, "Enlaza el archivo principal con todos los demás."},
 }
 local res = parser {...}
 

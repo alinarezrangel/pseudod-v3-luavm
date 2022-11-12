@@ -48,7 +48,10 @@ PT and not the current point."
           0
         (- (1- first-nonspace-char-pos) line-start)))))
 
-(defun pseudod-assembler--get-current-line (&optional pt)
+(defun pseudod-assembler--get-current-line ()
+  "Get the current line without any indentation.
+
+Trailing whitespace is left as-is."
   (save-mark-and-excursion
     (beginning-of-line)
     (let ((bol (point)))
@@ -56,7 +59,10 @@ PT and not the current point."
       (let ((eol (point)))
         (string-trim-left (buffer-substring-no-properties bol eol))))))
 
-(defun pseudod-assembler--get-previous-line (&optional pt)
+(defun pseudod-assembler--get-previous-line ()
+  "Get the previous line without any indentation.
+
+Trailing whitespace is left as-is."
   (save-mark-and-excursion
     (if (= (forward-line -1) -1)
         nil
@@ -86,7 +92,7 @@ See also `pseudod-assembler--indentation-of-current-line'."
       (pseudod-assembler--indentation-of-current-line))))
 
 (defun pseudod-assembler-indent-line-to-previous ()
-  "Indents the current line to the indentation of the previous line."
+  "Indent the current line to the indentation of the previous line."
   (interactive)
   (save-mark-and-excursion
     (let ((indentation (pseudod-assembler--indentation-of-previous-line)))
@@ -117,15 +123,21 @@ See also `pseudod-assembler--indentation-of-current-line'."
 (defun pseudod-assembler-indent-region (start end)
   "Indent all lines in a region to the next tab stop.
 
-Works on the region between the POINT and the MARK."
+Works on the region between START and END.."
   (interactive "r")
   (save-mark-and-excursion
-    (goto-char start)
-    (beginning-of-line)
-    (while (< (point) end)
-      (pseudod-assembler-indent)
-      (forward-line 1)
-      (beginning-of-line))))
+    (let ((mk-start (copy-marker start))
+          (mk-end (copy-marker end)))
+      (unwind-protect
+          (progn
+            (goto-char (marker-position mk-start))
+            (beginning-of-line)
+            (while (< (point) (marker-position mk-end))
+              (pseudod-assembler-indent)
+              (forward-line 1)
+              (beginning-of-line)))
+        (set-marker mk-start nil)
+        (set-marker mk-end nil)))))
 
 (defun pseudod-assembler-indent-function ()
   "Indent a line of pdasm code.
@@ -142,7 +154,7 @@ indentation (or a bigger indentation) then extra tabs are added."
 ;; Major Mode:
 
 (defconst pseudod-assembler-font-lock-keywords
-  '(("\\<\\(\\(END\\)?\\(SECTION\\|PROC\\)\\|LOCAL\\|PARAM\\|RETN\\|L[SG]ETC?\\|[IFLB]CONST\\|\\(OPN\\|CLS\\)FRM\\|E\\(INIT\\|NEW\\)\\|ROT\\|T?MSG\\|SUM\\|SUB\\|MUL\\|DIV\\|NAME\\|CHOOSE\\|[GL][ET]\\|JMP\\|DYNCALL\\|MTRUE\\|CMPN?EQ\\|NOT\\|MK0?\\(CLZ\\|OBJ\\|ARR\\)\\|VARIADIC\\|METHOD\\|PRN\\|NL\\|PDVM\\|PLATFORM\\|STRING\\|BIG\\(INT\\|DEC\\)\\|S?POP\\|SPUSH\\|OPEQ\\)\\>" . font-lock-keyword-face)
+  '(("\\<\\(\\(END\\)?\\(SECTION\\|PROC\\)\\|LOCAL\\|PARAM\\|RETN\\|L[SG]ETC?\\|[IFLB]CONST\\|\\(OPN\\|CLS\\)\\(FRM\\|EXP\\)\\|E\\(INIT\\|NEW\\|XP\\)\\|ROT\\|T?MSG\\|SUM\\|SUB\\|MUL\\|DIV\\|NAME\\|CHOOSE\\|[GL][ET]\\|JMP\\|DYNCALL\\|MTRUE\\|CMP\\(N\\|REF\\)?EQ\\|NOT\\|MK0?\\(CLZ\\|OBJ\\|ARR\\)\\|VARIADIC\\|METHOD\\|PRN\\|NL\\|PDVM\\|PLATFORM\\|STRING\\|BIG\\(INT\\|DEC\\)\\|S?POP\\|SPUSH\\|OPEQ\\|MODULE\\|EXP\\|\\(SAVE\\)?IMPORT\\)\\>" . font-lock-keyword-face)
     ("\\([,#()]\\)" . font-lock-keyword-face))
   "Font locking for pdasm keywords.")
 
@@ -150,9 +162,14 @@ indentation (or a bigger indentation) then extra tabs are added."
   '(("\\(-?[0-9]+\\(\\.[0-9]+\\)?\\)" . font-lock-constant-face))
   "Font locking for pdasm numbers.")
 
+(defconst pseudod-assembler-font-lock-specials
+  '(("\\<\\(E\\(ACT\\|SUP\\)\\|NIL\\)\\>" . font-lock-constant-face))
+  "Font locking for pdasm special entities.")
+
 (defvar pseudod-assembler-font-lock-defaults
   `((,@pseudod-assembler-font-lock-keywords
-     ,@pseudod-assembler-font-lock-numbers))
+     ,@pseudod-assembler-font-lock-numbers
+     ,@pseudod-assembler-font-lock-specials))
   "Font locking for pdasm.")
 
 (defvar pseudod-assembler-mode-syntax-table

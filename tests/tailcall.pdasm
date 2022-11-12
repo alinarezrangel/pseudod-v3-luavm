@@ -24,7 +24,7 @@ SECTION "procedures"
     ICONST 1
     SUM
     MK0CLZ 1
-    TMSG 1, 1, 1
+    TMSG 0, 1, 1
     NAME 2
     LGET 0
     RETN 1
@@ -32,5 +32,5 @@ SECTION "procedures"
 ENDSECTION
 
 SECTION "constant pool"
-  #1 STRING "llamar"
+  #0 STRING "llamar"
 ENDSECTION

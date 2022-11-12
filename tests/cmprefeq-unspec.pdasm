@@ -1,0 +1,48 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+-- Esta prueba es distinta de las demás: solo prueba la implementación actual
+-- en vez de adherirse a la especificación. Esto es porque el comportamiento de
+-- CMPREFEQ no está bien definído para ciertos argumentos. Esta prueba solo
+-- sirve de confirmación que su comporamiento no ha cambiado.
+
+SECTION "code"
+  -- Los procedimientos que son indistinguíbles operacionalmente pueden ser
+  -- fusionados, por ende, la siguiente comparación será falsa si no se
+  -- fusionaron o verdadero de lo contrario.
+  MK0CLZ 1
+  MK0CLZ 2
+  CMPREFEQ
+  NOT
+  MTRUE
+
+  -- Como los entornos vacíos son inmutables, es posible compartirlos entre
+  -- closures.
+  MK0CLZ 1
+  MK0CLZ 1
+  CMPREFEQ
+  NOT
+  MTRUE
+
+  -- Las lista de constantes solo debería tener constantes únicas. Si hay
+  -- alguna repetida, podría ser desduplicada.
+  LCONST 0
+  LCONST 1
+  CMPREFEQ
+  NOT
+  MTRUE
+ENDSECTION
+
+SECTION "procedures"
+  PROC 1
+    RETN 0
+  ENDPROC
+  PROC 2
+    RETN 0
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "abc"
+  #1 STRING "abc"
+ENDSECTION

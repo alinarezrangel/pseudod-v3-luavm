@@ -41,7 +41,7 @@ const char* pdcrt_perror(pdcrt_error err)
     static const char* const errores[] =
         { u8"Ok",
           u8"No hay memoria",
-          u8"No se pudo alojar más memoria"
+          u8"Operación inválida"
         };
     return errores[err];
 }
@@ -55,7 +55,7 @@ _Noreturn static void pdcrt_abort(void)
 
 static void pdcrt_notifica_error_interno(void)
 {
-    fprintf(stderr, "\nEste error es un error interno del runtime, no es un error con tu programa. \
+    fprintf(stderr, u8"\nEste error es un error interno del runtime, no es un error con tu programa. \
 Por favor, reporta este bug en el repositorio del runtime \
 <https://github.com/alinarezrangel/pseudod-v3-luavm/issues>.\n");
 }
@@ -98,7 +98,7 @@ _Noreturn static void pdcrt_inalcanzable(void)
 // `pdcrt_rtassert`. Incluso si no se está en modo de depuración (macro
 // `NDEBUG` de C) `PDCRT_ASSERT` siempre evalúa su argumento.
 #ifdef NDEBUG
-#define PDCRT_ASSERT(expr) do { (expr); } while(0)
+#define PDCRT_ASSERT(expr) do { (void) (expr); } while(0)
 #else
 #define PDCRT_ASSERT(expr) pdcrt_rtassert(expr, #expr, __FILE__, __LINE__)
 #endif
@@ -379,6 +379,22 @@ void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto)
     pdcrt_dealojar_simple(alojador, texto, sizeof(pdcrt_texto));
 }
 
+bool pdcrt_textos_son_iguales(pdcrt_texto* a, pdcrt_texto* b)
+{
+    if(a->longitud != b->longitud)
+    {
+        return false;
+    }
+    for(size_t i = 0; i < a->longitud; i++)
+    {
+        if(a->contenido[i] != b->contenido[i])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 static void pdcrt_escribir_texto(pdcrt_texto* texto)
 {
     for(size_t i = 0; i < texto->longitud; i++)
@@ -398,6 +414,50 @@ static void pdcrt_escribir_texto_max(pdcrt_texto* texto, size_t max)
     {
         printf("...");
     }
+}
+
+pdcrt_error pdcrt_aloj_espacio_de_nombres(pdcrt_alojador alojador, PDCRT_OUT pdcrt_espacio_de_nombres** espacio, size_t num)
+{
+    *espacio = pdcrt_alojar_simple(alojador, sizeof(pdcrt_espacio_de_nombres));
+    if(!*espacio)
+    {
+        return PDCRT_ENOMEM;
+    }
+    pdcrt_espacio_de_nombres* p = *espacio;
+    p->num_nombres = num;
+    p->ultimo_nombre_creado = 0;
+    if(num == 0)
+    {
+        p->nombres = NULL;
+    }
+    else
+    {
+        p->nombres = pdcrt_alojar_simple(alojador, sizeof(pdcrt_edn_triple) * num);
+        if(!p->nombres)
+        {
+            free(*espacio);
+            *espacio = NULL;
+            return PDCRT_ENOMEM;
+        }
+    }
+    return PDCRT_OK;
+}
+
+void pdcrt_dealoj_espacio_de_nombres(pdcrt_alojador alojador, pdcrt_espacio_de_nombres** espacio)
+{
+    if((*espacio)->num_nombres > 0)
+        pdcrt_dealojar_simple(alojador, (*espacio)->nombres, sizeof(pdcrt_edn_triple) * (*espacio)->num_nombres);
+    pdcrt_dealojar_simple(alojador, *espacio, sizeof(pdcrt_espacio_de_nombres));
+    *espacio = NULL;
+}
+
+void pdcrt_agregar_nombre_al_espacio_de_nombres(pdcrt_espacio_de_nombres* espacio, pdcrt_texto* nombre, bool es_autoejecutable, pdcrt_objeto valor)
+{
+    PDCRT_ASSERT(espacio->ultimo_nombre_creado < espacio->num_nombres);
+    pdcrt_edn_triple* triple = &espacio->nombres[espacio->ultimo_nombre_creado++];
+    triple->nombre = nombre;
+    triple->es_autoejecutable = es_autoejecutable;
+    triple->valor = valor;
 }
 
 pdcrt_error pdcrt_aloj_arreglo(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, size_t capacidad)
@@ -920,6 +980,21 @@ pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador
     return PDCRT_ENOMEM;
 }
 
+pdcrt_error pdcrt_objeto_aloj_espacio_de_nombres(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t num_nombres)
+{
+    obj->tag = PDCRT_TOBJ_ESPACIO_DE_NOMBRES;
+    obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_espacio_de_nombres;
+    pdcrt_error pderrno = pdcrt_aloj_espacio_de_nombres(alojador, &obj->value.e, num_nombres);
+    if(pderrno != PDCRT_OK)
+    {
+        return errno;
+    }
+    else
+    {
+        return PDCRT_OK;
+    }
+}
+
 
 // Igualdad:
 
@@ -942,6 +1017,7 @@ bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b)
         case PDCRT_TOBJ_MARCA_DE_PILA:
             return true;
         case PDCRT_TOBJ_CLOSURE:
+        case PDCRT_TOBJ_OBJETO:
             return (a.value.c.proc == b.value.c.proc) && (a.value.c.env == b.value.c.env);
         case PDCRT_TOBJ_TEXTO:
             if(a.value.t->longitud != b.value.t->longitud)
@@ -954,6 +1030,12 @@ bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b)
             return true;
         case PDCRT_TOBJ_NULO:
             return true;
+        case PDCRT_TOBJ_ARREGLO:
+            return a.value.a == b.value.a;
+        case PDCRT_TOBJ_VOIDPTR:
+            return a.value.p == b.value.p;
+        case PDCRT_TOBJ_ESPACIO_DE_NOMBRES:
+            return a.value.e == b.value.e;
         default:
             pdcrt_inalcanzable();
         }
@@ -1953,6 +2035,59 @@ static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_clonar_2(struct pdcrt_
     return pdcrt_continuacion_normal(pdcrt_recv_arreglo_continuacion_clonar_1, marco);
 }
 
+pdcrt_continuacion pdcrt_recv_espacio_de_nombres(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+{
+    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_ESPACIO_DE_NOMBRES);
+    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    pdcrt_edn_triple* encontrado = NULL;
+    for(size_t i = 0; i < yo.value.e->num_nombres; i++)
+    {
+        pdcrt_edn_triple* triple = &yo.value.e->nombres[i];
+        if(pdcrt_textos_son_iguales(triple->nombre, msj.value.t))
+        {
+            encontrado = triple;
+            break;
+        }
+    }
+    if(!encontrado)
+    {
+        pdcrt_escribir_texto(msj.value.t);
+        printf(" no existe en el espacio de nombres %p.\nEste espacio contiene los nombres:\n", (void*) yo.value.e);
+        for(size_t i = 0; i < yo.value.e->num_nombres; i++)
+        {
+            pdcrt_edn_triple* triple = &yo.value.e->nombres[i];
+            printf("  - ");
+            if(triple->es_autoejecutable)
+            {
+                printf("autoejecutable ");
+            }
+            pdcrt_escribir_texto(triple->nombre);
+            printf("\n");
+        }
+        pdcrt_abort();
+    }
+    else if(encontrado->es_autoejecutable)
+    {
+        pdcrt_objeto llamar = pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar);
+        return pdcrt_continuacion_tail_enviar_mensaje(marco, encontrado->valor, llamar, args, rets);
+    }
+    else if(args != 0 || (rets != 0 && rets != 1))
+    {
+        fprintf(stderr,
+                "Error: Se esperaban 0 argumentos y 1 valor devuelto, pero se obtuvieron %d argumentos y %d valores devueltos\n",
+                args, rets);
+        pdcrt_abort();
+    }
+    else
+    {
+        if(rets == 1)
+        {
+            no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, encontrado->valor));
+        }
+        return pdcrt_continuacion_devolver();
+    }
+}
+
 pdcrt_continuacion pdcrt_recv_voidptr(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
     (void) marco;
@@ -2132,25 +2267,6 @@ void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, 
 
 // Constantes:
 
-pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_constantes* consts)
-{
-    pdcrt_error pderrno;
-    consts->textos = NULL;
-    consts->num_textos = 0;
-
-#define PDCRT_INIC_CONST_TXT(cm, lit)                                   \
-    if((pderrno = pdcrt_aloj_texto_desde_c(&consts->cm, alojador, lit)) != PDCRT_OK) \
-    {                                                                   \
-        goto error;                                                     \
-    }
-#define PDCRT_DEINIC_CONST_TXT(cm, _lit)            \
-    if(consts->cm != NULL)                          \
-    {                                               \
-        pdcrt_dealoj_texto(alojador, consts->cm);   \
-    }
-#define PDCRT_NULL_CONST_TXT(cm, _lit)          \
-    consts->cm = NULL;
-
 #define PDCRT_TABLA(M)                                     \
     M(operador_mas, "operador_+");                         \
     M(operador_menos, "operador_-");                       \
@@ -2170,6 +2286,25 @@ pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_const
     M(txt_falso, "FALSO");                                 \
     M(txt_nulo, "NULO");
 
+pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_constantes* consts)
+{
+    pdcrt_error pderrno;
+    consts->textos = NULL;
+    consts->num_textos = 0;
+
+#define PDCRT_INIC_CONST_TXT(cm, lit)                                   \
+    if((pderrno = pdcrt_aloj_texto_desde_c(&consts->cm, alojador, lit)) != PDCRT_OK) \
+    {                                                                   \
+        goto error;                                                     \
+    }
+#define PDCRT_DEINIC_CONST_TXT(cm, _lit)            \
+    if(consts->cm != NULL)                          \
+    {                                               \
+        pdcrt_dealoj_texto(alojador, consts->cm);   \
+    }
+#define PDCRT_NULL_CONST_TXT(cm, _lit)          \
+    consts->cm = NULL;
+
     PDCRT_TABLA(PDCRT_NULL_CONST_TXT)
     PDCRT_TABLA(PDCRT_INIC_CONST_TXT)
     return PDCRT_OK;
@@ -2179,11 +2314,29 @@ error:
 #undef PDCRT_DEINIC_CONST_TXT
 #undef PDCRT_INIC_CONST_TXT
 #undef PDCRT_NULL_CONST_TXT
-#undef PDCRT_TABLA
 
     PDCRT_ESCRIBIR_ERROR(pderrno, __func__);
     return pderrno;
 }
+
+void pdcrt_dealoj_constantes(pdcrt_alojador alojador, pdcrt_constantes* consts)
+{
+    if(consts->num_textos > 0)
+    {
+        for(size_t i = 0; i < consts->num_textos; i++)
+        {
+            pdcrt_dealoj_texto(alojador, consts->textos[i]);
+        }
+    }
+
+#define PDCRT_DEALOJ(cm, _lit) pdcrt_dealoj_texto(alojador, consts->cm);
+
+    PDCRT_TABLA(PDCRT_DEALOJ)
+
+#undef PDCRT_DEALOJ
+}
+
+#undef PDCRT_TABLA
 
 pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto)
 {
@@ -2204,6 +2357,51 @@ pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_con
         consts->textos[idx] = texto;
     }
     return PDCRT_OK;
+}
+
+
+// Registro de módulos:
+
+pdcrt_error pdcrt_inic_registro_de_modulos(PDCRT_OUT pdcrt_registro_de_modulos* registro)
+{
+    registro->modulos = NULL;
+    registro->num_modulos = 0;
+    return PDCRT_OK;
+}
+
+pdcrt_error pdcrt_inic_registro_de_modulos_con_arreglo(pdcrt_modulo* modulos, size_t num_modulos, PDCRT_OUT pdcrt_registro_de_modulos* registro)
+{
+    registro->modulos = modulos;
+    registro->num_modulos = num_modulos;
+    return PDCRT_OK;
+}
+
+pdcrt_error pdcrt_agregar_bloque_de_modulos(pdcrt_registro_de_modulos* registro, pdcrt_modulo* modulos, size_t num_modulos)
+{
+    if(registro->num_modulos == 0)
+    {
+        registro->modulos = modulos;
+        registro->num_modulos = num_modulos;
+        return PDCRT_OK;
+    }
+    else
+    {
+        return PDCRT_EINVALOP;
+    }
+}
+
+bool pdcrt_obtener_modulo(pdcrt_registro_de_modulos* registro, pdcrt_texto* nombre, PDCRT_OUT pdcrt_modulo** modulo)
+{
+    for(size_t i = 0; i < registro->num_modulos; i++)
+    {
+        if(registro->modulos[i].nombre == nombre)
+        {
+            *modulo = &registro->modulos[i];
+            return true;
+        }
+    }
+    *modulo = NULL;
+    return false;
 }
 
 
@@ -2235,6 +2433,11 @@ pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
         return pderrno;
     }
     ctx->alojador = alojador;
+    if((pderrno = pdcrt_inic_registro_de_modulos(&ctx->registro)) != PDCRT_OK)
+    {
+        pdcrt_deinic_pila(&ctx->pila, alojador);
+        return pderrno;
+    }
     if((pderrno = pdcrt_aloj_constantes(alojador, &ctx->constantes)) != PDCRT_OK)
     {
         pdcrt_deinic_pila(&ctx->pila, alojador);
@@ -2247,6 +2450,7 @@ void pdcrt_deinic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
 {
     PDCRT_DEPURAR_CONTEXTO(ctx, "Deinicializando el contexto");
     pdcrt_deinic_pila(&ctx->pila, alojador);
+    pdcrt_dealoj_constantes(alojador, &ctx->constantes);
 }
 
 static void pdcrt_depurar_objeto(pdcrt_objeto obj)
@@ -2287,7 +2491,7 @@ void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra)
 }
 
 
-// Procesar el CLI:
+// Procesa el CLI:
 
 // Perdón. (<https://www.chiark.greenend.org.uk/~sgtatham/coroutines.html>)
 #define PDCRT_CORO_BEGIN                        \
@@ -2753,9 +2957,18 @@ pdcrt_continuacion pdcrt_op_cmp(pdcrt_marco* marco, pdcrt_cmp cmp, pdcrt_proc_co
     pdcrt_objeto a, b;
     a = pdcrt_sacar_de_pila(&marco->contexto->pila);
     b = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, b));
-    pdcrt_texto* mensaje = (cmp == PDCRT_CMP_EQ)? marco->contexto->constantes.operador_igualA : marco->contexto->constantes.operador_noIgualA;
-    return pdcrt_continuacion_enviar_mensaje(proc, marco, a, pdcrt_objeto_desde_texto(mensaje), 1, 1);
+    if(cmp == PDCRT_CMP_REFEQ)
+    {
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_objeto_identicos(a, b))));
+        return pdcrt_continuacion_normal(proc, marco);
+    }
+    else
+    {
+        PDCRT_ASSERT(cmp == PDCRT_CMP_EQ || cmp == PDCRT_CMP_NEQ);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, b));
+        pdcrt_texto* mensaje = (cmp == PDCRT_CMP_EQ)? marco->contexto->constantes.operador_igualA : marco->contexto->constantes.operador_noIgualA;
+        return pdcrt_continuacion_enviar_mensaje(proc, marco, a, pdcrt_objeto_desde_texto(mensaje), 1, 1);
+    }
 }
 
 void pdcrt_op_not(pdcrt_marco* marco)
@@ -2872,4 +3085,68 @@ void pdcrt_op_objtoclz(pdcrt_marco* marco)
     obj.tag = PDCRT_TOBJ_CLOSURE;
     obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, obj));
+}
+
+void pdcrt_op_opnexp(pdcrt_marco* marco, size_t num_exp)
+{
+    pdcrt_objeto edn;
+    no_falla(pdcrt_objeto_aloj_espacio_de_nombres(&edn, marco->contexto->alojador, num_exp));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, edn));
+}
+
+void pdcrt_op_clsexp(pdcrt_marco* marco)
+{
+    pdcrt_objeto edn = pdcrt_cima_de_pila(&marco->contexto->pila);
+    if(edn.tag != PDCRT_TOBJ_ESPACIO_DE_NOMBRES)
+    {
+        fprintf(stderr, "El objeto del opcode CLSEXP no era un espacio de nombres.\n");
+        pdcrt_abort();
+    }
+}
+
+void pdcrt_op_exp(pdcrt_marco* marco, int idx, pdcrt_local_index local, bool autoejec)
+{
+    pdcrt_objeto edn = pdcrt_cima_de_pila(&marco->contexto->pila);
+    pdcrt_texto* nombre = marco->contexto->constantes.textos[idx];
+    pdcrt_objeto valor = pdcrt_obtener_local(marco, local);
+    pdcrt_agregar_nombre_al_espacio_de_nombres(edn.value.e, nombre, autoejec, valor);
+}
+
+pdcrt_continuacion pdcrt_op_import(pdcrt_marco* marco, int cid, pdcrt_proc_continuacion cont)
+{
+    pdcrt_texto* nombre = marco->contexto->constantes.textos[cid];
+    pdcrt_modulo* modulo;
+    if(!pdcrt_obtener_modulo(&marco->contexto->registro, nombre, &modulo))
+    {
+        fprintf(stderr, "IMPORT: No se pudo encontrar el módulo #%d\n", cid);
+        pdcrt_inalcanzable();
+    }
+    if(modulo->valor.tag == PDCRT_TOBJ_NULO)
+    {
+        pdcrt_op_mk0clz(marco, modulo->cuerpo);
+        return pdcrt_op_dyncall(marco, cont, 0, 1);
+    }
+    else
+    {
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, modulo->valor));
+        return pdcrt_continuacion_normal(cont, marco);
+    }
+}
+
+void pdcrt_op_saveimport(pdcrt_marco* marco, int cid)
+{
+    pdcrt_objeto edn = pdcrt_cima_de_pila(&marco->contexto->pila);
+    if(edn.tag != PDCRT_TOBJ_ESPACIO_DE_NOMBRES)
+    {
+        fprintf(stderr, "El objeto del opcode SAVEIMPORT no era un espacio de nombres.\n");
+        pdcrt_abort();
+    }
+    pdcrt_texto* nombre = marco->contexto->constantes.textos[cid];
+    pdcrt_modulo* modulo;
+    if(!pdcrt_obtener_modulo(&marco->contexto->registro, nombre, &modulo))
+    {
+        fprintf(stderr, "SAVEIMPORT: No se pudo encontrar el módulo #%d\n", cid);
+        pdcrt_inalcanzable();
+    }
+    modulo->valor = edn;
 }

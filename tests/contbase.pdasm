@@ -21,7 +21,7 @@ SECTION "code"
   JMP 1
   NAME 3
   ICONST 1000
-  MSG 1, 0, 1
+  MSG 0, 0, 1
   PRN
   NL
 ENDSECTION
@@ -30,5 +30,5 @@ SECTION "procedures"
 ENDSECTION
 
 SECTION "constant pool"
-  #1 STRING "negar"
+  #0 STRING "negar"
 ENDSECTION
