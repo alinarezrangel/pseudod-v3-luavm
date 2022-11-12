@@ -984,15 +984,7 @@ pdcrt_error pdcrt_objeto_aloj_espacio_de_nombres(PDCRT_OUT pdcrt_objeto* obj, pd
 {
     obj->tag = PDCRT_TOBJ_ESPACIO_DE_NOMBRES;
     obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_espacio_de_nombres;
-    pdcrt_error pderrno = pdcrt_aloj_espacio_de_nombres(alojador, &obj->value.e, num_nombres);
-    if(pderrno != PDCRT_OK)
-    {
-        return errno;
-    }
-    else
-    {
-        return PDCRT_OK;
-    }
+    return pdcrt_aloj_espacio_de_nombres(alojador, &obj->value.e, num_nombres);
 }
 
 
