@@ -811,7 +811,7 @@ typedef pdcrt_continuacion (*pdcrt_recvmsj)(struct pdcrt_marco* marco, pdcrt_obj
 typedef struct pdcrt_env
 {
     size_t env_size;
-    PDCRT_ARR(env_size + PDCRT_NUM_LOCALES_ESP) pdcrt_objeto env[];
+    PDCRT_ARR(env_size) pdcrt_objeto env[];
 } pdcrt_env;
 
 // Tipo de un índice a una variable local.
@@ -1095,7 +1095,7 @@ void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[]);
 typedef struct pdcrt_marco
 {
     pdcrt_contexto* contexto;
-    PDCRT_ARR(num_locales + PDCRT_NUM_LOCALES_ESP) pdcrt_objeto* locales;
+    PDCRT_ARR(num_locales) pdcrt_objeto* locales;
     size_t num_locales;
     PDCRT_NULL struct pdcrt_marco* marco_anterior;
     int num_valores_a_devolver;
