@@ -280,5 +280,23 @@ def inspeccionar_entorno(arg, from_tty):
         pass
 
 
+@gdb_command('pdcrt-pila', gdb.COMMAND_DATA)
+def inspeccionar_pila(arg, from_tty):
+    val = gdb.parse_and_eval(arg)
+    try:
+        val = dereference_everything(val)
+        tag = val.type.strip_typedefs().tag
+        if tag == 'pdcrt_pila':
+            print('#{} (capacidad: {})'.format(val['num_elementos'], val['capacidad']))
+            size = int(val['num_elementos'])
+            for i in reversed(range(size)):
+                print('{}: {}'.format(i, val['elementos'][i]))
+            print()
+        else:
+            print('El valor no es ni un pdcrt_env ni un pdcrt_objeto de tipo CLOSURE')
+    except gdb.MemoryError:
+        pass
+
+
 def register_pretty_printers(objfile):
     objfile.pretty_printers.append(lookup_function)
