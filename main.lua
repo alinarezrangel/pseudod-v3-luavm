@@ -754,6 +754,11 @@ function toc.opcodes.LCONST(emit, state, op)
    end
 end
 
+toc.opschema.FCONST = schema "Fx"
+function toc.opcodes.FCONST(emit, state, op)
+   emit:stmt("pdcrt_op_fconst(marco, «1:flt»)", op.Fx)
+end
+
 toc.opschema.PRN = schema ""
 function toc.opcodes.PRN(emit, state, op)
    emit:stmt("pdcrt_op_prn(marco)")

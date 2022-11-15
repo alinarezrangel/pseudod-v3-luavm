@@ -2747,6 +2747,11 @@ void pdcrt_op_lconst(pdcrt_marco* marco, int c)
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, txt));
 }
 
+void pdcrt_op_fconst(pdcrt_marco* marco, float c)
+{
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_float(c)));
+}
+
 #define PDCRT_OP(marco, binop, proc)                                    \
     pdcrt_objeto a, b, msj;                                             \
     a = pdcrt_sacar_de_pila(&marco->contexto->pila);                    \

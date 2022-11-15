@@ -1290,6 +1290,7 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
 void pdcrt_op_iconst(pdcrt_marco* marco, int c);
 void pdcrt_op_bconst(pdcrt_marco* marco, bool c);
 void pdcrt_op_lconst(pdcrt_marco* marco, int c);
+void pdcrt_op_fconst(pdcrt_marco* marco, float c);
 
 pdcrt_continuacion pdcrt_op_sum(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
 pdcrt_continuacion pdcrt_op_sub(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
