@@ -2025,7 +2025,7 @@ static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_1(struct pdc
         pdcrt_fijar_local(marco, 1, pdcrt_objeto_entero(cnt.value.i + 1));
         pdcrt_objeto elemento = yo.value.a->elementos[cnt.value.i];
         pdcrt_objeto mensaje = pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_comoTexto);
-        return pdcrt_continuacion_enviar_mensaje(pdcrt_recv_arreglo_continuacion_comoTexto_2, marco, elemento, mensaje, 0, 1);
+        return pdcrt_continuacion_enviar_mensaje(&pdcrt_recv_arreglo_continuacion_comoTexto_2, marco, elemento, mensaje, 0, 1);
     }
     else
     {
@@ -2055,7 +2055,7 @@ static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_comoTexto_2(struct pdc
         pdcrt_constructor_agregar(marco->contexto->alojador, cons, ", ", 2);
     }
     pdcrt_constructor_agregar(marco->contexto->alojador, cons, res.value.t->contenido, res.value.t->longitud);
-    return pdcrt_continuacion_normal(pdcrt_recv_arreglo_continuacion_comoTexto_1, marco);
+    return pdcrt_continuacion_normal(&pdcrt_recv_arreglo_continuacion_comoTexto_1, marco);
 }
 
 static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_clonar_0(struct pdcrt_marco* marco,
@@ -2087,7 +2087,7 @@ static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_clonar_1(struct pdcrt_
         pdcrt_fijar_local(marco, 1, pdcrt_objeto_entero(cnt.value.i + 1));
         pdcrt_objeto elemento = yo.value.a->elementos[cnt.value.i];
         pdcrt_objeto mensaje = pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_clonar);
-        return pdcrt_continuacion_enviar_mensaje(pdcrt_recv_arreglo_continuacion_clonar_2, marco, elemento, mensaje, 0, 1);
+        return pdcrt_continuacion_enviar_mensaje(&pdcrt_recv_arreglo_continuacion_clonar_2, marco, elemento, mensaje, 0, 1);
     }
     else
     {
@@ -2108,7 +2108,7 @@ static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_clonar_2(struct pdcrt_
     pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_ARREGLO);
     pdcrt_objeto res = pdcrt_sacar_de_pila(&marco->contexto->pila);
     copia.value.a->elementos[(size_t) (cnt.value.i - 1)] = res;
-    return pdcrt_continuacion_normal(pdcrt_recv_arreglo_continuacion_clonar_1, marco);
+    return pdcrt_continuacion_normal(&pdcrt_recv_arreglo_continuacion_clonar_1, marco);
 }
 
 static pdcrt_continuacion pdcrt_recv_arreglo_continuacion_igualA_0(struct pdcrt_marco* marco,
