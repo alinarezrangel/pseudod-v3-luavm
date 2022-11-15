@@ -144,6 +144,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "PRN" / "NL"
     / "OPNEXP" / "CLSEXP" / "EXP" / "IMPORT" / "SAVEIMPORT" / "MODULE"
     / "SPUSH" / "SPOP"
+    / "OBJTAG"
 
 procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
@@ -1023,6 +1024,11 @@ function toc.opcodes.MODULE(emit, state, op)
    local c = state.constants[op.Cx]
    assert(c.type == "string", "constant passed to MODULE opcode must be a string.")
    emit:comment(("MODULO %d: %s"):format(op.Cx, c.value))
+end
+
+toc.opschema.OBJTAG = schema ""
+function toc.opcodes.OBJTAG(emit, state, op)
+   emit:stmt("pdcrt_op_objtag(marco)")
 end
 
 -- Fin de los opcodes.

@@ -1359,4 +1359,6 @@ void pdcrt_op_exp(pdcrt_marco* marco, int idx, pdcrt_local_index local, bool aut
 pdcrt_continuacion pdcrt_op_import(pdcrt_marco* marco, int cid, pdcrt_proc_continuacion proc);
 void pdcrt_op_saveimport(pdcrt_marco* marco, int cid);
 
+void pdcrt_op_objtag(pdcrt_marco* marco);
+
 #endif /* PDCRT_H */

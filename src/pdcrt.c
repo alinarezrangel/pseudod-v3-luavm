@@ -3298,3 +3298,9 @@ void pdcrt_op_saveimport(pdcrt_marco* marco, int cid)
     }
     modulo->valor = edn;
 }
+
+void pdcrt_op_objtag(pdcrt_marco* marco)
+{
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(obj.tag)));
+}

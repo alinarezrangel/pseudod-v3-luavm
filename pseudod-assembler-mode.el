@@ -154,7 +154,7 @@ indentation (or a bigger indentation) then extra tabs are added."
 ;; Major Mode:
 
 (defconst pseudod-assembler-font-lock-keywords
-  '(("\\<\\(\\(END\\)?\\(SECTION\\|PROC\\)\\|LOCAL\\|PARAM\\|RETN\\|L[SG]ETC?\\|[IFLB]CONST\\|\\(OPN\\|CLS\\)\\(FRM\\|EXP\\)\\|E\\(INIT\\|NEW\\|XP\\)\\|ROT\\|T?MSG\\|SUM\\|SUB\\|MUL\\|DIV\\|NAME\\|CHOOSE\\|[GL][ET]\\|JMP\\|DYNCALL\\|MTRUE\\|CMP\\(N\\|REF\\)?EQ\\|NOT\\|MK0?\\(CLZ\\|OBJ\\|ARR\\)\\|VARIADIC\\|METHOD\\|PRN\\|NL\\|PDVM\\|PLATFORM\\|STRING\\|BIG\\(INT\\|DEC\\)\\|S?POP\\|SPUSH\\|OPEQ\\|MODULE\\|EXP\\|\\(SAVE\\)?IMPORT\\)\\>" . font-lock-keyword-face)
+  '(("\\<\\(\\(END\\)?\\(SECTION\\|PROC\\)\\|LOCAL\\|PARAM\\|RETN\\|L[SG]ETC?\\|[IFLB]CONST\\|\\(OPN\\|CLS\\)\\(FRM\\|EXP\\)\\|E\\(INIT\\|NEW\\|XP\\)\\|ROT\\|T?MSG\\|SUM\\|SUB\\|MUL\\|DIV\\|NAME\\|CHOOSE\\|[GL][ET]\\|JMP\\|DYNCALL\\|MTRUE\\|CMP\\(N\\|REF\\)?EQ\\|NOT\\|MK0?\\(CLZ\\|OBJ\\|ARR\\)\\|VARIADIC\\|METHOD\\|PRN\\|NL\\|PDVM\\|PLATFORM\\|STRING\\|BIG\\(INT\\|DEC\\)\\|S?POP\\|SPUSH\\|OPEQ\\|MODULE\\|EXP\\|\\(SAVE\\)?IMPORT\\|OBJTAG\\)\\>" . font-lock-keyword-face)
     ("\\([,#()]\\)" . font-lock-keyword-face))
   "Font locking for pdasm keywords.")
 
