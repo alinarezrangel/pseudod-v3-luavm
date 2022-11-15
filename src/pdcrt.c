@@ -840,6 +840,10 @@ void pdcrt_objeto_debe_tener_tipo(pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo)
     if(obj.tag != tipo)
     {
         fprintf(stderr, u8"Objeto de tipo %s debía tener tipo %s\n", pdcrt_tipo_como_texto(obj.tag), pdcrt_tipo_como_texto(tipo));
+        if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA || tipo == PDCRT_TOBJ_MARCA_DE_PILA)
+        {
+            pdcrt_notifica_error_interno();
+        }
         pdcrt_abort();
     }
 }
@@ -855,6 +859,10 @@ static void pdcrt_objeto_debe_tener_uno_de_los_tipos(pdcrt_objeto obj,
                 pdcrt_tipo_como_texto(obj.tag),
                 pdcrt_tipo_como_texto(tipo1),
                 pdcrt_tipo_como_texto(tipo2));
+        if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA)
+        {
+            pdcrt_notifica_error_interno();
+        }
         pdcrt_abort();
     }
 }
@@ -1731,6 +1739,7 @@ pdcrt_continuacion pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_obj
     (void) args;
     (void) rets;
     fprintf(stderr, u8"Error: se trató de enviar un mensaje a una marca de pila.\n");
+    pdcrt_notifica_error_interno();
     pdcrt_abort();
 }
 
@@ -3070,6 +3079,9 @@ pdcrt_continuacion pdcrt_op_msg(pdcrt_marco* marco, pdcrt_proc_continuacion proc
 
 pdcrt_continuacion pdcrt_op_tail_msg(pdcrt_marco* marco, int cid, int args, int rets)
 {
+    pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, args + 1);
+    pdcrt_objeto_debe_tener_tipo(marca, PDCRT_TOBJ_MARCA_DE_PILA);
+
     pdcrt_marco* marco_superior = marco->marco_anterior;
     pdcrt_deinic_marco(marco);
     pdcrt_objeto mensaje = pdcrt_objeto_desde_texto(marco_superior->contexto->constantes.textos[cid]);
