@@ -121,7 +121,7 @@ constant <- {| '' -> 'constant'
 
 codesec <- {| '' -> 'code_section'
               "SECTION" ws '"code"' code rs "ENDSECTION" |}
-opcode <- {| {OP} ![a-zA-Z0-9_] (rs oparg (ws "," ws oparg)*)? |}
+opcode <- {| {:srcpos: {} :} {OP} ![a-zA-Z0-9_] (rs oparg (ws "," ws oparg)*)? |}
 oparg <- nil / envs / flt / int / str
 nil <- {| {:type: '' -> 'nil' :} 'NIL' |}
 envs <- {| {:type: '' -> 'env' :} { 'ESUP' / 'EACT' } |}
@@ -194,7 +194,7 @@ local function escapecstr(str)
          return ("\"\"\\x%02x\"\""):format(string.byte(st))
       end
    end
-   return (string.gsub(str, "[^a-zA-Z0-9%.%+/%^&%$@ %-%*_%%]", repl))
+   return (string.gsub(str, "[^a-zA-Z0-9%.%+/%^&%$@ %-%*_%%:;,]", repl))
 end
 
 local ESUP, EACT = {special = true, type = "ESUP"}, {special = true, type = "EACT"}
@@ -233,16 +233,94 @@ local function opcode(tbl)
    for i = 2, #tbl do
       r[i] = processoparg(tbl[i])
    end
+   r.srcpos = tbl.srcpos
    return r
+end
+
+local function binary_search(seq, el, comp)
+   comp = comp or function(a, b)
+      if a < b then
+         return -1
+      elseif a > b then
+         return 1
+      else
+         return 0
+      end
+   end
+
+   local function search(from, to)
+      if to < from then
+         return nil, from, to
+      elseif from == to then
+         if comp(seq[from], el) == 0 then
+            return from
+         else
+            return nil, from, to
+         end
+      else
+         local middle = math.floor((to - from) / 2) + from
+         local oel = seq[middle]
+         local c = comp(el, oel)
+         if c == 0 then
+            return middle
+         elseif c < 0 then
+            return search(from, middle - 1)
+         else
+            return search(middle + 1, to)
+         end
+      end
+   end
+   return search(1, #seq)
+end
+
+
+local function srcposes_to_srclocs(src, srcposes)
+   if #srcposes == 0 then
+      return {}
+   end
+
+   local sorted = {}
+   for i = 1, #srcposes do
+      sorted[i] = srcposes[i]
+   end
+   table.sort(sorted)
+   local unsorted = {}
+   for i = 1, #srcposes do
+      local srcpos = srcposes[i]
+      local idx = binary_search(sorted, srcpos)
+      assert(idx)
+      unsorted[idx] = i
+   end
+
+   local lineno, colno = 1, 0
+   local last_srcpos, sidx = sorted[#sorted], 1
+   local srclocs = {}
+   for i = 1, last_srcpos do
+      if sorted[sidx] == i then
+         srclocs[#srclocs + 1] = { lineno = lineno, colno = colno, byteno = i }
+         sidx = sidx + 1
+      end
+
+      local char = string.sub(src, i, i)
+      if char == "\n" then
+         lineno = lineno + 1
+         colno = 0
+      else
+         colno = colno + 1
+      end
+   end
+
+   return srclocs
 end
 
 
 local function processcode(code)
-   local res = { locals = {}, opcodes = {} }
+   local res = { locals = {}, opcodes = {}, srcposes = {} }
    for i = 1, #code.locals do
       res.locals[i] = opcode(code.locals[i])
    end
    for i = 1, #code.opcodes do
+      res.srcposes[i] = code.opcodes[i].srcpos
       res.opcodes[i] = opcode(code.opcodes[i])
    end
    return res
@@ -310,7 +388,9 @@ local function prepproc(proc)
       c.locals[i] = opcode(c.locals[i])
    end
    c.opcodes = sliceseq(proc[7], 2, #proc[7])
+   c.srcposes = {}
    for i = 1, #c.opcodes do
+      c.srcposes[i] = c.opcodes[i].srcpos
       c.opcodes[i] = opcode(c.opcodes[i])
    end
    return c
@@ -360,16 +440,22 @@ local function contains(tbl, el)
 end
 
 local function splitcode(code)
-   local parts = {{}}
+   local parts, pi = {{}}, 1
    for i = 1, #code.opcodes do
       local instr = code.opcodes[i]
       local opcode = instr[1]
+      local lastpart = parts[#parts]
       if contains(REQUIRES_CONTINUATION, opcode) then
-         local lastpart = parts[#parts]
          lastpart.kreq = instr
-         parts[#parts + 1] = {}
+         lastpart.srcposes = sliceseq(code.srcposes, pi, i)
+         pi = i + 1
+         if i ~= #code.opcodes then
+            parts[#parts + 1] = {}
+         end
       else
-         local lastpart = parts[#parts]
+         if i == #code.opcodes then
+            lastpart.srcposes = sliceseq(code.srcposes, pi, i)
+         end
          lastpart[#lastpart + 1] = instr
       end
    end
@@ -936,8 +1022,9 @@ end
 
 -- Fin de los opcodes.
 
-function toc.opcode(emit, state, op)
+function toc.opcode(emit, state, op, srcloc)
    local errm = "opcode ".. op[1] .. " not implemented"
+   emit:comment(("-- %d:%d @ %d --"):format(srcloc.lineno, srcloc.colno, srcloc.byteno))
    assert(toc.opschema[op[1]], errm)(op)
    return assert(toc.opcodes[op[1]], errm)(emit, state, op)
 end
@@ -995,12 +1082,13 @@ function toc.compmoduletbl(emit, state)
 end
 
 function toc.comppart(emit, state, part, next_ccid)
-   local substate = attach_extra(state, { next_ccid = next_ccid })
+   local srclocs = srcposes_to_srclocs(state.source, part.srcposes)
+   local substate = attach_extra(state, { next_ccid = next_ccid, srclocs = srclocs })
    for i = 1, #part do
-      toc.opcode(emit, substate, part[i])
+      toc.opcode(emit, substate, part[i], srclocs[i])
    end
    if part.kreq then
-      toc.opcode(emit, substate, part.kreq)
+      toc.opcode(emit, substate, part.kreq, srclocs[#srclocs])
    end
 end
 
@@ -1194,6 +1282,7 @@ local function main(input, config)
       procedures = secs.procedures_section,
       constants = secs.constant_pool_section,
       code = code,
+      source = input,
    }
    checklocals("code", state.code)
    for id, body in pairs(state.procedures) do
