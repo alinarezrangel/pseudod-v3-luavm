@@ -830,7 +830,10 @@ const char* pdcrt_tipo_como_texto(pdcrt_tipo_de_objeto tipo)
           u8"Texto",
           u8"Objeto",
           u8"Booleano",
-          u8"Nulo"
+          u8"Nulo",
+          u8"Arreglo",
+          u8"Puntero de C",
+          u8"Espacio de nombres",
         };
     return tipos[tipo];
 }
