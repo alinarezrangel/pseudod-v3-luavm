@@ -1261,7 +1261,33 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_/") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "dividir") == 0)
     {
-        PDCRT_NUMOP(/, pdcrt_objeto_float, pdcrt_objeto_entero);
+        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_uno_de_los_tipos(rhs, PDCRT_TOBJ_ENTERO, PDCRT_TOBJ_FLOAT);
+        float flhs, frhs;
+        switch(yo.tag)
+        {
+        case PDCRT_TOBJ_ENTERO:
+            flhs = yo.value.i;
+            break;
+        case PDCRT_TOBJ_FLOAT:
+            flhs = yo.value.f;
+            break;
+        default:
+            pdcrt_inalcanzable();
+        }
+        switch(rhs.tag)
+        {
+        case PDCRT_TOBJ_ENTERO:
+            frhs = rhs.value.i;
+            break;
+        case PDCRT_TOBJ_FLOAT:
+            frhs = rhs.value.f;
+            break;
+        default:
+            pdcrt_inalcanzable();
+        }
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_float(flhs / frhs)));
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_<") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "menorQue") == 0)
