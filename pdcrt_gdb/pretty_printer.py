@@ -44,6 +44,7 @@ class PDCRT_Objeto:
         7: (None, False),
         8: ('a', True),
         9: ('p', False),
+        10: ('e', True),
     }
 
     def __init__(self, val):
