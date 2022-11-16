@@ -93,11 +93,11 @@ SECTION "code"
   LGET 0
   ICONST 0
   ROT 1
-  MSG 4, 1, 1
+  MSG 3, 1, 1
   LGET 1
-  ICONST 0
+  ICONST 1
   ROT 1
-  MSG 4, 1, 1
+  MSG 3, 1, 1
   CMPREFEQ
   NOT
   MTRUE
@@ -135,6 +135,14 @@ SECTION "procedures"
     CMPEQ
     CHOOSE 1, 3
     NAME 3
+    LGET 0
+    LCONST 4
+    CMPEQ
+    CHOOSE 4, 5
+    NAME 5
+    LGET 0
+    PRN
+    NL
     BCONST 0
     MTRUE
 
@@ -143,6 +151,10 @@ SECTION "procedures"
     OBJTAG
     ICONST 5 -- TOBJ_OBJETO
     CMPEQ
+    RETN 1
+
+    NAME 4
+    LGET ESUP
     RETN 1
   ENDPROC
 ENDSECTION

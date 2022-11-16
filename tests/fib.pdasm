@@ -30,7 +30,6 @@ SECTION "procedures"
     NAME 1
     ICONST 1
     RETN 1
-    JMP 3
     NAME 2
     LGETC EACT, 1, 0
     LGET 0
@@ -46,7 +45,6 @@ SECTION "procedures"
     DYNCALL 1, 1
     SUM
     RETN 1
-    NAME 3
   ENDPROC
 ENDSECTION
 

@@ -450,9 +450,7 @@ local function splitcode(code)
          lastpart.kreq = instr
          lastpart.srcposes = sliceseq(code.srcposes, pi, i)
          pi = i + 1
-         if i ~= #code.opcodes then
-            parts[#parts + 1] = {}
-         end
+         parts[#parts + 1] = { srcposes = {} }
       else
          if i == #code.opcodes then
             lastpart.srcposes = sliceseq(code.srcposes, pi, i)
@@ -834,9 +832,10 @@ function toc.opcodes.LSET(emit, state, op)
    emit:stmt("PDCRT_SET_LVAR(«1:localid», pdcrt_op_lset(marco))", op.Lx)
 end
 
-toc.opschema.LGET = schema "Lx"
+toc.opschema.LGET = schema "Ex"
 function toc.opcodes.LGET(emit, state, op)
-   emit:stmt("pdcrt_op_lget(marco, PDCRT_GET_LVAR(«1:localid»))", op.Lx)
+   assert(op.Ex ~= EACT, "LGET can only be used with ESUP or a local ID")
+   emit:stmt("pdcrt_op_lget(marco, PDCRT_GET_LVAR(«1:localid»))", op.Ex)
 end
 
 toc.opschema.LSETC = schema "Ex, Ua, Ui"
@@ -1106,9 +1105,9 @@ end
 function toc.compparts(emit, state, proc)
    -- ccid = Continuation Id
    local labels_to_ccid = {}
-   for i = 1, #proc.parts - 1 do
+   for i = 1, #proc.parts do
       local part = proc.parts[i]
-      if part.kreq[1] == "NAME" then
+      if part.kreq and part.kreq[1] == "NAME" then
          labels_to_ccid[part.kreq[2]] = i + 1
          assert((i + 1) <= #proc.parts, "continuation must follow NAME opcode")
       end
