@@ -1261,6 +1261,16 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
 #define PDCRT_DECLARE_CONT(name, k)             \
     PDCRT_CONT(name, k);
 
+// Declara el nombre externo de una función
+#define PDCRT_DECLARE_CNAME(procname, extname)  \
+    pdcrt_continuacion extname(pdcrt_marco*, pdcrt_marco*, int, int) // {}
+// Define el nombre externo de una función
+#define PDCRT_DEFINE_CNAME(procname, extname)   \
+    pdcrt_continuacion extname(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets) \
+    {                                                                   \
+        return (*PDCRT_PROC_NAME(procname))(marco_actual, marco_superior, args, rets) \
+    }
+
 #define PDCRT_RETURN(nrets)                                       \
     do                                                            \
     {                                                             \

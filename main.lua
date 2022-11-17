@@ -154,10 +154,14 @@ procsec <- {| '' -> 'procedures_section'
               "SECTION" ws '"procedures"' (rs proc)* rs "ENDSECTION" |}
 proc <- {| '' -> 'proc'
            "PROC" rs id
+           {| '' -> 'pragmas' (rs pragma (rs pragma)*)? |}
            {| ('' -> 'method' rs 'METHOD' / '' -> 'no_method') |}
            {| '' -> 'params' (rs param)* |}
            {| ('' -> 'variadic' rs variadic  / '' -> 'no_variadic') |}
            code rs "ENDPROC" |}
+pragma <- {| "PRAGMA" rs {pragname} (rs pragval)* |}
+pragname <- [A-Z][A-Z0-9_]*
+pragval <- 'str:'? str / 'int:'? int / 'flt:'? flt / 'id:' id
 param <- {| {"PARAM"} rs (id / envs) |}
 variadic <- "VARIADIC" rs id
 
@@ -374,25 +378,52 @@ local function makestack()
    }
 end
 
+local PRAGMAS_SPECS = {
+   CNAME = "string",
+}
+
+local function preppragmas(pragmas, specs)
+   local prdct = {}
+   for i = 1, #pragmas do
+      local pragma = pragmas[i]
+      local val = {}
+      for j = 2, #pragma do
+         val[j - 1] = processoparg(pragma[j])
+      end
+      if specs[pragma[1]] then
+         local spec = specs[pragma[1]]
+         if spec == "string" then
+            assert(#val == 1)
+            val = assert(val[1])
+         else
+            assert(spec == "any")
+         end
+         prdct[pragma[1]] = val
+      end
+   end
+   return prdct
+end
+
 local function prepproc(proc)
    assert(proc[1] == "proc", "procedure required")
    local c = {}
    c.id = processoparg(proc[2])
-   c.method = proc[3][1] == 'method'
-   c.params = sliceseq(proc[4], 2, #proc[4])
+   c.pragmas = preppragmas(sliceseq(proc[3], 2, #proc[3]), PRAGMAS_SPECS)
+   c.method = proc[4][1] == 'method'
+   c.params = sliceseq(proc[5], 2, #proc[5])
    for i = 1, #c.params do
       c.params[i] = opcode(c.params[i])
    end
-   if proc[5][1] == "variadic" then
-      c.variadic = processoparg(proc[5][2])
+   if proc[6][1] == "variadic" then
+      c.variadic = processoparg(proc[6][2])
    else
       c.variadic = nil
    end
-   c.locals = sliceseq(proc[6], 2, #proc[6])
+   c.locals = sliceseq(proc[7], 2, #proc[7])
    for i = 1, #c.locals do
       c.locals[i] = opcode(c.locals[i])
    end
-   c.opcodes = sliceseq(proc[7], 2, #proc[7])
+   c.opcodes = sliceseq(proc[8], 2, #proc[8])
    c.srcposes = {}
    for i = 1, #c.opcodes do
       c.srcposes[i] = c.opcodes[i].srcpos
@@ -678,6 +709,10 @@ function toc.makeemitter()
             fields[#fields + 1] = (".%s = %s"):format(name, autoescape_to_c(value))
          end
          return ("{%s}"):format(table.concat(fields, ", "))
+      elseif spec == "cid" then
+         assert(type(arg) == "string" and string.match(arg, "^[a-zA-Z_][a-zA-Z_0-9]*$"),
+                "expected C identifier")
+         return arg
       else
          error("unknown specifier " .. spec)
       end
@@ -720,6 +755,10 @@ function toc.makeemitter()
 
    function emit:comment(comm)
       table.insert(self.statments, self:_basic("/* «1:strlit» */", comm))
+   end
+
+   function emit:commentfmt(fmt, ...)
+      table.insert(self.statments, "/* " .. self:_basic(fmt, ...) .. " */")
    end
 
    function emit:emittedstmts()
@@ -1119,6 +1158,11 @@ function toc.compparts(emit, state, proc)
 
    local substate = attach_extra(state, { labels_to_ccid = labels_to_ccid })
 
+   if proc.pragmas.CNAME then
+      log.dbg("emitting pragma cname for %s", proc.id)
+      assert(type(proc.pragmas.CNAME) == "string", "pragma CNAME must be a string")
+      emit:toplevelstmt("PDCRT_DEFINE_CNAME(«1:localname», «2:cid»)", proc.id, proc.pragmas.CNAME)
+   end
    log.dbg("emitting main proc for %s", proc.id)
    emit:opentoplevel("PDCRT_PROC(«1:localname») {", proc.id)
    local nyo
@@ -1184,7 +1228,13 @@ local BASE_RESERVED_PROC_IDS = 4294967296
 local MAIN_PROC_ID = BASE_RESERVED_PROC_IDS
 
 function toc.compcode(emit, state)
+   if not state.code then
+      -- No hay una sección de código
+      return
+   end
+
    local proc = {
+      pragmas = {},
       params = {},
       locals = state.code.locals,
       parts = state.code.parts,
@@ -1207,29 +1257,48 @@ function toc.compcode(emit, state)
    toc.compparts(emit, attach_extra(state, extra), proc)
 end
 
+function toc.compproc(emit, state, proc)
+   local extra = {
+      in_procedure = true,
+      current_proc = proc,
+   }
+   toc.compparts(emit, attach_extra(state, extra), proc)
+end
+
 function toc.compprocs(emit, state)
    for id, proc in pairs(state.procedures) do
-      local extra = {
-         in_procedure = true,
-         current_proc = proc,
-      }
-      toc.compparts(emit, attach_extra(state, extra), proc)
+      toc.compproc(emit, state, proc)
    end
 end
 
 function toc.compprocdeclrs(emit, state)
-   emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname»)", MAIN_PROC_ID)
-   for kid, part in pairs(state.code.parts) do
-      if kid > 1 then
-         emit:toplevelstmt("PDCRT_DECLARE_CONT(«1:localname», «2:contname»)", MAIN_PROC_ID, kid)
+   if state.code then
+      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname»)", MAIN_PROC_ID)
+      for kid, part in pairs(state.code.parts) do
+         if kid > 1 then
+            emit:toplevelstmt("PDCRT_DECLARE_CONT(«1:localname», «2:contname»)", MAIN_PROC_ID, kid)
+         end
       end
    end
    for id, proc in pairs(state.procedures) do
+      if proc.pragmas.CNAME then
+         assert(type(proc.pragmas.CNAME) == "string", "pragma CNAME must be a string")
+         emit:toplevelstmt("PDCRT_DECLARE_CNAME(«1:localname», «2:cid»)", id, proc.pragmas.CNAME)
+      end
       emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname»)", id)
       for kid, part in pairs(proc.parts) do
          if kid > 1 then
             emit:toplevelstmt("PDCRT_DECLARE_CONT(«1:localname», «2:contname»)", id, kid)
          end
+      end
+   end
+end
+
+function toc.compheader(emit, state)
+   for id, proc in pairs(state.procedures) do
+      if proc.pragmas.CNAME then
+         assert(type(proc.pragmas.CNAME) == "string", "pragma CNAME must be a string")
+         emit:toplevelstmt("PDCRT_DECLARE_CNAME(«1:localname», «2:cid»)", id, proc.pragmas.CNAME)
       end
    end
 end
@@ -1297,8 +1366,13 @@ local function main(input, config)
       warnabout("no_procedure_section", "no procedure section")
    end
    log.info("extracted procedures")
-   local code = splitcode(processcode(codetotable(assert(secs.code_section, "code section not provided"))))
-   log.info("processed code")
+   local code
+   if secs.code_section then
+      code = splitcode(processcode(codetotable(secs.code_section)))
+      log.info("processed code")
+   else
+      log.info("no code section")
+   end
    if secs.constant_pool_section then
       secs.constant_pool_section = processconstpool(secs.constant_pool_section)
    else
@@ -1312,23 +1386,42 @@ local function main(input, config)
       code = code,
       source = input,
    }
-   checklocals("code", state.code)
+   if state.code then
+      checklocals("code", state.code)
+   end
    for id, body in pairs(state.procedures) do
       checklocals("proc", body)
    end
    checkconstants(state.constants)
    log.info("generated state")
-   local emit = toc.makeemitter()
-   emit:include("pdcrt.h")
+
+   log.info("emitting .c")
+   local emitc = toc.makeemitter()
+   emitc:include("pdcrt.h")
    log.dbg("emitted prelude")
-   toc.compprocdeclrs(emit, state)
+   toc.compprocdeclrs(emitc, state)
    log.dbg("emitted proc. declrs.")
-   toc.compcode(emit, state)
+   toc.compcode(emitc, state)
    log.dbg("emitted code")
-   toc.compprocs(emit, state)
+   toc.compprocs(emitc, state)
    log.dbg("emitted procs.")
+   log.info("emited .c")
+   local cfile = emitc:emittedstmts()
+
+   log.info("emitting .h")
+   local emith = toc.makeemitter()
+   emith:include("pdcrt.h")
+   log.dbg("emitted prelude")
+   toc.compheader(emith, state)
+   log.dbg("emitted header")
+   log.info("emited .h")
+   local hfile = emith:emittedstmts()
+
    log.info("assembled everything")
-   return emit:emittedstmts()
+   return {
+      cfile = cfile,
+      hfile = hfile,
+   }
 end
 
 
@@ -1368,6 +1461,11 @@ SECTION "code"
 ENDSECTION
 
 SECTION "procedures"
+  PROC 0
+    TAGPROC "ejemplo"
+    ICONST 0
+    RETN 1
+  ENDPROC
 ENDSECTION
 
 SECTION "constant pool"
@@ -1426,6 +1524,7 @@ end
 local parser = makeparsecli {
    {"o", "output", 1, "Archivo en el cual guardar la salida."},
    {"O", "stdout", 0, "Escribe el compilado a la salida estándar."},
+   {"h", "header", 1, "Archivo en el cual guardar la cabecera generada"},
    {"h", "help", 0, "Muestra esta ayuda y termina."},
    {"v", "version", 0, "Muestra la versión del ensamblador"},
    {"V", "verbose", 0, "Muestra salida adicional."},
@@ -1484,6 +1583,10 @@ if res.warning then
    end
 end
 
+if not res.output and not res.stdout then
+   log.warn("the compiled output will not be saved anywhere: no -o nor -O flags")
+end
+
 local config = {}
 local compiled
 if res.sample then
@@ -1492,8 +1595,14 @@ else
    assert(type(res[1]) == "string", "se esperaba un archivo de entrada")
    compiled = main(readall(res[1]), config)
 end
-if not res.stdout and res.output then
-   writeto(res.output, compiled)
-else
+if res.output then
+   writeto(res.output, compiled.cfile)
+elseif res.stdout then
    print(compiled)
+end
+if res.header then
+   writeto(res.header, compiled.hfile)
+   log.dbg("saving the header file")
+else
+   log.dbg("discarding the header file")
 end
