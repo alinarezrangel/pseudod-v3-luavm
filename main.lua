@@ -43,12 +43,16 @@ local WARNINGS = {
    {"out-of-range-constant", "oor-const", {"oor_const"},
     "Advierte si el ID de alguna constante está fuera del rango válido."},
 
+   {"undefined-constant", "undef-const", {"undef_const"},
+    "Advierte si hay una constante sin definir."},
+
    {"future", "future", {"future"},
     "Advierte sobre cosas que van a cambiar en un futuro."},
 
    {"useful", "useful", {"redefined_constant", "redefined_procedure",
                          "no_procedure_section", "no_constant_pool",
-                         "empty_function", "future", "oor_const"},
+                         "empty_function", "future", "oor_const",
+                         "undef_const"},
     "Activa advertencias útiles durante el desarrollo."},
 
    {"all", "all", {--[[ el código más adelante llena este campo ]]},
@@ -1251,6 +1255,20 @@ local function checklocals(tp, body)
    end
 end
 
+local function checkconstants(consts)
+   local max_cid = -1
+   for id in pairs(consts) do
+      if id > max_cid then
+         max_cid = id
+      end
+   end
+   for i = 0, max_cid do
+      if not consts[i] then
+         warnabout("undef_const", "Undefined constant #%d", i)
+      end
+   end
+end
+
 local function main(input, config)
    local r = re.compile(grammar)
    log.info("compiling the file")
@@ -1298,6 +1316,7 @@ local function main(input, config)
    for id, body in pairs(state.procedures) do
       checklocals("proc", body)
    end
+   checkconstants(state.constants)
    log.info("generated state")
    local emit = toc.makeemitter()
    emit:include("pdcrt.h")
