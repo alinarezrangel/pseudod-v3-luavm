@@ -1381,8 +1381,8 @@ local function main(input, config)
    log.info("processed constant pool")
    local state = {
       version = secs.version,
-      procedures = secs.procedures_section,
-      constants = secs.constant_pool_section,
+      procedures = secs.procedures_section or {},
+      constants = secs.constant_pool_section or {},
       code = code,
       source = input,
    }
