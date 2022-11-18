@@ -764,6 +764,10 @@ function toc.makeemitter()
       table.insert(self.statments, self:_basic("#include «1:strlit»", header))
    end
 
+   function emit:pragma(fmt, ...)
+      table.insert(self.statments, "#pragma " .. self:_basic(fmt, ...))
+   end
+
    function emit:comment(comm)
       table.insert(self.statments, self:_basic("/* «1:strlit» */", comm))
    end
@@ -1371,16 +1375,73 @@ local function checkconstants(consts)
    end
 end
 
+
+local confsch = {}
+
+confsch.BOOLEANS = {
+   TRUE = {
+      yes = true, enable = true, enabled = true, ["1"] = true,
+   },
+   FALSE = {
+      no = true, disable = true, disabled = true, ["0"] = true,
+   },
+}
+
+function confsch.boolean(str)
+   if not str then
+      return true
+   else
+      str = string.lower(str)
+      if confsch.BOOLEANS.TRUE[str] then
+         return true
+      elseif confsch.BOOLEANS.FALSE[str] then
+         return false
+      else
+         error(("unknown boolean value %q"):format(str))
+      end
+   end
+end
+
+function confsch.alt(alts)
+   return function(str)
+      if not str and alts.default then
+         return alts.default
+      end
+      local ppalts = table.concat(alts, ", ")
+      assert(str, "must specify one of the alternative values: " .. ppalts)
+      for i = 1, #alts do
+         if alts[i] == str then
+            return str
+         end
+      end
+      if alts.invalid then
+         log.warn("expected one of [%s] but got %q", ppalts, str)
+         return alts.invalid
+      else
+         error(("unknown config value %q, expected one of %s"):format(str, ppalts))
+      end
+   end
+end
+
+
+local CONFIG_SCHEMA = {
+   prevent_warnings = confsch.boolean,
+   target_compiler = confsch.alt {"gcc", "unknown", invalid = "unknown"},
+}
+
 local function main(input, config)
    local r = re.compile(grammar)
    log.info("compiling the file")
+
    local secs = sectionstotable(assert(re.match(input, r), "could not parse bytecode"))
    log.info("done compiling")
+
    assert(tonumber(secs.version[1]) == VER[1],
           "major version must be " .. tostring(VER[1]))
    assert(tonumber(secs.version[2]) <= VER[2],
           "minor version must be " .. tostring(VER[2]) .. " or less")
    log.info("validated the version")
+
    if secs.procedures_section then
       local P = {}
       for i = 1, #secs.procedures_section do
@@ -1433,6 +1494,13 @@ local function main(input, config)
    log.info("emitting .c")
    local emitc = toc.makeemitter()
    emitc:include("pdcrt.h")
+   if config.prevent_warnings then
+      if config.target_compiler == "gcc" then
+         emitc:pragma("GCC diagnostic ignored \"-Wunused-function\"")
+      else
+         log.warn("cannot prevent warnings for the %q compiler", config.target_compiler)
+      end
+   end
    log.dbg("emitted prelude")
    toc.compprocdeclrs(emitc, state)
    log.dbg("emitted proc. declrs.")
@@ -1532,14 +1600,19 @@ local function makeparsecli(opts)
                for n = 1, #opts do
                   local o = opts[n]
                   if a:sub(j, j) == o[1] then
-                     r[o[2]] = {}
-                     table.move(cli, i + 1, i + o[3], 1, r[o[2]])
+                     local val = {}
+                     table.move(cli, i + 1, i + math.abs(o[3]), 1, val)
                      if o[3] == 0 then
                         r[o[2]] = true
                      elseif o[3] == 1 then
-                        r[o[2]] = r[o[2]][1]
+                        r[o[2]] = val[1]
+                     elseif o[3] < 0 then
+                        r[o[2]] = r[o[2]] or {}
+                        table.move(val, 1, #val, #r[o[2]] + 1, r[o[2]])
+                     else
+                        r[o[2]] = val
                      end
-                     i = i + o[3]
+                     i = i + math.abs(o[3])
                      break
                   end
                end
@@ -1566,6 +1639,7 @@ local parser = makeparsecli {
    {"s", "sample", 0, "Compila el programa de prueba."},
    {"W", "warning", 1, "Activa las advertencias especificadas (separadas por comas)."},
    {"l", "link", 0, "Enlaza el archivo principal con todos los demás."},
+   {"C", "config", -1, "Cambia un valor de configuración."},
 }
 local res = parser {...}
 
@@ -1623,6 +1697,18 @@ if not res.output and not res.stdout then
 end
 
 local config = {}
+for i = 1, #res.config do
+   local opt = res.config[i]
+   local name, value = string.match(opt, "^([a-zA-Z_][a-zA-Z_0-9]*)=(.*)$")
+   if name and value and CONFIG_SCHEMA[name] then
+      config[name] = CONFIG_SCHEMA[name](value)
+   elseif CONFIG_SCHEMA[opt] then
+      config[opt] = CONFIG_SCHEMA[opt]()
+   else
+      log.warn("unknown configuration parameter %q", opt)
+   end
+end
+
 local compiled
 if res.sample then
    compiled = main(sample, config)
