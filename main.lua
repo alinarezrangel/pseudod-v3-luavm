@@ -1185,11 +1185,17 @@ function toc.compparts(emit, state, proc)
    if proc.pragmas.CNAME then
       log.dbg("emitting pragma cname for %s", proc.id)
       assert(type(proc.pragmas.CNAME) == "string", "pragma CNAME must be a string")
-      emit:toplevelstmt("PDCRT_DEFINE_CNAME(«1:localname», «2:cid»)", proc.id, proc.pragmas.CNAME)
 
       if proc.pragmas.IMPORT then
          log.dbg("this proc is an imported one")
          assert(#proc.pragmas.IMPORT == 0, "syntax of IMPORT pragma: `PRAGMA IMPORT`")
+         emit:toplevelstmt("PDCRT_DEFINE_IMPORTED_CNAME(«1:localname», «2:cid»)",
+                           proc.id, proc.pragmas.CNAME)
+         log.dbg("skipping emitting code for %s because is an imported cname", proc.id)
+         return
+      else
+         emit:toplevelstmt("PDCRT_DEFINE_CNAME(«1:localname», «2:cid»)", proc.id, proc.pragmas.CNAME)
+         log.dbg("emitted cname definition for %s", proc.id)
       end
    elseif proc.pragmas.IMPORT then
       warnabout("useless_pr_import",
@@ -1322,10 +1328,13 @@ function toc.compprocdeclrs(emit, state)
          assert(type(proc.pragmas.CNAME) == "string", "pragma CNAME must be a string")
          emit:toplevelstmt("PDCRT_DECLARE_CNAME(«1:localname», «2:cid»)", id, proc.pragmas.CNAME)
       end
-      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname», «2:procvisibility»)", id, visibility)
-      for kid, part in pairs(proc.parts) do
-         if kid > 1 then
-            emit:toplevelstmt("PDCRT_DECLARE_CONT(«1:localname», «2:contname»)", id, kid)
+      local skip_body = proc.pragmas.CNAME and proc.pragmas.IMPORT
+      if not skip_body then
+         emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname», «2:procvisibility»)", id, visibility)
+         for kid, part in pairs(proc.parts) do
+            if kid > 1 then
+               emit:toplevelstmt("PDCRT_DECLARE_CONT(«1:localname», «2:contname»)", id, kid)
+            end
          end
       end
    end
