@@ -46,13 +46,16 @@ local WARNINGS = {
    {"undefined-constant", "undef-const", {"undef_const"},
     "Advierte si hay una constante sin definir."},
 
+   {"useless-import-pragma", "useless-import-pragma", {"useless_pr_import"},
+    "Advierte cuando se usa un `PRAGMA IMPORT` que no tiene un `PRAGMA CNAME`."},
+
    {"future", "future", {"future"},
     "Advierte sobre cosas que van a cambiar en un futuro."},
 
    {"useful", "useful", {"redefined_constant", "redefined_procedure",
                          "no_procedure_section", "no_constant_pool",
                          "empty_function", "future", "oor_const",
-                         "undef_const"},
+                         "undef_const", "useless_pr_import"},
     "Activa advertencias útiles durante el desarrollo."},
 
    {"all", "all", {--[[ el código más adelante llena este campo ]]},
@@ -380,6 +383,7 @@ end
 
 local PRAGMAS_SPECS = {
    CNAME = "string",
+   IMPORT = "any",
 }
 
 local function preppragmas(pragmas, specs)
@@ -689,7 +693,7 @@ function toc.makeemitter()
          return tostring(arg)
       elseif spec == "procname" then
          assert(not optional and math.type(arg) == "integer" and arg >= 0, "expected procedure id")
-         return ("PDCRT_PROC_NAME(name_%s)"):format(tostring(arg))
+         return ("&PDCRT_PROC_NAME(name_%s)"):format(tostring(arg))
       elseif spec == "labelid" then
          assert(not optional and math.type(arg) == "integer" and arg >= 0, "expected label")
          return tostring(arg)
@@ -713,6 +717,13 @@ function toc.makeemitter()
          assert(type(arg) == "string" and string.match(arg, "^[a-zA-Z_][a-zA-Z_0-9]*$"),
                 "expected C identifier")
          return arg
+      elseif spec == "procvisibility" then
+         assert(arg == "public" or arg == "private", "expected strings 'public' or 'private'")
+         if arg == "public" then
+            return "PDCRT_PROC_V_PUBLIC"
+         else
+            return "PDCRT_PROC_V_PRIVATE"
+         end
       else
          error("unknown specifier " .. spec)
       end
@@ -818,55 +829,55 @@ end
 
 toc.opschema.SUM = schema ""
 function toc.opcodes.SUM(emit, state, op)
-   emit:stmt("return pdcrt_op_sum(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_sum(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.MUL = schema ""
 function toc.opcodes.MUL(emit, state, op)
-   emit:stmt("return pdcrt_op_mul(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_mul(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.SUB = schema ""
 function toc.opcodes.SUB(emit, state, op)
-   emit:stmt("return pdcrt_op_sub(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_sub(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.DIV = schema ""
 function toc.opcodes.DIV(emit, state, op)
-   emit:stmt("return pdcrt_op_div(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_div(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.GT = schema ""
 function toc.opcodes.GT(emit, state, op)
-   emit:stmt("return pdcrt_op_gt(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_gt(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.LT = schema ""
 function toc.opcodes.LT(emit, state, op)
-   emit:stmt("return pdcrt_op_lt(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_lt(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.GE = schema ""
 function toc.opcodes.GE(emit, state, op)
-   emit:stmt("return pdcrt_op_ge(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_ge(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.LE = schema ""
 function toc.opcodes.LE(emit, state, op)
-   emit:stmt("return pdcrt_op_le(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_le(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.OPEQ = schema ""
 function toc.opcodes.OPEQ(emit, state, op)
-   emit:stmt("return pdcrt_op_opeq(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_opeq(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
@@ -928,7 +939,7 @@ end
 
 toc.opschema.DYNCALL = schema "Ux, Uy"
 function toc.opcodes.DYNCALL(emit, state, op)
-   emit:stmt("return pdcrt_op_dyncall(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int»)",
+   emit:stmt("return pdcrt_op_dyncall(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int»)",
              state.current_proc.id, state.next_ccid,
              op.Ux, op.Uy)
 end
@@ -977,25 +988,25 @@ end
 
 toc.opschema.CMPEQ = schema ""
 function toc.opcodes.CMPEQ(emit, state, op)
-   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_EQ, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_EQ, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.CMPNEQ = schema ""
 function toc.opcodes.CMPNEQ(emit, state, op)
-   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_NEQ, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_NEQ, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.CMPREFEQ = schema ""
 function toc.opcodes.CMPREFEQ(emit, state, op)
-   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_REFEQ, PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
+   emit:stmt("return pdcrt_op_cmp(marco, PDCRT_CMP_REFEQ, &PDCRT_CONT_NAME(«1:contproc», «2:contname»))",
              state.current_proc.id, state.next_ccid)
 end
 
 toc.opschema.MSG = schema "Cx, Ua, Ub"
 function toc.opcodes.MSG(emit, state, op)
-   emit:stmt("return pdcrt_op_msg(marco, PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int», «5:int»)",
+   emit:stmt("return pdcrt_op_msg(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int», «5:int»)",
              state.current_proc.id, state.next_ccid,
              op.Cx, op.Ua, op.Ub)
 end
@@ -1049,7 +1060,7 @@ function toc.opcodes.IMPORT(emit, state, op)
    local c = state.constants[op.Cx]
    assert(c.type == "string", "constant passed to IMPORT opcode must be a string.")
    emit:comment(("IMPORT %d: %s"):format(op.Cx, c.value))
-   emit:stmt("return pdcrt_op_import(marco, «1:int», PDCRT_CONT_NAME(«2:contproc», «3:contname»))",
+   emit:stmt("return pdcrt_op_import(marco, «1:int», &PDCRT_CONT_NAME(«2:contproc», «3:contname»))",
              op.Cx, state.current_proc.id, state.next_ccid)
 end
 
@@ -1145,6 +1156,15 @@ function toc.comppart(emit, state, part, next_ccid)
    end
 end
 
+local function get_proc_visibility(proc)
+   if proc.pragmas.CNAME and proc.pragmas.IMPORT then
+      assert(#proc.pragmas.IMPORT == 0, "syntax of IMPORT pragma: `PRAGMA IMPORT`")
+      return "public"
+   else
+      return "private"
+   end
+end
+
 function toc.compparts(emit, state, proc)
    -- ccid = Continuation Id
    local labels_to_ccid = {}
@@ -1162,9 +1182,21 @@ function toc.compparts(emit, state, proc)
       log.dbg("emitting pragma cname for %s", proc.id)
       assert(type(proc.pragmas.CNAME) == "string", "pragma CNAME must be a string")
       emit:toplevelstmt("PDCRT_DEFINE_CNAME(«1:localname», «2:cid»)", proc.id, proc.pragmas.CNAME)
+
+      if proc.pragmas.IMPORT then
+         log.dbg("this proc is an imported one")
+         assert(#proc.pragmas.IMPORT == 0, "syntax of IMPORT pragma: `PRAGMA IMPORT`")
+      end
+   elseif proc.pragmas.IMPORT then
+      warnabout("useless_pr_import",
+                "The procedure %s has a `PRAGMA IMPORT` but no `PRAGMA CNAME`. This makes the `PRAGMA IMPORT` useless",
+                proc.id)
    end
+
+   local visibility = get_proc_visibility(proc)
+
    log.dbg("emitting main proc for %s", proc.id)
-   emit:opentoplevel("PDCRT_PROC(«1:localname») {", proc.id)
+   emit:opentoplevel("PDCRT_PROC(«1:localname», «2:procvisibility») {", proc.id, visibility)
    local nyo
    if proc.method then
       nyo = 1
@@ -1273,7 +1305,7 @@ end
 
 function toc.compprocdeclrs(emit, state)
    if state.code then
-      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname»)", MAIN_PROC_ID)
+      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname», «2:procvisibility»)", MAIN_PROC_ID, "private")
       for kid, part in pairs(state.code.parts) do
          if kid > 1 then
             emit:toplevelstmt("PDCRT_DECLARE_CONT(«1:localname», «2:contname»)", MAIN_PROC_ID, kid)
@@ -1281,11 +1313,12 @@ function toc.compprocdeclrs(emit, state)
       end
    end
    for id, proc in pairs(state.procedures) do
+      local visibility = get_proc_visibility(proc)
       if proc.pragmas.CNAME then
          assert(type(proc.pragmas.CNAME) == "string", "pragma CNAME must be a string")
          emit:toplevelstmt("PDCRT_DECLARE_CNAME(«1:localname», «2:cid»)", id, proc.pragmas.CNAME)
       end
-      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname»)", id)
+      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname», «2:procvisibility»)", id, visibility)
       for kid, part in pairs(proc.parts) do
          if kid > 1 then
             emit:toplevelstmt("PDCRT_DECLARE_CONT(«1:localname», «2:contname»)", id, kid)
@@ -1366,6 +1399,7 @@ local function main(input, config)
       warnabout("no_procedure_section", "no procedure section")
    end
    log.info("extracted procedures")
+
    local code
    if secs.code_section then
       code = splitcode(processcode(codetotable(secs.code_section)))
@@ -1379,6 +1413,7 @@ local function main(input, config)
       warnabout("no_constant_pool", "no constant pool")
    end
    log.info("processed constant pool")
+
    local state = {
       version = secs.version,
       procedures = secs.procedures_section or {},
@@ -1595,6 +1630,7 @@ else
    assert(type(res[1]) == "string", "se esperaba un archivo de entrada")
    compiled = main(readall(res[1]), config)
 end
+
 if res.output then
    writeto(res.output, compiled.cfile)
 elseif res.stdout then

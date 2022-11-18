@@ -1212,10 +1212,23 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
 #define PDCRT_GET_LVAR(idx)                     \
     pdcrt_obtener_local(marco, idx)
 
-#define PDCRT_PROC(name)                                                \
-    pdcrt_continuacion pdproc_##name(pdcrt_marco* name##marco_actual, pdcrt_marco* name##marco_anterior, int name##nargs, int name##nrets) // {}
+// El nombre de la función con nombre `name`. `name` es su nombre en el
+// bytecode.
+#define PDCRT_PROC_NAME(name)                   \
+    pdproc_##name
+// Lo mismo pero con una continuación.
+#define PDCRT_CONT_NAME(name, k)                \
+    pdprock_##name##_k##k
+
+#define PDCRT_PROC_V_PUBLIC
+#define PDCRT_PROC_V_PRIVATE static
+
+#define PDCRT_PROC(name, visibility)                                    \
+    visibility                                                          \
+    pdcrt_continuacion PDCRT_PROC_NAME(name)(pdcrt_marco* name##marco_actual, pdcrt_marco* name##marco_anterior, int name##nargs, int name##nrets) // {}
 #define PDCRT_CONT(name, k)                                             \
-    pdcrt_continuacion pdprock_##name##_k##k(pdcrt_marco* name##marco_actual) // {}
+    PDCRT_PROC_V_PRIVATE                                                \
+    pdcrt_continuacion PDCRT_CONT_NAME(name, k)(pdcrt_marco* name##marco_actual) // {}
 #define PDCRT_PROC_PRELUDE(name, nparams, nlocals, isvariadic)          \
     pdcrt_error pderrno;                                                \
     pdcrt_contexto* ctx = name##marco_anterior->contexto;               \
@@ -1247,17 +1260,9 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
     pdcrt_marco* marco = name##marco_actual;            \
     PDCRT_RASTREAR_MARCO(marco, #name, "continuar");
 
-// Obtiene un puntero a la función con nombre `name`. `name` es su nombre en el
-// bytecode.
-#define PDCRT_PROC_NAME(name)                   \
-    &pdproc_##name
-
-#define PDCRT_CONT_NAME(name, k)                \
-    &pdprock_##name##_k##k
-
 // Declara una función antes de usarla.
-#define PDCRT_DECLARE_PROC(name)                \
-    PDCRT_PROC(name);
+#define PDCRT_DECLARE_PROC(name, visibility)    \
+    PDCRT_PROC(name, visibility);
 #define PDCRT_DECLARE_CONT(name, k)             \
     PDCRT_CONT(name, k);
 
@@ -1268,7 +1273,13 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
 #define PDCRT_DEFINE_CNAME(procname, extname)   \
     pdcrt_continuacion extname(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets) \
     {                                                                   \
-        return (*PDCRT_PROC_NAME(procname))(marco_actual, marco_superior, args, rets) \
+        return PDCRT_PROC_NAME(procname)(marco_actual, marco_superior, args, rets) \
+    }
+// Dale un nombre interno a una función externa
+#define PDCRT_DEFINE_IMPORTED_CNAME(procname, extname)                  \
+    pdcrt_continuacion PDCRT_PROC_NAME(procname)(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets) \
+    {                                                                   \
+        return extname(marco_actual, marco_superior, args, rets) \
     }
 
 #define PDCRT_RETURN(nrets)                                       \
@@ -1282,7 +1293,7 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
     while(0)
 
 #define PDCRT_REIFY_CONT(proc, k)                               \
-    pdcrt_continuacion_normal(PDCRT_CONT_NAME(proc, k), marco)
+    pdcrt_continuacion_normal(&PDCRT_CONT_NAME(proc, k), marco)
 
 #define PDCRT_CONTINUE(proc, k)                                         \
     do                                                                  \
