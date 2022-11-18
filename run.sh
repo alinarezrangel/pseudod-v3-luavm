@@ -3,8 +3,9 @@
 local status
 lset file $(nth args 1)
 lset expfile $(nth args 2)
-echo lua5.4 main.lua -W all -o sample.c $file
-!>status[] lua5.4 main.lua -W all -o sample.c $file
+alset asm lua5.4 main.lua -W all -o sample.c -C prevent_warnings -C target_compiler=gcc $file
+echo @asm
+!>status[] @asm
 if $(not (numeq status 0)) [
     : @(exit 3)
 ]
