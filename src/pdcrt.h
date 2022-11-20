@@ -964,6 +964,8 @@ typedef struct pdcrt_constantes
     pdcrt_texto* msj_clonar;
     pdcrt_texto* msj_llamar;
     pdcrt_texto* msj_comoTexto;
+    pdcrt_texto* msj_mapear;
+    pdcrt_texto* msj_reducir;
     pdcrt_texto* txt_verdadero;
     pdcrt_texto* txt_falso;
     pdcrt_texto* txt_nulo;

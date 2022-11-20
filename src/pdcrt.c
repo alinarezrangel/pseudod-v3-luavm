@@ -2537,6 +2537,8 @@ void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, 
     M(msj_clonar, "clonar");                               \
     M(msj_llamar, "llamar");                               \
     M(msj_comoTexto, "comoTexto");                         \
+    M(msj_mapear, "mapear");                               \
+    M(msj_reducir, "reducir");                             \
     M(txt_verdadero, "VERDADERO");                         \
     M(txt_falso, "FALSO");                                 \
     M(txt_nulo, "NULO");
