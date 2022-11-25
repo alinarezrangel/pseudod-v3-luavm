@@ -1,0 +1,135 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  MK0CLZ 0
+  ROT 0
+  MSG 4, 0, 1
+  LSET 0
+
+  LGET 0
+  ROT 0
+  MSG 0, 0, 0
+
+  LGET 0
+  ICONST 0
+  ICONST 1
+  OBJATTRSET
+
+  LGET 0
+  ROT 0
+  MSG 0, 0, 0
+
+  LGET 0
+  ICONST 1
+  ICONST 2
+  OBJATTRSET
+  LGET 0
+  ICONST 2
+  ICONST 3
+  OBJATTRSET
+
+  LGET 0
+  ROT 0
+  MSG 0, 0, 0
+
+  LGET 0
+  ICONST 0
+  OBJATTR
+  ICONST 1
+  CMPEQ
+  MTRUE
+  LGET 0
+  ICONST 1
+  OBJATTR
+  ICONST 2
+  CMPEQ
+  MTRUE
+  LGET 0
+  ICONST 2
+  OBJATTR
+  ICONST 3
+  CMPEQ
+  MTRUE
+
+  LGET 0
+  ROT 0
+  MSG 2, 0, 0
+
+  LGET 0
+  ICONST 1
+  OBJATTR
+  ICONST 99
+  CMPEQ
+  MTRUE
+
+  LGET 0
+  ROT 0
+  MSG 0, 0, 0
+ENDSECTION
+
+SECTION "procedures"
+  PROC 0
+    OPNFRM EACT, ESUP, 3
+    ENEW EACT, 0
+    ENEW EACT, 1
+    ENEW EACT, 2
+    CLSFRM EACT
+    MKCLZ EACT, 1
+    ROT 0
+    MSG 3, 0, 1
+    RETN 1
+  ENDPROC
+
+  PROC 1
+    PARAM 0
+    VARIADIC 1
+    LOCAL 1
+    OPNFRM EACT, ESUP, 0
+    CLSFRM EACT
+
+    LCONST 0
+    LGET 0
+    CMPEQ
+    CHOOSE 1, 2
+    NAME 1
+    LGETC EACT, 1, 0
+    PRN
+    LCONST 1
+    PRN
+    LGETC EACT, 1, 1
+    PRN
+    LCONST 1
+    PRN
+    LGETC EACT, 1, 2
+    PRN
+    NL
+    RETN 0
+
+    NAME 2
+    LGET 0
+    LCONST 2
+    CMPEQ
+    CHOOSE 3, 4
+    NAME 3
+    ICONST 99
+    LSETC EACT, 1, 1
+    RETN 0
+
+    NAME 4
+    LGET 0
+    PRN
+    NL
+    BCONST 0
+    MTRUE
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "mostrar"
+  #1 STRING ", "
+  #2 STRING "fijar"
+  #3 STRING "comoObjeto"
+  #4 STRING "llamar"
+ENDSECTION

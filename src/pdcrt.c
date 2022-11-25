@@ -3443,6 +3443,38 @@ void pdcrt_op_objtoclz(pdcrt_marco* marco)
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, obj));
 }
 
+void pdcrt_op_objattr(pdcrt_marco* marco)
+{
+    pdcrt_objeto idx = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto_debe_tener_tipo(idx, PDCRT_TOBJ_ENTERO);
+    pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
+    size_t real_idx = idx.value.i + PDCRT_NUM_LOCALES_ESP;
+    PDCRT_ASSERT(real_idx >= 0 && real_idx < obj.value.c.env->env_size);
+    pdcrt_objeto v = obj.value.c.env->env[real_idx];
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, v));
+}
+
+void pdcrt_op_objattrset(pdcrt_marco* marco)
+{
+    pdcrt_objeto v = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto idx = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto_debe_tener_tipo(idx, PDCRT_TOBJ_ENTERO);
+    pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
+    size_t real_idx = idx.value.i + PDCRT_NUM_LOCALES_ESP;
+    PDCRT_ASSERT(real_idx >= 0 && real_idx < obj.value.c.env->env_size);
+    obj.value.c.env->env[real_idx] = v;
+}
+
+void pdcrt_op_objsz(pdcrt_marco* marco)
+{
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
+    size_t tam = obj.value.c.env->env_size - PDCRT_NUM_LOCALES_ESP;
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(tam)));
+}
+
 void pdcrt_op_opnexp(pdcrt_marco* marco, size_t num_exp)
 {
     pdcrt_objeto edn;

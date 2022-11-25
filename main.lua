@@ -152,6 +152,7 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "GT" / "LT" / "GE" / "LE" / "OPEQ"
     / "CLZ2OBJ" / "OBJ2CLZ"
     / "TMSGV" / "TMSG" / "MSGV" / "MSG"
+    / "OBJATTRSET" / "OBJATTR" / "OBJSZ"
     / "TDYNMSGV" / "TDYNMSG" / "DYNMSGV" / "DYNMSG"
     / "PRN" / "NL"
     / "OPNEXP" / "CLSEXP" / "EXP" / "IMPORT" / "SAVEIMPORT" / "MODULE"
@@ -1187,6 +1188,21 @@ end
 toc.opschema.OBJTAG = schema ""
 function toc.opcodes.OBJTAG(emit, state, op)
    emit:stmt("pdcrt_op_objtag(marco)")
+end
+
+toc.opschema.OBJATTR = schema ""
+function toc.opcodes.OBJATTR(emit, state, op)
+   emit:stmt("pdcrt_op_objattr(marco)")
+end
+
+toc.opschema.OBJATTRSET = schema ""
+function toc.opcodes.OBJATTRSET(emit, state, op)
+   emit:stmt("pdcrt_op_objattrset(marco)")
+end
+
+toc.opschema.OBJSZ = schema ""
+function toc.opcodes.OBJSZ(emit, state, op)
+   emit:stmt("pdcrt_op_objsz(marco)")
 end
 
 -- Fin de los opcodes.

@@ -1381,6 +1381,10 @@ void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index
 void pdcrt_op_clztoobj(pdcrt_marco* marco);
 void pdcrt_op_objtoclz(pdcrt_marco* marco);
 
+void pdcrt_op_objattr(pdcrt_marco* marco);
+void pdcrt_op_objattrset(pdcrt_marco* marco);
+void pdcrt_op_objsz(pdcrt_marco* marco);
+
 void pdcrt_op_opnexp(pdcrt_marco* marco, size_t num_exp);
 void pdcrt_op_clsexp(pdcrt_marco* marco);
 void pdcrt_op_exp(pdcrt_marco* marco, int idx, pdcrt_local_index local, bool autoejec);
