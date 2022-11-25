@@ -1,0 +1,28 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  MK0CLZ 0
+  LCONST 0
+  ICONST 1
+  ICONST 2
+  ROTM 2
+  DYNMSG 2, 1
+  PRN
+  NL
+ENDSECTION
+
+SECTION "procedures"
+  PROC 0
+    PARAM 0
+    PARAM 1
+    LGET 0
+    LGET 1
+    SUM
+    RETN 1
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "llamar"
+ENDSECTION
