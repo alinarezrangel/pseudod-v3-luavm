@@ -932,7 +932,7 @@ pdcrt_objeto pdcrt_sacar_de_pila(pdcrt_pila* pila);
 pdcrt_objeto pdcrt_cima_de_pila(pdcrt_pila* pila);
 // Elimina el enésimo elemento de la pila. Nota que `n` indexa desde la cima de
 // la pila, no desde el comienzo de `pila->elementos`. Por ejemplo: si `n` es 0
-// entonces esto es lo mismo que `pdcrt_cima_de_pila`.
+// entonces esto es lo mismo que `pdcrt_sacar_de_pila`.
 pdcrt_objeto pdcrt_eliminar_elemento_en_pila(pdcrt_pila* pila, size_t n);
 // Inserta un elemento en la pila en una posición indicada. Tal como con
 // `pdcrt_eliminar_elemento_en_pila`, `n` indexa desde la cima.
@@ -1343,8 +1343,6 @@ void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc
 void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc);
 void pdcrt_op_mkarr(pdcrt_marco* marco, size_t tam);
 
-pdcrt_continuacion pdcrt_op_dyncall(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int acepta, int devuelve);
-
 void pdcrt_op_retn(pdcrt_marco* marco, int n);
 int pdcrt_real_return(pdcrt_marco* marco);
 int pdcrt_passthru_return(pdcrt_marco* marco);
@@ -1352,6 +1350,7 @@ int pdcrt_passthru_return(pdcrt_marco* marco);
 bool pdcrt_op_choose(pdcrt_marco* marco);
 
 void pdcrt_op_rot(pdcrt_marco* marco, int n);
+void pdcrt_op_rotm(pdcrt_marco* marco, int n);
 
 typedef enum pdcrt_cmp
 {
@@ -1369,6 +1368,12 @@ void pdcrt_op_nl(pdcrt_marco* marco);
 
 pdcrt_continuacion pdcrt_op_msg(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int cid, int args, int rets);
 pdcrt_continuacion pdcrt_op_tail_msg(pdcrt_marco* marco, int cid, int args, int rets);
+pdcrt_continuacion pdcrt_op_msgv(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int cid, const unsigned char* proto, int args, int rets);
+pdcrt_continuacion pdcrt_op_tail_msgv(pdcrt_marco* marco, int cid, const unsigned char* proto, int args, int rets);
+pdcrt_continuacion pdcrt_op_dynmsg(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int args, int rets);
+pdcrt_continuacion pdcrt_op_tail_dynmsg(pdcrt_marco* marco, int args, int rets);
+pdcrt_continuacion pdcrt_op_dynmsgv(pdcrt_marco* marco, pdcrt_proc_continuacion proc, const unsigned char* proto, int args, int rets);
+pdcrt_continuacion pdcrt_op_tail_dynmsgv(pdcrt_marco* marco, const unsigned char* proto, int args, int rets);
 
 void pdcrt_op_spush(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup);
 void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup);

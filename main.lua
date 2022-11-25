@@ -121,10 +121,13 @@ cpoolsec <- {| '' -> 'constant_pool_section'
                "SECTION" ws '"constant pool"' (rs constant)* rs "ENDSECTION" |}
 constant <- {| '' -> 'constant'
                 "#" id rs ( '' -> 'string'  "STRING" ws str
-                          / '' -> 'bigint'  "BIGINT" ws int
-                          / '' -> 'bigdec'  "BIGDEC" ws flt
+                          / '' -> 'bigint'  "BIGINT" rs int
+                          / '' -> 'bigdec'  "BIGDEC" rs flt
+                          / '' -> 'proto' "PROTOTYPE" rs proto
                           )
             |}
+proto <- {| {:proto: {| (isvarg (ws "," rs isvarg)*)? |} :} |}
+isvarg <- {[01]}
 
 codesec <- {| '' -> 'code_section'
               "SECTION" ws '"code"' code rs "ENDSECTION" |}
@@ -139,15 +142,16 @@ local <- {| {"LOCAL"} rs (id / envs) |}
 
 OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "SUM" / "SUB" / "MUL" / "DIV"
-    / "RETN" / "DYNCALL"
+    / "RETN"
     / "MKCLZ" / "MK0CLZ" / "MKARR"
     / "OPNFRM" / "EINIT" / "ENEW" / "CLSFRM"
     / "LSETC" / "LGETC" / "LSET" / "LGET"
     / "POP" / "CHOOSE" / "JMP" / "NAME"
     / "MTRUE" / "CMPEQ" / "CMPNEQ" / "CMPREFEQ" / "NOT"
-    / "ROT" / "GT" / "LT" / "GE" / "LE" / "OPEQ"
+    / "ROT" / "ROTM"
+    / "GT" / "LT" / "GE" / "LE" / "OPEQ"
     / "CLZ2OBJ" / "OBJ2CLZ"
-    / "TMSG" / "MSG"
+    / "TMSGV" / "TMSG" / "MSGV" / "MSG"
     / "PRN" / "NL"
     / "OPNEXP" / "CLSEXP" / "EXP" / "IMPORT" / "SAVEIMPORT" / "MODULE"
     / "SPUSH" / "SPOP"
@@ -227,6 +231,12 @@ local function processoparg(tbl)
       else
          return EACT
       end
+   elseif tbl.proto then
+      local r = {}
+      for i = 1, #tbl.proto do
+         r[i] = tonumber(tbl.proto[i])
+      end
+      return r
    else
       local escapes = {
          ["q"] = "\"",
@@ -458,12 +468,13 @@ end
 
 
 local REQUIRES_CONTINUATION = {
-   "LT", "GT", "LE", "GE", "OPEQ", -- Llamadas a función (operadores)
-   "CMPEQ", "CMPNEQ", "CMPREFEQ",  -- Llamadas a función (método `igualA`)
-   "TMSG", "MSG", "DYNCALL",       -- Llamadas a función
-   "SUM", "SUB", "MUL", "DIV",     -- Llamadas a función (operadores)
-   "IMPORT",                       -- Importar un módulo (control de flujo)
-   "NAME", "JMP", "CHOOSE"         -- Control de flujo
+   "LT", "GT", "LE", "GE", "OPEQ",         -- Llamadas a función (operadores)
+   "CMPEQ", "CMPNEQ", "CMPREFEQ",          -- Llamadas a función (método `igualA`)
+   "MSG", "MSGV", "DYNMSG", "DYNMSGV",     -- Enviar mensajes.
+   "TMSG", "TMSGV", "TDYNMSG", "TDYNMSGV", -- Enviar mensajes (tail).
+   "SUM", "SUB", "MUL", "DIV",             -- Llamadas a función (operadores)
+   "IMPORT",                               -- Importar un módulo (control de flujo)
+   "NAME", "JMP", "CHOOSE"                 -- Control de flujo
 }
 
 local FALLS_THROUGHT = {
@@ -807,7 +818,7 @@ function toc.opcodes.LCONST(emit, state, op)
    if t == "string" then
       emit:stmt("pdcrt_op_lconst(marco, «1:int»)", op.Cx)
    else
-      emit:stmt("pdcrt_op_lconst_int(marco, «2:int»)", op.Cx, v)
+      error("cannot load constant of type " .. t)
    end
 end
 
@@ -941,13 +952,6 @@ function toc.opcodes.MKARR(emit, state, op)
    emit:stmt("pdcrt_op_mkarr(marco, «1:int»)", op.Ua)
 end
 
-toc.opschema.DYNCALL = schema "Ux, Uy"
-function toc.opcodes.DYNCALL(emit, state, op)
-   emit:stmt("return pdcrt_op_dyncall(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int»)",
-             state.current_proc.id, state.next_ccid,
-             op.Ux, op.Uy)
-end
-
 toc.opschema.CHOOSE = schema "Tx, Ty"
 function toc.opcodes.CHOOSE(emit, state, op)
    local cont_consq = state.labels_to_ccid[op.Tx]
@@ -973,6 +977,11 @@ end
 toc.opschema.ROT = schema "Ia"
 function toc.opcodes.ROT(emit, state, op)
    emit:stmt("pdcrt_op_rot(marco, «1:int»)", op.Ia)
+end
+
+toc.opschema.ROTM = schema "Ia"
+function toc.opcodes.ROTM(emit, state, op)
+   emit:stmt("pdcrt_op_rotm(marco, «1:int»)", op.Ia)
 end
 
 toc.opschema.RETN = schema "Ua"
@@ -1008,13 +1017,6 @@ function toc.opcodes.CMPREFEQ(emit, state, op)
              state.current_proc.id, state.next_ccid)
 end
 
-toc.opschema.MSG = schema "Cx, Ua, Ub"
-function toc.opcodes.MSG(emit, state, op)
-   emit:stmt("return pdcrt_op_msg(marco, &PDCRT_CONT_NAME(«1:contproc», «2:contname»), «3:int», «4:int», «5:int»)",
-             state.current_proc.id, state.next_ccid,
-             op.Cx, op.Ua, op.Ub)
-end
-
 toc.opschema.CLZ2OBJ = schema ""
 function toc.opcodes.CLZ2OBJ(emit, state, op)
    emit:stmt("pdcrt_op_clztoobj(marco)")
@@ -1025,9 +1027,107 @@ function toc.opcodes.OBJ2CLZ(emit, state, op)
    emit:stmt("pdcrt_op_objtoclz(marco)")
 end
 
-toc.opschema.TMSG = schema "Cx, Ua, Ub"
+local function MSG_function(is_tail, is_variadic, is_dyn)
+   local func = "msg"
+   if is_variadic then
+      func = func .. "v"
+   end
+   if is_dyn then
+      func = "dyn" .. func
+   end
+   if is_tail then
+      func = "tail_" .. func
+   end
+   func = "pdcrt_op_" .. func
+   return func
+end
+
+local function MSG_opcode(emit, state, op, is_tail, is_variadic, is_dyn)
+   local func = MSG_function(is_tail, is_variadic, is_dyn)
+   local args = {}
+   local fmt = {}
+
+   if not is_tail then
+      args[#args + 1] = state.current_proc.id
+      args[#args + 1] = state.next_ccid
+      fmt[#fmt + 1] = ("&PDCRT_CONT_NAME(«%d:contproc», «%d:contname»)"):format(#args - 1, #args)
+   end
+
+   if not is_dyn then
+      local msg = state.constants[op.Cmsg]
+      assert(msg.type == "string")
+      args[#args + 1] = op.Cmsg
+      fmt[#fmt + 1] = ("«%d:int»"):format(#args)
+   end
+
+   if is_variadic then
+      local proto = state.constants[op.Cproto]
+      assert(proto.type == "proto")
+      local protocid = ("proto_%d_%d"):format(state.srcloc.lineno, state.srcloc.colno)
+      emit:stmt("static const unsigned char «1:cid»[«2:int»] = «3:*int»",
+                protocid, #proto.value, proto.value)
+      args[#args + 1] = protocid
+      fmt[#fmt + 1] = ("«%d:cid»"):format(#args)
+
+      args[#args + 1] = #proto.value
+      fmt[#fmt + 1] = ("«%d:int»"):format(#args)
+   else
+      args[#args + 1] = op.Uargs
+      fmt[#fmt + 1] = ("«%d:int»"):format(#args)
+   end
+
+   args[#args + 1] = op.Urets
+   fmt[#fmt + 1] = ("«%d:int»"):format(#args)
+
+   local finalfmt = ("return %s(marco, %s)"):format(func, table.concat(fmt, ", "))
+   emit:stmt(finalfmt, table.unpack(args))
+end
+
+local function MSG_helper(emit, state, op)
+   local is_tail = not not string.match(op[1], "^T")
+   local is_dyn = not not string.match(op[1], "^T?DYN")
+   local is_variadic = not not string.match(op[1], "V$")
+   return MSG_opcode(emit, state, op, is_tail, is_variadic, is_dyn)
+end
+
+toc.opschema.MSG = schema "Cmsg, Uargs, Urets"
+function toc.opcodes.MSG(emit, state, op)
+   MSG_helper(emit, state, op)
+end
+
+toc.opschema.MSGV = schema "Cmsg, Cproto, Urets"
+function toc.opcodes.MSGV(emit, state, op)
+   MSG_helper(emit, state, op)
+end
+
+toc.opschema.DYNMSG = schema "Uargs, Urets"
+function toc.opcodes.DYNMSG(emit, state, op)
+   MSG_helper(emit, state, op)
+end
+
+toc.opschema.DYNMSGV = schema "Cproto, Urets"
+function toc.opcodes.DYNMSGV(emit, state, op)
+   MSG_helper(emit, state, op)
+end
+
+toc.opschema.TMSG = schema "Cmsg, Uargs, Urets"
 function toc.opcodes.TMSG(emit, state, op)
-   emit:stmt("return pdcrt_op_tail_msg(marco, «1:int», «2:int», «3:int»)", op.Cx, op.Ua, op.Ub)
+   MSG_helper(emit, state, op)
+end
+
+toc.opschema.TMSGV = schema "Cmsg, Cproto, Urets"
+function toc.opcodes.TMSGV(emit, state, op)
+   MSG_helper(emit, state, op)
+end
+
+toc.opschema.TDYNMSG = schema "Uargs, Urets"
+function toc.opcodes.DYNMSG(emit, state, op)
+   MSG_helper(emit, state, op)
+end
+
+toc.opschema.TDYNMSGV = schema "Cproto, Urets"
+function toc.opcodes.DYNMSGV(emit, state, op)
+   MSG_helper(emit, state, op)
 end
 
 toc.opschema.SPUSH = schema "Ea, Eb"
@@ -1093,14 +1193,17 @@ end
 function toc.opcode(emit, state, op, srcloc)
    local errm = "opcode ".. op[1] .. " not implemented"
    emit:comment(("-- %d:%d @ %d --"):format(srcloc.lineno, srcloc.colno, srcloc.byteno))
+   local substate = attach_extra(state, { srcloc = srcloc })
    assert(toc.opschema[op[1]], errm)(op)
-   return assert(toc.opcodes[op[1]], errm)(emit, state, op)
+   return assert(toc.opcodes[op[1]], errm)(emit, substate, op)
 end
 
 function toc.compconsts(emit, state)
    for i, c in pairs(state.constants) do
       if c.type == "string" then
          emit:stmt("PDCRT_REGISTRAR_TXTLIT(«1:int», «2:strlit»)", i, c.value)
+      elseif c.type == "proto" then
+         log.dbg("skipping emission of prototype constant #%s", i)
       else
          error("not implemented constant type " .. c.type)
       end

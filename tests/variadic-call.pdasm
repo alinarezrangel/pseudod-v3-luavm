@@ -1,0 +1,73 @@
+PDVM 1.0
+PLATFORM "pdcrt"
+
+SECTION "code"
+  LOCAL 0
+  LOCAL 1
+
+  ICONST 2
+  ICONST 3
+  MKARR 2
+  LSET 0
+
+  ICONST 3
+  ICONST 2
+  ICONST 1
+  ICONST 0
+  MKARR 4
+  LSET 1
+
+  MK0CLZ 0
+  ICONST 4
+  ICONST 3
+  ICONST 2
+  ICONST 1
+  ROT 4
+  MSG 0, 4, 1
+  POP
+
+  MK0CLZ 0
+  ICONST 1
+  LGET 0
+  ICONST 4
+  ROT 3
+  MSGV 0, 2, 1
+  POP
+
+  MK0CLZ 0
+  LGET 1
+  ROT 1
+  MSGV 0, 3, 1
+  POP
+ENDSECTION
+
+SECTION "procedures"
+  PROC 0
+    PARAM 0
+    PARAM 1
+    PARAM 2
+    PARAM 3
+    LGET 0
+    PRN
+    LCONST 1
+    PRN
+    LGET 1
+    PRN
+    LCONST 1
+    PRN
+    LGET 2
+    PRN
+    LCONST 1
+    PRN
+    LGET 3
+    PRN
+    NL
+  ENDPROC
+ENDSECTION
+
+SECTION "constant pool"
+  #0 STRING "llamar"
+  #1 STRING ", "
+  #2 PROTOTYPE 0, 1, 0
+  #3 PROTOTYPE 1
+ENDSECTION

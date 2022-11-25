@@ -3132,13 +3132,6 @@ void pdcrt_op_mkarr(pdcrt_marco* marco, size_t tam)
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, arr));
 }
 
-pdcrt_continuacion pdcrt_op_dyncall(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int acepta, int devuelve)
-{
-    pdcrt_objeto cima = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(cima, PDCRT_TOBJ_CLOSURE);
-    return pdcrt_continuacion_enviar_mensaje(proc, marco, cima, pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar), acepta, devuelve);
-}
-
 void pdcrt_op_call(pdcrt_marco* marco, pdcrt_proc_t proc, int acepta, int devuelve)
 {
     (void) marco;
@@ -3211,6 +3204,24 @@ void pdcrt_op_rot(pdcrt_marco* marco, int n)
         pdcrt_pila* pila = &marco->contexto->pila;
         pdcrt_objeto obj = pdcrt_eliminar_elemento_en_pila(pila, n);
         no_falla(pdcrt_empujar_en_pila(pila, marco->contexto->alojador, obj));
+    }
+}
+
+void pdcrt_op_rotm(pdcrt_marco* marco, int n)
+{
+    // El caso n == 0 es un caso especial.
+    if(n == 0)
+    {
+        return;
+    }
+    else
+    {
+        PDCRT_ASSERT(n > 0);
+        pdcrt_pila* pila = &marco->contexto->pila;
+        pdcrt_objeto mensaje = pdcrt_eliminar_elemento_en_pila(pila, n);
+        pdcrt_objeto obj = pdcrt_eliminar_elemento_en_pila(pila, n);
+        no_falla(pdcrt_empujar_en_pila(pila, marco->contexto->alojador, obj));
+        no_falla(pdcrt_empujar_en_pila(pila, marco->contexto->alojador, mensaje));
     }
 }
 
@@ -3304,6 +3315,86 @@ pdcrt_continuacion pdcrt_op_tail_msg(pdcrt_marco* marco, int cid, int args, int 
     return pdcrt_continuacion_tail_enviar_mensaje(marco_superior, obj, mensaje, args, rets);
 }
 
+static size_t pdcrt_desvariadicear_argumentos(pdcrt_marco* marco, const unsigned char* proto, int args)
+{
+    size_t total = 0;
+    for(size_t i = 0; i < (size_t) args; i++)
+    {
+        if(proto[i] > 0)
+        {
+            size_t rel = args - (i + 1);
+            pdcrt_objeto arreglo = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, rel);
+            pdcrt_objeto_debe_tener_tipo(arreglo, PDCRT_TOBJ_ARREGLO);
+            for(size_t j = 0; j < arreglo.value.a->longitud; j++)
+            {
+                pdcrt_objeto el = arreglo.value.a->elementos[j];
+                pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, rel, el);
+            }
+            total += arreglo.value.a->longitud;
+        }
+        else
+        {
+            total += 1;
+        }
+    }
+    return total;
+}
+
+pdcrt_continuacion pdcrt_op_msgv(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int cid, const unsigned char* proto, int args, int rets)
+{
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    size_t total = pdcrt_desvariadicear_argumentos(marco, proto, args);
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, obj));
+    return pdcrt_op_msg(marco, proc, cid, total, rets);
+}
+
+pdcrt_continuacion pdcrt_op_tail_msgv(pdcrt_marco* marco, int cid, const unsigned char* proto, int args, int rets)
+{
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    size_t total = pdcrt_desvariadicear_argumentos(marco, proto, args);
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, obj));
+    return pdcrt_op_tail_msg(marco, cid, total, rets);
+}
+
+pdcrt_continuacion pdcrt_op_dynmsg(pdcrt_marco* marco, pdcrt_proc_continuacion proc, int args, int rets)
+{
+    pdcrt_objeto mensaje = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    return pdcrt_continuacion_enviar_mensaje(proc, marco, obj, mensaje, args, rets);
+}
+
+pdcrt_continuacion pdcrt_op_tail_dynmsg(pdcrt_marco* marco, int args, int rets)
+{
+    pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, args + 1);
+    pdcrt_objeto_debe_tener_tipo(marca, PDCRT_TOBJ_MARCA_DE_PILA);
+
+    pdcrt_marco* marco_superior = marco->marco_anterior;
+    pdcrt_deinic_marco(marco);
+    pdcrt_objeto mensaje = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco_superior->contexto->pila);
+    return pdcrt_continuacion_tail_enviar_mensaje(marco_superior, obj, mensaje, args, rets);
+}
+
+pdcrt_continuacion pdcrt_op_dynmsgv(pdcrt_marco* marco, pdcrt_proc_continuacion proc, const unsigned char* proto, int args, int rets)
+{
+    pdcrt_objeto mensaje = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    size_t total = pdcrt_desvariadicear_argumentos(marco, proto, args);
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, obj));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, mensaje));
+    return pdcrt_op_dynmsg(marco, proc, total, rets);
+}
+
+pdcrt_continuacion pdcrt_op_tail_dynmsgv(pdcrt_marco* marco, const unsigned char* proto, int args, int rets)
+{
+    pdcrt_objeto mensaje = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    size_t total = pdcrt_desvariadicear_argumentos(marco, proto, args);
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, obj));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, mensaje));
+    return pdcrt_op_tail_dynmsg(marco, total, rets);
+}
+
 void pdcrt_op_spush(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index esup)
 {
     pdcrt_objeto o_eact = pdcrt_obtener_local(marco, eact);
@@ -3389,7 +3480,9 @@ pdcrt_continuacion pdcrt_op_import(pdcrt_marco* marco, int cid, pdcrt_proc_conti
     if(modulo->valor.tag == PDCRT_TOBJ_NULO)
     {
         pdcrt_op_mk0clz(marco, modulo->cuerpo);
-        return pdcrt_op_dyncall(marco, cont, 0, 1);
+        pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto mensaje = pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar);
+        return pdcrt_continuacion_enviar_mensaje(cont, marco, obj, mensaje, 0, 1);
     }
     else
     {

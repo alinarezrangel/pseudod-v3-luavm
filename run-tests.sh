@@ -1,6 +1,6 @@
 #!/usr/bin/env lunash
 
-alset all_tests fib arit envs par procs str2num txtbuscar fmt boole sumador spush inittonull proccont contbase tailcall retn einit procargs procorder arreglo_comoTexto arreglo_en arreglo_fijarEn arreglo_redimensionar arreglo_clonar variadic variadic_slice objs_creacion objs_atributos modulos cmprefeq cmprefeq-unspec objtag enteros tail-pila arreglo_igualA arreglo_distíntoDe
+alset all_tests fib arit envs par procs str2num txtbuscar fmt boole sumador spush inittonull proccont contbase tailcall retn einit procargs procorder arreglo_comoTexto arreglo_en arreglo_fijarEn arreglo_redimensionar arreglo_clonar variadic variadic_slice objs_creacion objs_atributos modulos cmprefeq cmprefeq-unspec objtag enteros tail-pila arreglo_igualA arreglo_distíntoDe variadic-call
 alset tests
 
 if $(numeq (arrlen args) 0) [
