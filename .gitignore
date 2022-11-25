@@ -6,6 +6,8 @@
 *.out
 sample
 sample.c
+pdcrt.pc
+__pycache__/
 .emacs.desktop*
 .projectile
 test-output.txt
