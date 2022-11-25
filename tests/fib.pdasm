@@ -11,7 +11,7 @@ SECTION "code"
   LGETC EACT, 0, 0
   ICONST 20
   ROT 1
-  DYNCALL 1, 1
+  MSG 1, 1, 1
   ROT 0
   MSG 0, 0, 1
   PRN
@@ -36,13 +36,13 @@ SECTION "procedures"
     ICONST 1
     SUB
     ROT 1
-    DYNCALL 1, 1
+    MSG 1, 1, 1
     LGETC EACT, 1, 0
     LGET 0
     ICONST 2
     SUB
     ROT 1
-    DYNCALL 1, 1
+    MSG 1, 1, 1
     SUM
     RETN 1
   ENDPROC
@@ -50,4 +50,5 @@ ENDSECTION
 
 SECTION "constant pool"
   #0 STRING "comoTexto"
+  #1 STRING "llamar"
 ENDSECTION

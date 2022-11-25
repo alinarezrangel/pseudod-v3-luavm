@@ -4,7 +4,7 @@ PLATFORM "pdcrt"
 SECTION "code"
   ICONST 0
   MK0CLZ 1
-  DYNCALL 1, 1
+  MSG 0, 1, 1
   PRN
   NL
 ENDSECTION

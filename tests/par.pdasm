@@ -10,22 +10,22 @@ SECTION "code"
   LSET 1
   ICONST 5
   LGET 0
-  DYNCALL 1, 1
+  MSG 0, 1, 1
   PRN
   NL
   ICONST 8
   LGET 1
-  DYNCALL 1, 1
+  MSG 0, 1, 1
   PRN
   NL
   ICONST 2
   LGET 0
-  DYNCALL 1, 1
+  MSG 0, 1, 1
   PRN
   NL
   ICONST 11
   LGET 1
-  DYNCALL 1, 1
+  MSG 0, 1, 1
   PRN
   NL
 ENDSECTION
@@ -55,7 +55,7 @@ SECTION "procedures"
     ICONST 1
     SUB
     MK0CLZ 0
-    DYNCALL 1, 1
+    MSG 0, 1, 1
     NOT
     RETN 1
   ENDPROC
@@ -84,11 +84,12 @@ SECTION "procedures"
     ICONST 1
     SUB
     MK0CLZ 1
-    DYNCALL 1, 1
+    MSG 0, 1, 1
     NOT
     RETN 1
   ENDPROC
 ENDSECTION
 
 SECTION "constant pool"
+  #0 STRING "llamar"
 ENDSECTION

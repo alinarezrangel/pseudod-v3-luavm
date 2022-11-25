@@ -13,7 +13,7 @@ SECTION "code"
   LSET 1
   ICONST 30
   LGET 1
-  DYNCALL 1, 1
+  MSG 0, 1, 1
   PRN
   NL
 ENDSECTION
@@ -41,4 +41,5 @@ SECTION "procedures"
 ENDSECTION
 
 SECTION "constant pool"
+  #0 STRING "llamar"
 ENDSECTION

@@ -42,7 +42,7 @@ SECTION "code"
   MTRUE
 
   MK0CLZ 1
-  DYNCALL 0, 1
+  MSG 3, 0, 1
   OBJTAG
   ICONST 7 -- NULO
   CMPEQ
@@ -79,4 +79,5 @@ SECTION "constant pool"
   #0 STRING "hola"
   #1 STRING "operador_/"
   #2 STRING "comoObjeto"
+  #3 STRING "llamar"
 ENDSECTION

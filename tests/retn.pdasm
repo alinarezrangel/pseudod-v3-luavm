@@ -4,37 +4,37 @@ PLATFORM "pdcrt"
 SECTION "code"
   ICONST 2001
   MK0CLZ 1
-  DYNCALL 0, 0
+  MSG 0, 0, 0
   PRN
   NL
   ICONST 2003
   MK0CLZ 2
-  DYNCALL 0, 0
+  MSG 0, 0, 0
   PRN
   NL
   ICONST 2004
   MK0CLZ 3
-  DYNCALL 0, 0
+  MSG 0, 0, 0
   PRN
   NL
 
   ICONST 3001
   MK0CLZ 1
-  DYNCALL 0, 1
+  MSG 0, 0, 1
   PRN
   NL
   PRN
   NL
   ICONST 3003
   MK0CLZ 2
-  DYNCALL 0, 1
+  MSG 0, 0, 1
   PRN
   NL
   PRN
   NL
   ICONST 3004
   MK0CLZ 3
-  DYNCALL 0, 1
+  MSG 0, 0, 1
   PRN
   NL
   PRN
@@ -42,7 +42,7 @@ SECTION "code"
 
   ICONST 4001
   MK0CLZ 1
-  DYNCALL 0, 2
+  MSG 0, 0, 2
   PRN
   NL
   PRN
@@ -51,7 +51,7 @@ SECTION "code"
   NL
   ICONST 4003
   MK0CLZ 2
-  DYNCALL 0, 2
+  MSG 0, 0, 2
   PRN
   NL
   PRN
@@ -60,7 +60,7 @@ SECTION "code"
   NL
   ICONST 4004
   MK0CLZ 3
-  DYNCALL 0, 2
+  MSG 0, 0, 2
   PRN
   NL
   PRN
@@ -70,7 +70,7 @@ SECTION "code"
 
   ICONST 5001
   MK0CLZ 1
-  DYNCALL 0, 3
+  MSG 0, 0, 3
   PRN
   NL
   PRN
@@ -81,7 +81,7 @@ SECTION "code"
   NL
   ICONST 5003
   MK0CLZ 2
-  DYNCALL 0, 3
+  MSG 0, 0, 3
   PRN
   NL
   PRN
@@ -92,7 +92,7 @@ SECTION "code"
   NL
   ICONST 5004
   MK0CLZ 3
-  DYNCALL 0, 3
+  MSG 0, 0, 3
   PRN
   NL
   PRN
@@ -119,6 +119,5 @@ SECTION "procedures"
 ENDSECTION
 
 SECTION "constant pool"
-  --
+  #0 STRING "llamar"
 ENDSECTION
-

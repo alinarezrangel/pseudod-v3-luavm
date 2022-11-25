@@ -15,7 +15,7 @@ SECTION "code"
   ICONST 3
   ICONST 4
   ROT 7
-  DYNCALL 7, 1
+  MSG 4, 7, 1
   MSG 1, 0, 1
   PRN
   NL
@@ -29,7 +29,7 @@ SECTION "code"
   ICONST 1
   ICONST 0
   ROT 7
-  DYNCALL 7, 1
+  MSG 4, 7, 1
   MSG 1, 0, 1
   PRN
   NL
@@ -91,4 +91,5 @@ SECTION "constant pool"
   #1 STRING "comoTexto"
   #2 STRING "en"
   #3 STRING "agregarAlFinal"
+  #4 STRING "llamar"
 ENDSECTION

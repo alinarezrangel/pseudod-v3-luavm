@@ -60,20 +60,20 @@ SECTION "code"
   MTRUE
 
   MK0CLZ 3
-  DYNCALL 0, 1
+  MSG 5, 0, 1
   MK0CLZ 3
-  DYNCALL 0, 1
+  MSG 5, 0, 1
   CMPREFEQ
   NOT
   MTRUE
 
   MK0CLZ 5
-  DYNCALL 0, 1
+  MSG 5, 0, 1
   LSET 0
   LGET 0
-  DYNCALL 0, 1
+  MSG 5, 0, 1
   LGET 0
-  DYNCALL 0, 1
+  MSG 5, 0, 1
   CMPREFEQ
   MTRUE
 ENDSECTION
@@ -129,5 +129,5 @@ SECTION "constant pool"
   #2 STRING "ho"
   #3 STRING "la"
   #4 STRING "concatenar"
+  #5 STRING "llamar"
 ENDSECTION
-

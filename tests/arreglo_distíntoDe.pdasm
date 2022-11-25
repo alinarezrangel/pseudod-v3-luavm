@@ -38,11 +38,11 @@ SECTION "code"
   LSET 0
 
   LGET 0
-  DYNCALL 0, 1
+  MSG 5, 0, 1
   LGET 0
-  DYNCALL 0, 1
+  MSG 5, 0, 1
   LGET 0
-  DYNCALL 0, 1
+  MSG 5, 0, 1
   MKARR 3
   LSET 1
 
@@ -169,4 +169,5 @@ SECTION "constant pool"
   #2 STRING "comoObjeto"
   #3 STRING "en"
   #4 STRING "clonar"
+  #5 STRING "llamar"
 ENDSECTION

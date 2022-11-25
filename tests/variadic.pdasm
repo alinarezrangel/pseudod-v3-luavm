@@ -14,14 +14,14 @@ SECTION "code"
   ICONST 5
   ICONST 6
   ROT 6
-  DYNCALL 6, 1
+  MSG 2, 6, 1
   PRN
   NL
 
   LGET 0
   ICONST 1
   ROT 1
-  DYNCALL 1, 1
+  MSG 2, 1, 1
   PRN
   NL
 ENDSECTION
@@ -40,4 +40,5 @@ ENDSECTION
 SECTION "constant pool"
   #0 STRING "longitud"
   #1 STRING "comoTexto"
+  #2 STRING "llamar"
 ENDSECTION

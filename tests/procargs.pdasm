@@ -3,34 +3,34 @@ PLATFORM "pdcrt"
 
 SECTION "code"
   MK0CLZ 1
-  DYNCALL 0, 1
+  MSG 0, 0, 1
   PRN
   NL
 
   ICONST 1
   MK0CLZ 1
-  DYNCALL 1, 1
+  MSG 0, 1, 1
   PRN
   NL
 
   MK0CLZ 2
-  DYNCALL 0, 0
+  MSG 0, 0, 0
 
   ICONST 1
   MK0CLZ 2
-  DYNCALL 1, 0
+  MSG 0, 1, 0
 
   ICONST 1
   ICONST 2
   MK0CLZ 2
-  DYNCALL 2, 1
+  MSG 0, 2, 1
   PRN
   NL
 
   ICONST 5
   ICONST 4
   MK0CLZ 3
-  DYNCALL 2, 1
+  MSG 0, 2, 1
   PRN
   NL
 
@@ -39,7 +39,7 @@ SECTION "code"
   ICONST 100
   ICONST 1000
   MK0CLZ 3
-  DYNCALL 4, 1
+  MSG 0, 4, 1
   PRN
   NL
 ENDSECTION
@@ -69,4 +69,5 @@ SECTION "procedures"
 ENDSECTION
 
 SECTION "constant pool"
+  #0 STRING "llamar"
 ENDSECTION

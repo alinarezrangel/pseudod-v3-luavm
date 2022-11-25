@@ -5,7 +5,7 @@ SECTION "code"
   ICONST 0
   ICONST 1
   MK0CLZ 1
-  DYNCALL 2, 0
+  MSG 0, 2, 0
 ENDSECTION
 
 SECTION "procedures"
@@ -25,4 +25,5 @@ SECTION "procedures"
 ENDSECTION
 
 SECTION "constant pool"
+  #0 STRING "llamar"
 ENDSECTION

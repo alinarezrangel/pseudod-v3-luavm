@@ -7,7 +7,7 @@ SECTION "code"
   ICONST 4
   MK0CLZ 2
   ROT 2
-  DYNCALL 2, 1
+  MSG 0, 2, 1
   PRN
   NL
   PRN

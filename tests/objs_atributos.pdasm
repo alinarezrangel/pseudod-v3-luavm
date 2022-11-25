@@ -7,7 +7,7 @@ SECTION "code"
   CLSFRM EACT
 
   MKCLZ EACT, 1
-  DYNCALL 0, 1
+  MSG 3, 0, 1
   LSET 0
 
   LGET 0
@@ -78,4 +78,5 @@ SECTION "constant pool"
   #0 STRING "escribirEstado"
   #1 STRING "incrementar"
   #2 STRING "en"
+  #3 STRING "llamar"
 ENDSECTION
