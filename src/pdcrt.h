@@ -969,6 +969,11 @@ typedef struct pdcrt_constantes
     pdcrt_texto* msj_comoTexto;
     pdcrt_texto* msj_mapear;
     pdcrt_texto* msj_reducir;
+    pdcrt_texto* msj_argc;
+    pdcrt_texto* msj_argv;
+    pdcrt_texto* msj_fallarConMensaje;
+    pdcrt_texto* msj_objeto;
+    pdcrt_texto* msj_fijar_objeto;
     pdcrt_texto* txt_verdadero;
     pdcrt_texto* txt_falso;
     pdcrt_texto* txt_nulo;
@@ -1060,12 +1065,18 @@ bool pdcrt_obtener_modulo(pdcrt_registro_de_modulos* registro, pdcrt_texto* nomb
 // El contexto "posee" la pila, la lista de constantes y el registro de
 // módulos: al desalojar el contexto también se desalojará la pila, la lista
 // de constantes y el registro de módulos.
+//
+// El contexto "referencia" a los parámetros argc y argv de `main`.
 typedef struct pdcrt_contexto
 {
     pdcrt_pila pila;
     pdcrt_alojador alojador;
     pdcrt_constantes constantes;
     pdcrt_registro_de_modulos registro;
+    int argc;
+    char** argv;
+    pdcrt_objeto claseObjeto;
+    pdcrt_objeto entornoBootstrap;
 } pdcrt_contexto;
 
 // Variantes de las funciones con el mismo nombre pero sin el `_simple` al
@@ -1282,19 +1293,19 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
     PDCRT_CONT(name, k);
 
 // Declara el nombre externo de una función
-#define PDCRT_DECLARE_CNAME(procname, extname)  \
-    pdcrt_continuacion extname(pdcrt_marco*, pdcrt_marco*, int, int) // {}
+#define PDCRT_DECLARE_CNAME(procname, extname)                          \
+    pdcrt_continuacion extname(pdcrt_marco*, pdcrt_marco*, int, int); // {}
 // Define el nombre externo de una función
 #define PDCRT_DEFINE_CNAME(procname, extname)   \
     pdcrt_continuacion extname(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets) \
     {                                                                   \
-        return PDCRT_PROC_NAME(procname)(marco_actual, marco_superior, args, rets) \
+        return PDCRT_PROC_NAME(procname)(marco_actual, marco_superior, args, rets); \
     }
 // Dale un nombre interno a una función externa
 #define PDCRT_DEFINE_IMPORTED_CNAME(procname, extname)                  \
     pdcrt_continuacion PDCRT_PROC_NAME(procname)(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets) \
     {                                                                   \
-        return extname(marco_actual, marco_superior, args, rets) \
+        return extname(marco_actual, marco_superior, args, rets);       \
     }
 
 #define PDCRT_RETURN(nrets)                                       \
@@ -1406,5 +1417,19 @@ pdcrt_continuacion pdcrt_op_import(pdcrt_marco* marco, int cid, pdcrt_proc_conti
 void pdcrt_op_saveimport(pdcrt_marco* marco, int cid);
 
 void pdcrt_op_objtag(pdcrt_marco* marco);
+
+pdcrt_continuacion pdcrt_frt_obtener_rt(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets);
+pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+
+#define PDCRT_DECLARE_RT_EXTERN(name)                                   \
+    pdcrt_continuacion name(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets) // {}
+
+PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_arreglo_como_texto);
+PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_clonar_arreglo);
+PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_arreglo_igual_a);
+PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_arreglo_distinto_de);
+PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_arreglo_operador_igual);
+PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_arreglo_operador_distinto);
+PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_arreglo_mapear);
 
 #endif /* PDCRT_H */
