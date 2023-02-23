@@ -976,8 +976,13 @@ pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_const
 // Registra una constante textual en la lista. La lista es expandida en la
 // medida necesaria para que la operación funcione.
 pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto);
-// Desaloja la lista de constantes.
-void pdcrt_dealoj_constantes(pdcrt_alojador alojador, pdcrt_constantes* consts);
+// Desaloja las constantes con nombre de la lista de constantes.
+//
+// Las demás constantes (la que se encuentran en el campo `textos`) deben ser
+// desalojadas manualmente con `pdcrt_dealoj_constante`.
+void pdcrt_dealoj_constantes_internas(pdcrt_alojador alojador, pdcrt_constantes* consts);
+// Desaloja una constante textual.
+void pdcrt_dealoj_constante(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx);
 
 
 // Un módulo. Este tipo contiene tanto los datos necesarios para buscar un
@@ -1181,13 +1186,13 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
         pdcrt_continuacion pdprocm_cont(struct pdcrt_marco* marco);
 
 #define PDCRT_MAIN_CONT()                                               \
-        pdcrt_continuacion pdprocm_cont(struct pdcrt_marco* marco)      \
-        {                                                               \
-            pdcrt_deinic_marco(marco);                                 \
-            pdcrt_deinic_contexto(marco->contexto, marco->contexto->alojador); \
-            pdcrt_dealoj_alojador_de_arena(marco->contexto->alojador);  \
-            exit(PDCRT_SALIDA_EXITO);                                   \
-        }
+        pdcrt_continuacion pdprocm_cont(struct pdcrt_marco* marco)
+#define PDCRT_MAIN_CONT_BODY_1                                          \
+    pdcrt_deinic_marco(marco);                                          \
+    pdcrt_deinic_contexto(marco->contexto, marco->contexto->alojador);
+#define PDCRT_MAIN_CONT_BODY_2                                          \
+    pdcrt_dealoj_alojador_de_arena(marco->contexto->alojador);          \
+    exit(PDCRT_SALIDA_EXITO);
 
 // Registra una literal textual. Solo puede llamarse dentro de `PDCRT_MAIN()`.
 // `lit` debe ser una literal de C (como `"hola mundo"`), mientras que `id`
@@ -1205,6 +1210,11 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
         pdcrt_registrar_constante_textual(aloj, &ctx->constantes, id, txt); \
     }                                                                   \
     while(0)
+// Desaloja la literal textual con el ID dado. Solo puede llamarse entre
+// `PDCRT_MAIN_CONT_BODY_1` y `PDCRT_MAIN_CONT_BODY_2` dentro de
+// `PDCRT_MAIN_CONT`.
+#define PDCRT_DEALOJ_TXTLIT(id)                                         \
+    pdcrt_dealoj_constante(marco->contexto->alojador, &marco->contexto->constantes, id)
 
 // Declara, fija y obtiene una variable local.
 #define PDCRT_LOCAL(idx, name)                              \

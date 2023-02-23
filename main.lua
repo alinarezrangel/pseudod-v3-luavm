@@ -1226,6 +1226,18 @@ function toc.compconsts(emit, state)
    end
 end
 
+function toc.compconstsunload(emit, state)
+   for i, c in pairs(state.constants) do
+      if c.type == "string" then
+         emit:stmt("PDCRT_DEALOJ_TXTLIT(«1:int»)", i)
+      elseif c.type == "proto" then
+         log.dbg("skipping deallocation of prototype constant #%s", i)
+      else
+         error("not implemented constant type " .. c.type)
+      end
+   end
+end
+
 local function gen_module_table(state)
    local module_table = {}
    for id, proc in pairs(state.procedures) do
@@ -1407,13 +1419,19 @@ function toc.compcode(emit, state)
    }
 
    emit:toplevelstmt("PDCRT_MAIN_CONT_DECLR()")
+
    emit:opentoplevel("PDCRT_MAIN() {")
    emit:stmt("PDCRT_MAIN_PRELUDE(«1:int»)", 0)
    toc.compconsts(emit, state)
    toc.compmoduletbl(emit, state)
    emit:stmt("PDCRT_RUN(«1:procname»)", MAIN_PROC_ID)
    emit:closetoplevel("}")
-   emit:toplevelstmt("PDCRT_MAIN_CONT()")
+
+   emit:opentoplevel("PDCRT_MAIN_CONT() {")
+   emit:stmt("PDCRT_MAIN_CONT_BODY_1")
+   toc.compconstsunload(emit, state)
+   emit:stmt("PDCRT_MAIN_CONT_BODY_2")
+   emit:closetoplevel("}")
 
    toc.compparts(emit, attach_extra(state, extra), proc)
 end

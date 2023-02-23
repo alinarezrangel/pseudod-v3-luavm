@@ -2074,11 +2074,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
-        return pdcrt_continuacion_tail_enviar_mensaje(marco,
-                                                      pdcrt_closure_desde_callback_del_runtime(marco, &pdcrt_frt_clonar_arreglo),
-                                                      pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar),
-                                                      1,
-                                                      rets);
+        return pdcrt_continuacion_tail_iniciar(&pdcrt_recv_arreglo_continuacion_clonar_0, marco, 1, 1);
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
     {
@@ -2663,21 +2659,18 @@ error:
     return pderrno;
 }
 
-void pdcrt_dealoj_constantes(pdcrt_alojador alojador, pdcrt_constantes* consts)
+void pdcrt_dealoj_constantes_internas(pdcrt_alojador alojador, pdcrt_constantes* consts)
 {
-    if(consts->num_textos > 0)
-    {
-        for(size_t i = 0; i < consts->num_textos; i++)
-        {
-            pdcrt_dealoj_texto(alojador, consts->textos[i]);
-        }
-    }
-
 #define PDCRT_DEALOJ(cm, _lit) pdcrt_dealoj_texto(alojador, consts->cm);
 
     PDCRT_TABLA(PDCRT_DEALOJ)
 
 #undef PDCRT_DEALOJ
+}
+
+void pdcrt_dealoj_constante(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx)
+{
+    pdcrt_dealoj_texto(alojador, consts->textos[idx]);
 }
 
 #undef PDCRT_TABLA
@@ -2794,7 +2787,7 @@ void pdcrt_deinic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
 {
     PDCRT_DEPURAR_CONTEXTO(ctx, "Deinicializando el contexto");
     pdcrt_deinic_pila(&ctx->pila, alojador);
-    pdcrt_dealoj_constantes(alojador, &ctx->constantes);
+    pdcrt_dealoj_constantes_internas(alojador, &ctx->constantes);
 }
 
 static void pdcrt_depurar_objeto(pdcrt_objeto obj)
