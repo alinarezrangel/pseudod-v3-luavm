@@ -126,7 +126,7 @@ constant <- {| '' -> 'constant'
                           / '' -> 'proto' "PROTOTYPE" rs proto
                           )
             |}
-proto <- {| {:proto: {| (isvarg (ws "," rs isvarg)*)? |} :} |}
+proto <- {| {:proto: {| (isvarg (ws "," ws isvarg)*)? |} :} |}
 isvarg <- {[01]}
 
 codesec <- {| '' -> 'code_section'
