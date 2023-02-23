@@ -1064,7 +1064,7 @@ local function MSG_opcode(emit, state, op, is_tail, is_variadic, is_dyn)
 
    if is_variadic then
       local proto = state.constants[op.Cproto]
-      assert(proto.type == "proto")
+      assert(proto.type == "proto", string.format("invalid prototype constant #%d", op.Cproto))
       local protocid = ("proto_%d_%d"):format(state.srcloc.lineno, state.srcloc.colno)
       emit:stmt("static const unsigned char «1:cid»[«2:int»] = «3:*int»",
                 protocid, #proto.value, proto.value)
@@ -1180,7 +1180,7 @@ end
 
 toc.opschema.MODULE = schema "Cx"
 function toc.opcodes.MODULE(emit, state, op)
-   local c = state.constants[op.Cx]
+   local c = assert(state.constants[op.Cx], string.format("constant %d does not exist", op.Cx))
    assert(c.type == "string", "constant passed to MODULE opcode must be a string.")
    emit:comment(("MODULO %d: %s"):format(op.Cx, c.value))
 end
