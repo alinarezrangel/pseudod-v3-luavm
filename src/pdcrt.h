@@ -1400,7 +1400,7 @@ void pdcrt_op_objsz(pdcrt_marco* marco);
 
 void pdcrt_op_opnexp(pdcrt_marco* marco, size_t num_exp);
 void pdcrt_op_clsexp(pdcrt_marco* marco);
-void pdcrt_op_exp(pdcrt_marco* marco, int idx, pdcrt_local_index local, bool autoejec);
+void pdcrt_op_exp(pdcrt_marco* marco, int idx, bool autoejec);
 
 pdcrt_continuacion pdcrt_op_import(pdcrt_marco* marco, int cid, pdcrt_proc_continuacion proc);
 void pdcrt_op_saveimport(pdcrt_marco* marco, int cid);
