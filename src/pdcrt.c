@@ -1201,6 +1201,42 @@ static void pdcrt_necesita_args_y_rets(int args, int rets, int eargs, int erets)
     }
 }
 
+static void pdcrt_ajustar_argumentos_para_c(pdcrt_contexto* ctx, int args, int params)
+{
+    if(args < params)
+    {
+        for(int i = args; i < params; i++)
+        {
+            no_falla(pdcrt_empujar_en_pila(&ctx->pila, ctx->alojador, pdcrt_objeto_nulo()));
+        }
+    }
+    else if(args > params)
+    {
+        for(int i = args; i > params; i--)
+        {
+            (void) pdcrt_sacar_de_pila(&ctx->pila);
+        }
+    }
+}
+
+static void pdcrt_ajustar_valores_devueltos_para_c(pdcrt_contexto* ctx, int esperados, int devueltos)
+{
+    if(esperados < devueltos)
+    {
+        for(int i = esperados; i < devueltos; i++)
+        {
+            (void) pdcrt_sacar_de_pila(&ctx->pila);
+        }
+    }
+    else if(esperados > devueltos)
+    {
+        for(int i = esperados; i > devueltos; i--)
+        {
+            no_falla(pdcrt_empujar_en_pila(&ctx->pila, ctx->alojador, pdcrt_objeto_nulo()));
+        }
+    }
+}
+
 pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
     pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
@@ -1208,7 +1244,7 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
 #define PDCRT_NUMOP(op, ffn, efn)                                       \
     do                                                                  \
     {                                                                   \
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);                   \
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);      \
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila); \
         pdcrt_objeto_debe_tener_uno_de_los_tipos(rhs, PDCRT_TOBJ_ENTERO, PDCRT_TOBJ_FLOAT); \
         switch(rhs.tag)                                                 \
@@ -1247,21 +1283,24 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
     if(pdcrt_texto_cmp_lit(msj.value.t, "operador_+") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "sumar") == 0)
     {
         PDCRT_NUMOP(+, pdcrt_objeto_float, pdcrt_objeto_entero);
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_-") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "restar") == 0)
     {
         PDCRT_NUMOP(-, pdcrt_objeto_float, pdcrt_objeto_entero);
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_*") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "multiplicar") == 0)
     {
         PDCRT_NUMOP(*, pdcrt_objeto_float, pdcrt_objeto_entero);
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_/") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "dividir") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_uno_de_los_tipos(rhs, PDCRT_TOBJ_ENTERO, PDCRT_TOBJ_FLOAT);
         float flhs, frhs;
@@ -1288,6 +1327,7 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
             pdcrt_inalcanzable();
         }
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_float(flhs / frhs)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_<") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "menorQue") == 0)
@@ -1296,6 +1336,7 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
         pdcrt_objeto bb = pdcrt_sacar_de_pila(&marco->contexto->pila);
         bb = pdcrt_objeto_booleano(bb.value.i != 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, bb));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_>") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "mayorQue") == 0)
@@ -1304,6 +1345,7 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
         pdcrt_objeto bb = pdcrt_sacar_de_pila(&marco->contexto->pila);
         bb = pdcrt_objeto_booleano(bb.value.i != 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, bb));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_=<") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "menorOIgualA") == 0)
@@ -1312,6 +1354,7 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
         pdcrt_objeto bb = pdcrt_sacar_de_pila(&marco->contexto->pila);
         bb = pdcrt_objeto_booleano(bb.value.i != 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, bb));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_>=") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "mayorOIgualA") == 0)
@@ -1320,11 +1363,12 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
         pdcrt_objeto bb = pdcrt_sacar_de_pila(&marco->contexto->pila);
         bb = pdcrt_objeto_booleano(bb.value.i != 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, bb));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
 #define PDCRT_LONGITUD_BUFFER 60
         char buffer[PDCRT_LONGITUD_BUFFER];
         memset(buffer, '\0', PDCRT_LONGITUD_BUFFER);
@@ -1344,12 +1388,13 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
         no_falla(pdcrt_objeto_aloj_texto(&res, marco->contexto->alojador, lonbuff));
         memcpy(res.value.t->contenido, buffer, lonbuff);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, res));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
 #undef PDCRT_LONGITUD_BUFFER
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "negar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         switch(yo.tag)
         {
         case PDCRT_TOBJ_ENTERO:
@@ -1361,31 +1406,35 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
         default:
             pdcrt_inalcanzable();
         }
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "clonar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_objeto_iguales(yo, rhs))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, u8"distíntoDe") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_no=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(!pdcrt_objeto_iguales(yo, rhs))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "truncar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         int r;
         switch(yo.tag)
         {
@@ -1399,11 +1448,12 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
             pdcrt_inalcanzable();
         }
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(r)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "piso") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         float r;
         switch(yo.tag)
         {
@@ -1417,11 +1467,12 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
             pdcrt_inalcanzable();
         }
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(floor(r))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "techo") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         float r;
         switch(yo.tag)
         {
@@ -1435,6 +1486,7 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
             pdcrt_inalcanzable();
         }
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(ceil(r))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else
@@ -1466,39 +1518,44 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
     pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "longitud") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(yo.value.t->longitud)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "clonar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_objeto_iguales(yo, rhs))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, u8"distíntoDe") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_no=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(!pdcrt_objeto_iguales(yo, rhs))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoNumeroEntero") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         char* buff = pdcrt_alojar_simple(marco->contexto->alojador, sizeof(char) * (yo.value.t->longitud + 1));
         if(buff == NULL)
         {
@@ -1516,11 +1573,12 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         }
         pdcrt_dealojar_simple(marco->contexto->alojador, buff, sizeof(char) * (yo.value.t->longitud + 1));
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(r)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoNumeroReal") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         char* buff = pdcrt_alojar_simple(marco->contexto->alojador, sizeof(char) * (yo.value.t->longitud + 1));
         if(buff == NULL)
         {
@@ -1538,11 +1596,12 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         }
         pdcrt_dealojar_simple(marco->contexto->alojador, buff, sizeof(char) * (yo.value.t->longitud + 1));
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_float(r)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "en") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_ENTERO);
         int i = obj.value.i;
@@ -1564,11 +1623,12 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         no_falla(pdcrt_aloj_texto(&texto, marco->contexto->alojador, 1));
         texto->contenido[0] = yo.value.t->contenido[i];
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(texto)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "concatenar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_TEXTO);
         pdcrt_texto* res;
@@ -1576,11 +1636,12 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         memcpy(res->contenido, yo.value.t->contenido, yo.value.t->longitud);
         memcpy(res->contenido + yo.value.t->longitud, obj.value.t->contenido, obj.value.t->longitud);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(res)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "subTexto") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 2, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto oinic = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto ofinal = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(oinic, PDCRT_TOBJ_ENTERO);
@@ -1593,11 +1654,12 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         no_falla(pdcrt_aloj_texto(&res, marco->contexto->alojador, final - inic));
         memcpy(res->contenido, yo.value.t->contenido + inic, final - inic);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(res)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "parteDelTexto") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 2, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto oinic = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto olon = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(oinic, PDCRT_TOBJ_ENTERO);
@@ -1610,11 +1672,12 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         no_falla(pdcrt_aloj_texto(&res, marco->contexto->alojador, lon));
         memcpy(res->contenido, yo.value.t->contenido + inic, lon);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(res)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "buscar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 2, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto otxt = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto oinic = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(otxt, PDCRT_TOBJ_TEXTO);
@@ -1651,12 +1714,14 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
             }
             no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(encontrado? pos : -1)));
         }
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "buscarEnReversa") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 2, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_no_implementado("Texto#buscarEnReversa");
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "formatear") == 0)
@@ -1719,30 +1784,34 @@ pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_objeto_iguales(yo, rhs))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, u8"distíntoDe") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_no=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(!pdcrt_objeto_iguales(yo, rhs))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoObjeto") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         yo.tag = PDCRT_TOBJ_OBJETO;
         yo.recv = (pdcrt_funcion_generica) &pdcrt_recv_objeto;
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "clonar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else
@@ -1777,7 +1846,7 @@ pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto y
     pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         pdcrt_texto* texto = NULL;
         if(yo.value.b)
         {
@@ -1788,44 +1857,45 @@ pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto y
             texto = marco->contexto->constantes.txt_falso;
         }
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(texto)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_objeto_iguales(yo, rhs))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, u8"distíntoDe") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_no=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(!pdcrt_objeto_iguales(yo, rhs))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "clonar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "escojer") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 2, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto a = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto b = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto res = yo.value.b? a : b;
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, res));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "llamarSegun") == 0)
     {
-        if(args != 2)
-        {
-            fprintf(stderr, "Error: Se esperaban 2 argumentos, pero se obtuvieron %d argumentos", args);
-            pdcrt_abort();
-        }
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto a = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto b = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto res = yo.value.b? a : b;
@@ -1834,18 +1904,20 @@ pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto y
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "y") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_&&") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 2, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto otro = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(otro, PDCRT_TOBJ_BOOLEANO);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(yo.value.b && otro.value.b)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "o") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_||") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 2, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto otro = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(otro, PDCRT_TOBJ_BOOLEANO);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(yo.value.b || otro.value.b)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else
@@ -1863,30 +1935,34 @@ pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, p
     pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila,
                                        marco->contexto->alojador,
                                        pdcrt_objeto_desde_texto(marco->contexto->constantes.txt_nulo)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "clonar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_objeto_iguales(yo, rhs))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, u8"distíntoDe") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_no=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(!pdcrt_objeto_iguales(yo, rhs))));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else
@@ -1938,26 +2014,28 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "agregarAlFinal") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 0);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto el = pdcrt_sacar_de_pila(&marco->contexto->pila);
         no_falla(pdcrt_arreglo_agregar_al_final(marco->contexto->alojador, yo.value.a, el));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 0);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "longitud") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero((int) yo.value.a->longitud)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
         return pdcrt_continuacion_tail_iniciar(&pdcrt_recv_arreglo_continuacion_comoTexto_0, marco, 1, 1);
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "en") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto obj_indice = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(obj_indice, PDCRT_TOBJ_ENTERO);
         PDCRT_ASSERT(obj_indice.value.i >= 0);
@@ -1965,11 +2043,12 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
         PDCRT_ASSERT(indice < yo.value.a->longitud);
         pdcrt_objeto elemento = yo.value.a->elementos[indice];
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, elemento));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "fijarEn") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 2, 0);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto obj_valor = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto obj_indice = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(obj_indice, PDCRT_TOBJ_ENTERO);
@@ -1977,31 +2056,38 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
         size_t indice = obj_indice.value.i;
         PDCRT_ASSERT(indice < yo.value.a->longitud);
         yo.value.a->elementos[indice] = obj_valor;
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 0);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "redimensionar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 0);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto nueva_longitud_obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo(nueva_longitud_obj, PDCRT_TOBJ_ENTERO);
         PDCRT_ASSERT(nueva_longitud_obj.value.i >= 0);
         size_t nueva_longitud = nueva_longitud_obj.value.i;
         no_falla(pdcrt_arreglo_redimensionar(marco->contexto->alojador, yo.value.a, nueva_longitud));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 0);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "clonar") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 0, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
-        return pdcrt_continuacion_tail_iniciar(&pdcrt_recv_arreglo_continuacion_clonar_0, marco, 1, 1);
+        return pdcrt_continuacion_tail_enviar_mensaje(marco,
+                                                      pdcrt_closure_desde_callback_del_runtime(marco, &pdcrt_frt_clonar_arreglo),
+                                                      pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar),
+                                                      1,
+                                                      rets);
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto otro = pdcrt_sacar_de_pila(&marco->contexto->pila);
         if(otro.tag != PDCRT_TOBJ_ARREGLO)
         {
             no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(false)));
+            pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
             return pdcrt_continuacion_devolver();
         }
         else
@@ -2013,11 +2099,12 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, u8"distíntoDe") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_no=") == 0)
     {
-        pdcrt_necesita_args_y_rets(args, rets, 1, 1);
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto otro = pdcrt_sacar_de_pila(&marco->contexto->pila);
         if(otro.tag != PDCRT_TOBJ_ARREGLO)
         {
             no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(true)));
+            pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
             return pdcrt_continuacion_devolver();
         }
         else
