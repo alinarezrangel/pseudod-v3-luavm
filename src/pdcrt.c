@@ -2579,7 +2579,7 @@ pdcrt_objeto pdcrt_cima_de_pila(pdcrt_pila* pila)
 
 pdcrt_objeto pdcrt_eliminar_elemento_en_pila(pdcrt_pila* pila, size_t n)
 {
-    PDCRT_ASSERT(pila->num_elementos > 0);
+    PDCRT_ASSERT(pila->num_elementos > n);
     size_t I = pila->num_elementos - n - 1;
     pdcrt_objeto r = pila->elementos[I];
     for(size_t i = I; i < (pila->num_elementos - 1); i++)
