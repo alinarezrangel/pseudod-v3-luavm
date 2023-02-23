@@ -1443,13 +1443,13 @@ function toc.compprocdeclrs(emit, state)
    end
    for id, proc in pairs(state.procedures) do
       local visibility = get_proc_visibility(proc)
+      emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname», «2:procvisibility»)", id, visibility)
       if proc.pragmas.CNAME then
          assert(type(proc.pragmas.CNAME) == "string", "pragma CNAME must be a string")
          emit:toplevelstmt("PDCRT_DECLARE_CNAME(«1:localname», «2:cid»)", id, proc.pragmas.CNAME)
       end
       local skip_body = proc.pragmas.CNAME and proc.pragmas.IMPORT
       if not skip_body then
-         emit:toplevelstmt("PDCRT_DECLARE_PROC(«1:localname», «2:procvisibility»)", id, visibility)
          for kid, part in pairs(proc.parts) do
             if kid > 1 then
                emit:toplevelstmt("PDCRT_DECLARE_CONT(«1:localname», «2:contname»)", id, kid)
