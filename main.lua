@@ -88,7 +88,7 @@ end
 
 local grammar = [==[
 
-program <- {| '' -> 'program' ws version (rs platform)? (rs section)* ws |} {}
+program <- {| '' -> 'program' ws version (rs platform)? (rs section)* |} (ws {} ! . / {})
 
 s <- %s / comment
 ws <- s*
@@ -1562,7 +1562,13 @@ local function main(input, config)
    local r = re.compile(grammar)
    log.info("compiling the file")
 
-   local secs = sectionstotable(assert(re.match(input, r), "could not parse bytecode"))
+   local ast, pos = re.match(input, r)
+   if not ast or not pos then
+      error "could not parse bytecode"
+   elseif pos ~= string.len(input) + 1 then
+      error "failed to parse all the bytecode"
+   end
+   local secs = sectionstotable(ast)
    log.info("done compiling")
 
    assert(tonumber(secs.version[1]) == VER[1],
@@ -1769,6 +1775,7 @@ local parser = makeparsecli {
    {"W", "warning", 1, "Activa las advertencias especificadas (separadas por comas)."},
    {"l", "link", 0, "Enlaza el archivo principal con todos los demás."},
    {"C", "config", -1, "Cambia un valor de configuración."},
+   {"t", "check", 0, "No compila nada, solo verifica que el programa es válido."},
 }
 local res = parser {...}
 
@@ -1821,12 +1828,12 @@ if res.warning then
    end
 end
 
-if not res.output and not res.stdout then
+if not res.check and not res.output and not res.stdout then
    log.warn("the compiled output will not be saved anywhere: no -o nor -O flags")
 end
 
 local config = {}
-for i = 1, #res.config do
+for i = 1, #(res.config or {}) do
    local opt = res.config[i]
    local name, value = string.match(opt, "^([a-zA-Z_][a-zA-Z_0-9]*)=(.*)$")
    if name and value and CONFIG_SCHEMA[name] then
@@ -1846,14 +1853,18 @@ else
    compiled = main(readall(res[1]), config)
 end
 
-if res.output then
-   writeto(res.output, compiled.cfile)
-elseif res.stdout then
-   print(compiled)
-end
-if res.header then
-   writeto(res.header, compiled.hfile)
-   log.dbg("saving the header file")
+if res.check then
+   log.info("not saving anything because of --check mode")
 else
-   log.dbg("discarding the header file")
+   if res.output then
+      writeto(res.output, compiled.cfile)
+   elseif res.stdout then
+      print(compiled)
+   end
+   if res.header then
+      writeto(res.header, compiled.hfile)
+      log.dbg("saving the header file")
+   else
+      log.dbg("discarding the header file")
+   end
 end
