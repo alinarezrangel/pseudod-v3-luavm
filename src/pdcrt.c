@@ -395,12 +395,17 @@ bool pdcrt_textos_son_iguales(pdcrt_texto* a, pdcrt_texto* b)
     return true;
 }
 
-static void pdcrt_escribir_texto(pdcrt_texto* texto)
+static void pdcrt_escribir_texto_al_archivo(FILE* f, pdcrt_texto* texto)
 {
     for(size_t i = 0; i < texto->longitud; i++)
     {
-        printf("%c", texto->contenido[i]);
+        fprintf(f, "%c", texto->contenido[i]);
     }
+}
+
+static void pdcrt_escribir_texto(pdcrt_texto* texto)
+{
+    pdcrt_escribir_texto_al_archivo(stdout, texto);
 }
 
 static void pdcrt_escribir_texto_max(pdcrt_texto* texto, size_t max)
@@ -868,6 +873,11 @@ static void pdcrt_objeto_debe_tener_uno_de_los_tipos(pdcrt_objeto obj,
         }
         pdcrt_abort();
     }
+}
+
+static void pdcrt_objeto_debe_tener_closure(pdcrt_objeto obj)
+{
+    pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
 }
 
 pdcrt_objeto pdcrt_objeto_entero(int v)
@@ -3110,11 +3120,6 @@ pdcrt_objeto pdcrt_op_lset(pdcrt_marco* marco)
 void pdcrt_op_lget(pdcrt_marco* marco, pdcrt_objeto v)
 {
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, v));
-}
-
-static void pdcrt_objeto_debe_tener_closure(pdcrt_objeto obj)
-{
-    pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
 }
 
 void pdcrt_op_lsetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind)

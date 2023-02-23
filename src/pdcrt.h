@@ -930,6 +930,9 @@ pdcrt_objeto pdcrt_sacar_de_pila(pdcrt_pila* pila);
 // Obtiene el objeto en la cima de la pila. Aborta la ejecución del programa si
 // la pila está vacía.
 pdcrt_objeto pdcrt_cima_de_pila(pdcrt_pila* pila);
+// Obtiene el enésimo elemento de la pila. `n` comienza desde 0 y
+// `pdcrt_elemento_de_pila(pila, 0)` es igual a `pdcrt_cima_de_pila(pila)`.
+pdcrt_objeto pdcrt_elemento_de_pila(pdcrt_pila* pila, size_t n);
 // Elimina el enésimo elemento de la pila. Nota que `n` indexa desde la cima de
 // la pila, no desde el comienzo de `pila->elementos`. Por ejemplo: si `n` es 0
 // entonces esto es lo mismo que `pdcrt_sacar_de_pila`.
