@@ -905,7 +905,6 @@ end
 
 toc.opschema.LGET = schema "Ex"
 function toc.opcodes.LGET(emit, state, op)
-   assert(op.Ex ~= EACT, "LGET can only be used with ESUP or a local ID")
    emit:stmt("pdcrt_op_lget(marco, PDCRT_GET_LVAR(«1:localid»))", op.Ex)
 end
 
