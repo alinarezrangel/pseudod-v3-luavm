@@ -3572,11 +3572,11 @@ void pdcrt_op_clsexp(pdcrt_marco* marco)
     }
 }
 
-void pdcrt_op_exp(pdcrt_marco* marco, int idx, pdcrt_local_index local, bool autoejec)
+void pdcrt_op_exp(pdcrt_marco* marco, int idx, bool autoejec)
 {
+    pdcrt_objeto valor = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto edn = pdcrt_cima_de_pila(&marco->contexto->pila);
     pdcrt_texto* nombre = marco->contexto->constantes.textos[idx];
-    pdcrt_objeto valor = pdcrt_obtener_local(marco, local);
     pdcrt_agregar_nombre_al_espacio_de_nombres(edn.value.e, nombre, autoejec, valor);
 }
 

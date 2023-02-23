@@ -1155,9 +1155,9 @@ function toc.opcodes.CLSEXP(emit, state, op)
    emit:stmt("pdcrt_op_clsexp(marco)")
 end
 
-toc.opschema.EXP = schema "Cx, La, Bx"
+toc.opschema.EXP = schema "Cx, Bx"
 function toc.opcodes.EXP(emit, state, op)
-   emit:stmt("pdcrt_op_exp(marco, «1:int», «2:int», «3:bool»)", op.Cx, op.La, op.Bx)
+   emit:stmt("pdcrt_op_exp(marco, «1:int», «2:bool»)", op.Cx, op.Bx)
 end
 
 toc.opschema.IMPORT = schema "Cx"
