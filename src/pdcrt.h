@@ -437,7 +437,7 @@ typedef struct pdcrt_arreglo
     size_t longitud;
 } pdcrt_arreglo;
 
-// Aloja un nuevo arreglo con una capacidad dada. Su longitud es 0.
+// Aloja un nuevo arreglo con una capacidad dada. Su longitud es de 0.
 pdcrt_error pdcrt_aloj_arreglo(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, size_t capacidad);
 // Desaloja un arreglo.
 void pdcrt_dealoj_arreglo(pdcrt_alojador alojador, pdcrt_arreglo* arr);
@@ -459,8 +459,8 @@ pdcrt_error pdcrt_aloj_arreglo_con_2(pdcrt_alojador alojador, PDCRT_OUT pdcrt_ar
 // se alojará más memoria).
 pdcrt_error pdcrt_realoj_arreglo(pdcrt_alojador alojador, pdcrt_arreglo* arr, size_t nueva_capacidad);
 
-// Fija un elemento de un arreglo. Esta función se asegura que `indice` tiene
-// un valor válido.
+// Fija un elemento de un arreglo. Esta función se asegura de que `indice`
+// tiene un valor válido.
 void pdcrt_arreglo_fijar_elemento(pdcrt_arreglo* arr, size_t indice, pdcrt_objeto nuevo_elemento);
 // Obtiene el elemento en el índice dado. También se asegura de que `indice`
 // tenga un valor válido.
@@ -1003,7 +1003,7 @@ typedef struct pdcrt_modulo
     // específicamente, los punteros al `pdcrt_texto` son comparados
     // **directamente** (el registro no usa `pdcrt_objeto_identicos`). Esto
     // significa que dos textos con el mismo contenido pero con identidades de
-    // C distíntas serán considerados desiguales. Esto es un bug y será
+    // C distíntas serán considerados distintos. Esto es un bug y será
     // corregido en el futuro.
     pdcrt_texto* nombre;
     // El «cuerpo» del módulo es el procedimiento que se debe llamar para
@@ -1120,6 +1120,15 @@ typedef struct pdcrt_marco
     PDCRT_ARR(num_locales) pdcrt_objeto* locales;
     size_t num_locales;
     PDCRT_NULL struct pdcrt_marco* marco_anterior;
+    // El número de valores que este marco debe devolver.
+    //
+    // Este número se especifica cuando se llama a la función activada. Sin
+    // embargo, debido a que el programa se encuentra en modo CPS, no podemos
+    // acceder a este parámetro al final de la función, ¡Que es justo cuando lo
+    // necesitamos!
+    //
+    // Para solucionar este problema, cada marco tiene este entero que es
+    // inicializado al valor del parámetro `rets`.
     int num_valores_a_devolver;
 } pdcrt_marco;
 
@@ -1296,7 +1305,7 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
 #define PDCRT_DECLARE_CNAME(procname, extname)                          \
     pdcrt_continuacion extname(pdcrt_marco*, pdcrt_marco*, int, int); // {}
 // Define el nombre externo de una función
-#define PDCRT_DEFINE_CNAME(procname, extname)   \
+#define PDCRT_DEFINE_CNAME(procname, extname)                           \
     pdcrt_continuacion extname(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets) \
     {                                                                   \
         return PDCRT_PROC_NAME(procname)(marco_actual, marco_superior, args, rets); \

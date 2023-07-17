@@ -1,4 +1,6 @@
 local re = require "re"
+require "fennel"
+local V = require "fennel.view"
 
 local VER = {1, 0, 0}
 
@@ -29,7 +31,7 @@ local WARNINGS = {
     "Advierte cuando se redefina un procedimiento."},
 
    {"no-procedure-section", "no-proc-sec", {"no_procedure_section"},
-    "Advierte si no hay sección de procedimientos."},
+    "Advierte si no hay una sección de procedimientos."},
 
    {"no-constant-pool", "no-const-pool", {"no_constant_pool"},
     "Advierte si no hay una sección de \"lista de constantes\"."},
@@ -43,11 +45,11 @@ local WARNINGS = {
    {"out-of-range-constant", "oor-const", {"oor_const"},
     "Advierte si el ID de alguna constante está fuera del rango válido."},
 
-   {"undefined-constant", "undef-const", {"undef_const"},
-    "Advierte si hay una constante sin definir."},
-
    {"useless-import-pragma", "useless-import-pragma", {"useless_pr_import"},
     "Advierte cuando se usa un `PRAGMA IMPORT` que no tiene un `PRAGMA CNAME`."},
+
+   {"no-code-section", "no-code-sec", {"no_code_section"},
+    "Advierte si no hay una sección de código."},
 
    {"future", "future", {"future"},
     "Advierte sobre cosas que van a cambiar en un futuro."},
