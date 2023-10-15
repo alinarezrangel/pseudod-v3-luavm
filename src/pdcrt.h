@@ -424,6 +424,14 @@ void pdcrt_agregar_nombre_al_espacio_de_nombres(pdcrt_espacio_de_nombres* espaci
                                                 pdcrt_texto* nombre,
                                                 bool es_autoejecutable,
                                                 pdcrt_objeto valor);
+// Obtiene un atributo de un espacio de nombres.
+//
+// Devuelve verdadero si encontró el `nombre`, en cuyo caso `valor` es
+// modificado para contener el valor encontrado. Devuelve falso si el nombre no
+// existe; en este caso `*valor` es fijado a nulo.
+bool pdcrt_obtener_campo_del_espacio_de_nombres(pdcrt_espacio_de_nombres* espacio,
+                                                pdcrt_texto* nombre,
+                                                PDCRT_OUT pdcrt_objeto* valor);
 
 // Un arreglo de objetos.
 //
@@ -999,16 +1007,23 @@ typedef struct pdcrt_modulo
 {
     // El nombre del módulo.
     //
+    // El valor `NULL` es utilizado por el registro de módulos para llevar
+    // cuenta de que módulos han sido registrados. Sin embargo, este campo no
+    // debería ser nulo.
+    //
     // **Nota**: Los nombres de los módulos son comparados por *identidad*,
     // específicamente, los punteros al `pdcrt_texto` son comparados
     // **directamente** (el registro no usa `pdcrt_objeto_identicos`). Esto
     // significa que dos textos con el mismo contenido pero con identidades de
     // C distíntas serán considerados distintos. Esto es un bug y será
     // corregido en el futuro.
-    pdcrt_texto* nombre;
+    PDCRT_NULL pdcrt_texto* nombre;
     // El «cuerpo» del módulo es el procedimiento que se debe llamar para
     // ejecutarlo y obtener su espacio de nombres.
-    pdcrt_proc_t cuerpo;
+    //
+    // Tal como `nombre`, `NULL` es especial y solo debe ser usado dentro del
+    // registro.
+    PDCRT_NULL pdcrt_proc_t cuerpo;
     // El espacio de nombres, como un objeto. Si el módulo no ha sido llamado
     // será `NULO`.
     pdcrt_objeto valor;
@@ -1016,43 +1031,35 @@ typedef struct pdcrt_modulo
 
 // El registro de módulo.
 //
-// A diferencia de la lista de constantes, el registro de módulos no «posee» a
-// sus módulos. Estos son alojados por el ensamblador en un espacio global cuya
-// dirección de memoria es usada después para inicializar el registro mediante
-// `pdcrt_inic_registro_de_modulos_con_arreglo`.
-//
-// Esto no solo significa que el registro de módulos no requirer ser
-// desinicializado, sino que además no es posible agregar más módulos al
-// registro después de iniciado el programa. Esto es una falla del sistema
-// actual ya que prohibe el «desarrollo basado en un REPL» y en un futuro
-// eliminaré esta restricción.
+// Contiene la lista con todos los módulos del programa. El registro «posee»
+// esta lista, de forma de desalojar el registro también desaloja la lista.
 typedef struct pdcrt_registro_de_modulos
 {
+    // La lista de módulos. Si no hay ningún módulo, es `NULL`.
     PDCRT_NULL PDCRT_ARR(num_modulos) pdcrt_modulo* modulos;
     size_t num_modulos;
 } pdcrt_registro_de_modulos;
 
-// Inicializa un registro sin módulos.
-pdcrt_error pdcrt_inic_registro_de_modulos(PDCRT_OUT pdcrt_registro_de_modulos* registro);
-// Inicializa un registro desde una lista de módulos dada. Este arreglo debe
-// «vivir» lo suficiente como para ser usado por el resto del runtime.
+// Aloja un registro del tamaño dado.
+pdcrt_error pdcrt_aloj_registro_de_modulos(pdcrt_alojador alojador,
+                                           PDCRT_OUT pdcrt_registro_de_modulos* registro,
+                                           size_t tam);
+// Desaloja un registro.
+void pdcrt_dealoj_registro_de_modulos(pdcrt_alojador alojador,
+                                      PDCRT_OUT pdcrt_registro_de_modulos* registro);
+// Agrega un módulo al registro.
 //
-// Es equivalente a usar `pdcrt_inic_registro_de_modulos` seguido de
-// `pdcrt_agregar_bloque_de_modulos`.
-pdcrt_error pdcrt_inic_registro_de_modulos_con_arreglo(pdcrt_modulo* modulos, size_t num_modulos, PDCRT_OUT pdcrt_registro_de_modulos* registro);
-// Fija el arreglo de módulos del registro al dado.
-//
-// Tal como con `pdcrt_inic_registro_de_modulos_con_arreglo` este arreglo debe
-// «vivir» lo suficiente para que el resto del programa lo use.
-//
-// Esta operación puede fallar con una «operación inválida» si al registro ya
-// le agregaron un bloque de módulos.
-pdcrt_error pdcrt_agregar_bloque_de_modulos(pdcrt_registro_de_modulos* registro, pdcrt_modulo* modulos, size_t num_modulos);
+// El módulo es agregado en el índice `i`. Puede fallar con `PDCRT_EINVALOP` si
+// el índice ya existía en el registro.
+pdcrt_error pdcrt_agregar_modulo(pdcrt_registro_de_modulos* registro, size_t i, pdcrt_modulo modulo);
 // Obtiene un módulo dado del registro.
 //
 // Busca un módulo con el mismo nombre que `nombre`. Si lo encuentra, asigna un
 // puntero a este a `*modulo` y devuelve verdadero. De lo contrario asigna
 // `NULL` a `*modulo` y devuelve falso.
+//
+// Véase la nota en el atributo `nombre` de `pdcrt_modulo` para una advertencia
+// sobre el parámetro `nombre`.
 bool pdcrt_obtener_modulo(pdcrt_registro_de_modulos* registro, pdcrt_texto* nombre, PDCRT_OUT pdcrt_modulo** modulo);
 
 
@@ -1090,7 +1097,9 @@ PDCRT_NULL void* pdcrt_realojar(pdcrt_contexto* ctx, PDCRT_NULL void* ptr, size_
 
 // Inicializa y desinicializa un contexto. También inicializa la pila y la
 // lista de constantes de este.
-pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador);
+//
+// `num_mods` es el número de módulos del programa.
+pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador, size_t num_mods);
 void pdcrt_deinic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador);
 
 // Escribe a la salida estándar información útil cuando se quiere depurar un
@@ -1102,6 +1111,16 @@ void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra);
 // argumentos del runtime. Esta función usa estado global y no es ni reentrante
 // ni thread-safe. Tampoco puede llamarse más de una vez.
 void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[]);
+
+// Agrega un módulo al contexto.
+//
+// `const_nombre` es el ID de la constante con el nombre del módulo, mientras
+// que `proc` es el cuerpo del módulo. `i` es el índice donde se agregará el
+// módulo.
+//
+// La función `pdcrt_inic_contexto` inicializa el registro con un número de
+// módulos dado, esta función agrega un módulo en específico.
+void pdcrt_agregar_modulo_al_contexto(pdcrt_contexto* ctx, size_t i, int const_nombre, pdcrt_proc_t proc);
 
 
 // Un marco de llamadas (también llamado "marco de activación").
@@ -1173,7 +1192,7 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
 #define PDCRT_MAIN()                            \
     int main(int argc, char* argv[])
 
-#define PDCRT_MAIN_PRELUDE(nlocals)                                     \
+#define PDCRT_MAIN_PRELUDE(nlocals, nmods)                              \
     pdcrt_contexto ctx_real;                                            \
     pdcrt_error pderrno;                                                \
     pdcrt_contexto* ctx = &ctx_real;                                    \
@@ -1185,7 +1204,7 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
         puts(pdcrt_perror(pderrno));                                    \
         exit(PDCRT_SALIDA_ERROR);                                       \
     }                                                                   \
-    if((pderrno = pdcrt_inic_contexto(&ctx_real, aloj)) != PDCRT_OK)    \
+    if((pderrno = pdcrt_inic_contexto(&ctx_real, aloj, nmods)) != PDCRT_OK) \
     {                                                                   \
         puts(pdcrt_perror(pderrno));                                    \
         exit(PDCRT_SALIDA_ERROR);                                       \
@@ -1247,13 +1266,17 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
 #define PDCRT_GET_LVAR(idx)                     \
     pdcrt_obtener_local(marco, idx)
 
+// La macro `PDCRT_MANGLING_PREFIX` es definída por el compilador con el
+// prefijo que todos los identificadores de este módulo deberían usar. Cada
+// módulo en un proyecto es asignado un prefijo único.
+
 // El nombre de la función con nombre `name`. `name` es su nombre en el
 // bytecode.
 #define PDCRT_PROC_NAME(name)                   \
-    pdproc_##name
+    PDCRT_MANGLING_PREFIX##pdproc_##name
 // Lo mismo pero con una continuación.
 #define PDCRT_CONT_NAME(name, k)                \
-    pdprock_##name##_k##k
+    PDCRT_MANGLING_PREFIX##pdprock_##name##_k##k
 
 #define PDCRT_PROC_V_PUBLIC
 #define PDCRT_PROC_V_PRIVATE static
@@ -1426,6 +1449,13 @@ pdcrt_continuacion pdcrt_op_import(pdcrt_marco* marco, int cid, pdcrt_proc_conti
 void pdcrt_op_saveimport(pdcrt_marco* marco, int cid);
 
 void pdcrt_op_objtag(pdcrt_marco* marco);
+
+void pdcrt_op_dup(pdcrt_marco* marco);
+void pdcrt_op_drop(pdcrt_marco* marco);
+
+void pdcrt_op_nslookup(pdcrt_marco* marco, int cid);
+
+void pdcrt_op_getclsobj(pdcrt_marco* marco);
 
 pdcrt_continuacion pdcrt_frt_obtener_rt(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets);
 pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);

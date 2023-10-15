@@ -465,6 +465,24 @@ void pdcrt_agregar_nombre_al_espacio_de_nombres(pdcrt_espacio_de_nombres* espaci
     triple->valor = valor;
 }
 
+bool pdcrt_obtener_campo_del_espacio_de_nombres(pdcrt_espacio_de_nombres* espacio,
+                                                pdcrt_texto* nombre,
+                                                PDCRT_OUT pdcrt_objeto* valor)
+{
+    for(size_t i = 0; i < espacio->num_nombres; i++)
+    {
+        pdcrt_edn_triple triple = espacio->nombres[i];
+        if(pdcrt_textos_son_iguales(triple.nombre, nombre))
+        {
+            *valor = triple.valor;
+            return true;
+        }
+    }
+
+    *valor = pdcrt_objeto_nulo();
+    return false;
+}
+
 pdcrt_error pdcrt_aloj_arreglo(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, size_t capacidad)
 {
     arr->capacidad = pdcrt_siguiente_capacidad(capacidad, 0, 0);
@@ -1824,6 +1842,21 @@ pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
+    {
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
+        char* texto = malloc(128);
+        snprintf(texto, 127,
+                 u8"(Procedimiento proc: 0x%zX  env: 0x%zX #%zd)",
+                 (intptr_t) yo.value.c.proc,
+                 (intptr_t) yo.value.c.env,
+                 yo.value.c.env->env_size);
+        pdcrt_objeto res;
+        no_falla(pdcrt_objeto_aloj_texto_desde_cstr(&res, marco->contexto->alojador, texto));
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, res));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        return pdcrt_continuacion_devolver();
+    }
     else
     {
         printf("Mensaje ");
@@ -2480,32 +2513,51 @@ pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_con
 
 // Registro de módulos:
 
-pdcrt_error pdcrt_inic_registro_de_modulos(PDCRT_OUT pdcrt_registro_de_modulos* registro)
+pdcrt_error pdcrt_aloj_registro_de_modulos(pdcrt_alojador alojador,
+                                           PDCRT_OUT pdcrt_registro_de_modulos* registro,
+                                           size_t tam)
 {
-    registro->modulos = NULL;
-    registro->num_modulos = 0;
-    return PDCRT_OK;
-}
-
-pdcrt_error pdcrt_inic_registro_de_modulos_con_arreglo(pdcrt_modulo* modulos, size_t num_modulos, PDCRT_OUT pdcrt_registro_de_modulos* registro)
-{
-    registro->modulos = modulos;
-    registro->num_modulos = num_modulos;
-    return PDCRT_OK;
-}
-
-pdcrt_error pdcrt_agregar_bloque_de_modulos(pdcrt_registro_de_modulos* registro, pdcrt_modulo* modulos, size_t num_modulos)
-{
-    if(registro->num_modulos == 0)
+    registro->num_modulos = tam;
+    if(tam > 0)
     {
-        registro->modulos = modulos;
-        registro->num_modulos = num_modulos;
-        return PDCRT_OK;
+        registro->modulos = pdcrt_alojar_simple(alojador, tam * sizeof(pdcrt_modulo));
+        if(!registro->modulos)
+            return PDCRT_ENOMEM;
+
+        for(size_t i = 0; i < registro->num_modulos; i++)
+        {
+            registro->modulos[i] = (pdcrt_modulo){
+                .nombre = NULL,
+                .cuerpo = NULL,
+                .valor = pdcrt_objeto_nulo()
+            };
+        }
     }
     else
     {
-        return PDCRT_EINVALOP;
+        registro->modulos = NULL;
     }
+    return PDCRT_OK;
+}
+
+void pdcrt_dealoj_registro_de_modulos(pdcrt_alojador alojador,
+                                      PDCRT_OUT pdcrt_registro_de_modulos* registro)
+{
+    if(registro->num_modulos > 0)
+        pdcrt_dealojar_simple(alojador, registro->modulos, registro->num_modulos * sizeof(pdcrt_modulo));
+}
+
+pdcrt_error pdcrt_agregar_modulo(pdcrt_registro_de_modulos* registro, size_t i, pdcrt_modulo modulo)
+{
+    if(i >= registro->num_modulos)
+        return PDCRT_EINVALOP;
+    pdcrt_modulo* mod = &registro->modulos[i];
+    if(mod->nombre || mod->cuerpo)
+        return PDCRT_EINVALOP;
+    mod->nombre = modulo.nombre;
+    mod->cuerpo = modulo.cuerpo;
+    mod->valor = modulo.valor;
+    return PDCRT_OK;
 }
 
 bool pdcrt_obtener_modulo(pdcrt_registro_de_modulos* registro, pdcrt_texto* nombre, PDCRT_OUT pdcrt_modulo** modulo)
@@ -2543,7 +2595,7 @@ PDCRT_NULL void* pdcrt_realojar(pdcrt_contexto* ctx, void* ptr, size_t tam_actua
 
 // Contexto:
 
-pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
+pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador, size_t num_mods)
 {
     ctx->argc = 0;
     ctx->argv = NULL;
@@ -2555,7 +2607,7 @@ pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
         return pderrno;
     }
     ctx->alojador = alojador;
-    if((pderrno = pdcrt_inic_registro_de_modulos(&ctx->registro)) != PDCRT_OK)
+    if((pderrno = pdcrt_aloj_registro_de_modulos(alojador, &ctx->registro, num_mods)) != PDCRT_OK)
     {
         pdcrt_deinic_pila(&ctx->pila, alojador);
         return pderrno;
@@ -2714,6 +2766,16 @@ void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[])
              "  -h     Muestra esta ayuda y termina.");
         exit(PDCRT_SALIDA_ERROR);
     }
+}
+
+void pdcrt_agregar_modulo_al_contexto(pdcrt_contexto* ctx, size_t i, int const_nombre, pdcrt_proc_t proc)
+{
+    pdcrt_modulo mod = {
+        .nombre = ctx->constantes.textos[const_nombre],
+        .cuerpo = proc,
+        .valor = pdcrt_objeto_nulo()
+    };
+    no_falla(pdcrt_agregar_modulo(&ctx->registro, i, mod));
 }
 
 
@@ -3310,7 +3372,7 @@ void pdcrt_op_objattr(pdcrt_marco* marco)
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(idx, PDCRT_TOBJ_ENTERO);
     pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
-    size_t real_idx = idx.value.i + PDCRT_NUM_LOCALES_ESP;
+    size_t real_idx = idx.value.i;
     PDCRT_ASSERT(real_idx >= 0 && real_idx < obj.value.c.env->env_size);
     pdcrt_objeto v = obj.value.c.env->env[real_idx];
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, v));
@@ -3323,7 +3385,7 @@ void pdcrt_op_objattrset(pdcrt_marco* marco)
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_tipo(idx, PDCRT_TOBJ_ENTERO);
     pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
-    size_t real_idx = idx.value.i + PDCRT_NUM_LOCALES_ESP;
+    size_t real_idx = idx.value.i;
     PDCRT_ASSERT(real_idx >= 0 && real_idx < obj.value.c.env->env_size);
     obj.value.c.env->env[real_idx] = v;
 }
@@ -3332,7 +3394,7 @@ void pdcrt_op_objsz(pdcrt_marco* marco)
 {
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
-    size_t tam = obj.value.c.env->env_size - PDCRT_NUM_LOCALES_ESP;
+    size_t tam = obj.value.c.env->env_size;
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(tam)));
 }
 
@@ -3406,6 +3468,42 @@ void pdcrt_op_objtag(pdcrt_marco* marco)
 {
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(obj.tag)));
+}
+
+void pdcrt_op_dup(pdcrt_marco* marco)
+{
+    pdcrt_objeto valor = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, valor));
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, valor));
+}
+
+void pdcrt_op_drop(pdcrt_marco* marco)
+{
+    (void) pdcrt_sacar_de_pila(&marco->contexto->pila);
+}
+
+void pdcrt_op_nslookup(pdcrt_marco* marco, int cid)
+{
+    pdcrt_objeto valor = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto_debe_tener_tipo(valor, PDCRT_TOBJ_ESPACIO_DE_NOMBRES);
+    pdcrt_objeto res = pdcrt_objeto_nulo();
+    pdcrt_texto* nombre = marco->contexto->constantes.textos[cid];
+    if(pdcrt_obtener_campo_del_espacio_de_nombres(valor.value.e, nombre, &res))
+    {
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, res));
+    }
+    else
+    {
+        fprintf(stderr, "El espacio de nombres de NSLOOKUP no poseía el nombre ");
+        pdcrt_escribir_texto_al_archivo(stderr, nombre);
+        fprintf(stderr, "\n");
+        pdcrt_abort();
+    }
+}
+
+void pdcrt_op_getclsobj(pdcrt_marco* marco)
+{
+    no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, marco->contexto->claseObjeto));
 }
 
 pdcrt_continuacion pdcrt_frt_obtener_rt(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets)
@@ -3483,6 +3581,34 @@ pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdc
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         marco->contexto->entornoBootstrap = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 0);
+        return pdcrt_continuacion_devolver();
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "construirTexto") == 0)
+    {
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
+        pdcrt_objeto arr = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo(arr, PDCRT_TOBJ_ARREGLO);
+        struct pdcrt_constructor_de_texto cons;
+        size_t capacidad = 0;
+        for(size_t i = 0; i < arr.value.a->longitud; i++)
+        {
+            pdcrt_objeto el = arr.value.a->elementos[i];
+            pdcrt_objeto_debe_tener_tipo(el, PDCRT_TOBJ_TEXTO);
+            capacidad += el.value.t->longitud;
+        }
+        pdcrt_inic_constructor_de_texto(&cons, marco->contexto->alojador, capacidad);
+        for(size_t i = 0; i < arr.value.a->longitud; i++)
+        {
+            pdcrt_objeto el = arr.value.a->elementos[i];
+            pdcrt_objeto_debe_tener_tipo(el, PDCRT_TOBJ_TEXTO);
+            pdcrt_constructor_agregar(marco->contexto->alojador, &cons,
+                                      el.value.t->contenido, el.value.t->longitud);
+        }
+        pdcrt_texto* texto;
+        pdcrt_finalizar_constructor(marco->contexto->alojador, &cons, &texto);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(texto)));
+        pdcrt_deainic_constructor_de_texto(marco->contexto->alojador, &cons);
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
     else

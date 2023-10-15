@@ -51,13 +51,17 @@ local WARNINGS = {
    {"no-code-section", "no-code-sec", {"no_code_section"},
     "Advierte si no hay una sección de código."},
 
+   {"no-module-table", "no-mod-sec", {"no_module_table"},
+    "Advierte si no hay una sección con la tabla de módulos."},
+
    {"future", "future", {"future"},
     "Advierte sobre cosas que van a cambiar en un futuro."},
 
    {"useful", "useful", {"redefined_constant", "redefined_procedure",
                          "no_procedure_section", "no_constant_pool",
                          "empty_function", "future", "oor_const",
-                         "undef_const", "useless_pr_import"},
+                         "undef_const", "useless_pr_import", "no_module_table",
+                        },
     "Activa advertencias útiles durante el desarrollo."},
 
    {"all", "all", {--[[ el código más adelante llena este campo ]]},
@@ -90,7 +94,7 @@ end
 
 local grammar = [==[
 
-program <- {| '' -> 'program' ws version (rs platform)? (rs section)* |} (ws {} ! . / {})
+program <- {| '' -> 'program' ws version rs platform (rs section)* |} (ws {} ! . / {})
 
 s <- %s / comment
 ws <- s*
@@ -112,7 +116,7 @@ platform <- {| '' -> 'platform'
 pexp <- {| "(" ws {"and" / "or" / "not"} ws (pexp (ws "," ws pexp)*)? ws ")" |}
       / str
 
-section <- platformsec / cpoolsec / codesec / procsec / unknownsec
+section <- platformsec / cpoolsec / codesec / procsec / modtblsec / unknownsec
 
 platformsec <- {| '' -> 'platform_section'
                   "SECTION" ws '"platform"' (rs extern)* rs "ENDSECTION" |}
@@ -142,7 +146,8 @@ code <- {| '' -> 'locals'  (rs local)* |}
         {| '' -> 'opcodes'  (rs opcode)* |}
 local <- {| {"LOCAL"} rs (id / envs) |}
 
-OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
+OP <- "GETCLSOBJ"
+    / "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "SUM" / "SUB" / "MUL" / "DIV"
     / "RETN"
     / "MKCLZ" / "MK0CLZ" / "MKARR"
@@ -157,8 +162,9 @@ OP <- "LCONST" / "ICONST" / "FCONST" / "BCONST"
     / "OBJATTRSET" / "OBJATTR" / "OBJSZ"
     / "TDYNMSGV" / "TDYNMSG" / "DYNMSGV" / "DYNMSG"
     / "PRN" / "NL"
-    / "OPNEXP" / "CLSEXP" / "EXP" / "IMPORT" / "SAVEIMPORT" / "MODULE"
+    / "OPNEXP" / "CLSEXP" / "EXP" / "IMPORT" / "SAVEIMPORT" / "MODULE" / "NSLOOKUP"
     / "SPUSH" / "SPOP"
+    / "DUP" / "DROP"
     / "OBJTAG"
 
 procsec <- {| '' -> 'procedures_section'
@@ -175,6 +181,11 @@ pragname <- [A-Z][A-Z0-9_]*
 pragval <- 'str:'? str / 'int:'? int / 'flt:'? flt / 'id:' id
 param <- {| {"PARAM"} rs (id / envs) |}
 variadic <- "VARIADIC" rs id
+
+modtblsec <- {| '' -> 'module_table_section'
+                "SECTION" ws '"module table"' (rs modpair)* rs "ENDSECTION"
+             |}
+modpair <- {| '' -> 'module_pair' "MODULE" rs int rs "PROC" rs int |}
 
 unknownsec <- "SECTION" ws str (ws token)* rs "ENDSECTION"
 token <- str / [^%s"]+
@@ -470,6 +481,18 @@ local function processconstpool(cpool)
    return pool
 end
 
+local function processmodules(modtbl)
+   local r = {}
+   for i = 1, #modtbl do
+      assert(modtbl[i][1] == "module_pair")
+      r[#r + 1] = {
+         name_id = processoparg(modtbl[i][2]),
+         proc_id = processoparg(modtbl[i][3]),
+      }
+   end
+   return r
+end
+
 
 local REQUIRES_CONTINUATION = {
    "LT", "GT", "LE", "GE", "OPEQ",         -- Llamadas a función (operadores)
@@ -563,7 +586,17 @@ local schemare = re.compile(schemagrammar)
 
 local function schema(s)
    local ss = assert(re.match(s, schemare), ("could not parse schema %q"):format(s))
-   return function(op)
+
+   local types = {}
+   for i = 1, #ss do
+      local sel = ss[i]
+      types[#types + 1] = {
+         optional = sel[1] == "?",
+         type = sel[2],
+      }
+   end
+
+   local function check(op)
       assert(#op - 1 == #ss, "unexpected number of arguments to opcode " .. op[1])
       for i = 1, #ss do
          local sel = ss[i]
@@ -597,6 +630,11 @@ local function schema(s)
          end
       end
    end
+
+   return {
+      types = types,
+      check = check,
+   }
 end
 
 local function autoescape_raw(code)
@@ -1206,13 +1244,33 @@ function toc.opcodes.OBJSZ(emit, state, op)
    emit:stmt("pdcrt_op_objsz(marco)")
 end
 
+toc.opschema.DROP = schema ""
+function toc.opcodes.DROP(emit, state, op)
+   emit:stmt("pdcrt_op_drop(marco)")
+end
+
+toc.opschema.DUP = schema ""
+function toc.opcodes.DUP(emit, state, op)
+   emit:stmt("pdcrt_op_dup(marco)")
+end
+
+toc.opschema.NSLOOKUP = schema "Cx"
+function toc.opcodes.NSLOOKUP(emit, state, op)
+   emit:stmt("pdcrt_op_nslookup(marco, «1:int»)", op.Cx)
+end
+
+toc.opschema.GETCLSOBJ = schema ""
+function toc.opcodes.GETCLSOBJ(emit, state, op)
+   emit:stmt("pdcrt_op_getclsobj(marco)")
+end
+
 -- Fin de los opcodes.
 
 function toc.opcode(emit, state, op, srcloc)
    local errm = "opcode ".. op[1] .. " not implemented"
    emit:comment(("-- %d:%d @ %d --"):format(srcloc.lineno, srcloc.colno, srcloc.byteno))
    local substate = attach_extra(state, { srcloc = srcloc })
-   assert(toc.opschema[op[1]], errm)(op)
+   assert(toc.opschema[op[1]], errm).check(op)
    return assert(toc.opcodes[op[1]], errm)(emit, substate, op)
 end
 
@@ -1240,47 +1298,14 @@ function toc.compconstsunload(emit, state)
    end
 end
 
-local function gen_module_table(state)
-   local module_table = {}
-   for id, proc in pairs(state.procedures) do
-      for i = 1, #proc.parts do
-         local part = proc.parts[i]
-         for j = 1, #part do
-            local opcode = part[j]
-            if opcode[1] == "MODULE" then
-               local Cx = opcode[2]
-               local c = state.constants[Cx]
-               assert(c.type == "string")
-               assert(
-                  not module_table[Cx],
-                  ("redeclared module %s at proc %s (previous was %s)"):format(Cx, id, module_table[Cx])
-               )
-               module_table[Cx] = id
-            end
-         end
-      end
+function toc.compmodules(emit, state)
+   for i = 1, #state.module_table do
+      local mod = state.module_table[i]
+      emit:stmt("pdcrt_agregar_modulo_al_contexto(ctx, «1:int», «2:int», «3:procname»)",
+                i - 1, mod.name_id, mod.proc_id)
    end
-   return module_table
 end
 
-function toc.compmoduletbl(emit, state)
-   local module_table = gen_module_table(state)
-   if not next(module_table) then
-      warnabout("no_modules", "No se declaró ningún módulo")
-      emit:stmt("pdcrt_inic_registro_de_modulos(&ctx->registro)")
-   else
-      local modules = {}
-      for Cx, procid in pairs(module_table) do
-         modules[#modules + 1] = {
-            nombre = autoescape_raw(emit:expr("marco->contexto->constantes.textos[«1:int»]", Cx)),
-            cuerpo = autoescape_raw(emit:expr("«1:procname»", procid)),
-            valor = autoescape_raw(emit:expr("pdcrt_objeto_nulo()")),
-         }
-      end
-      emit:stmt("pdcrt_modulo modulos[«1:int»] = «2:*structlit»", #modules, modules)
-      emit:stmt("pdcrt_inic_registro_de_modulos_con_arreglo(modulos, «1:int», &ctx->registro)", #modules)
-   end
-end
 
 function toc.comppart(emit, state, part, next_ccid)
    local srclocs = srcposes_to_srclocs(state.source, part.srcposes)
@@ -1423,9 +1448,9 @@ function toc.compcode(emit, state)
    emit:toplevelstmt("PDCRT_MAIN_CONT_DECLR()")
 
    emit:opentoplevel("PDCRT_MAIN() {")
-   emit:stmt("PDCRT_MAIN_PRELUDE(«1:int»)", 0)
+   emit:stmt("PDCRT_MAIN_PRELUDE(«1:int», «2:int»)", 0, #state.module_table)
    toc.compconsts(emit, state)
-   toc.compmoduletbl(emit, state)
+   toc.compmodules(emit, state)
    emit:stmt("PDCRT_RUN(«1:procname»)", MAIN_PROC_ID)
    emit:closetoplevel("}")
 
@@ -1587,6 +1612,7 @@ local function main(input, config)
    elseif pos ~= string.len(input) + 1 then
       error "failed to parse all the bytecode"
    end
+
    local secs = sectionstotable(ast)
    log.info("done compiling")
 
@@ -1627,12 +1653,18 @@ local function main(input, config)
    else
       warnabout("no_constant_pool", "no constant pool")
    end
+   if secs.module_table_section then
+      secs.module_table_section = processmodules(secs.module_table_section)
+   else
+      warnabout("no_module_table", "no module table")
+   end
    log.info("processed constant pool")
 
    local state = {
       version = secs.version,
       procedures = secs.procedures_section or {},
       constants = secs.constant_pool_section or {},
+      module_table = secs.module_table_section or {},
       code = code,
       source = input,
    }
@@ -1751,6 +1783,7 @@ local function makeparsecli(opts)
             if a:sub(j, j) == "-" then
                ended = true
             else
+               local found = false
                for n = 1, #opts do
                   local o = opts[n]
                   if a:sub(j, j) == o[1] then
@@ -1767,8 +1800,12 @@ local function makeparsecli(opts)
                         r[o[2]] = val
                      end
                      i = i + math.abs(o[3])
+                     found = true
                      break
                   end
+               end
+               if not found then
+                  error("unknown option: " .. a:sub(j, j) .. " from " .. a)
                end
             end
          end
@@ -1786,7 +1823,7 @@ end
 local parser = makeparsecli {
    {"o", "output", 1, "Archivo en el cual guardar la salida."},
    {"O", "stdout", 0, "Escribe el compilado a la salida estándar."},
-   {"h", "header", 1, "Archivo en el cual guardar la cabecera generada"},
+   {"H", "header", 1, "Archivo en el cual guardar la cabecera generada"},
    {"h", "help", 0, "Muestra esta ayuda y termina."},
    {"v", "version", 0, "Muestra la versión del ensamblador"},
    {"V", "verbose", 0, "Muestra salida adicional."},
@@ -1807,15 +1844,15 @@ Este programa solo acepta opciones cortas (como `-h` o `-v`), las cuales
 tienen que estar antes de los argumentos. Las opciones se pueden combinar.
 Puedes separar las opciones de los argumentos con `--`.
 ]]):format())
-   print((" % 8s  % 15s  %s"):format("Opción", "Núm. argumentos", "Descripción"))
+   print((" %8s  %15s  %s"):format("Opción", "Núm. argumentos", "Descripción"))
    for i = 1, #res.OPTS do
       local opt = res.OPTS[i]
-      print(("% 8s  % 15d  %s"):format("-"..opt[1], opt[3], opt[4]))
+      print(("%8s  %15d  %s"):format("-"..opt[1], math.abs(opt[3]), opt[4]))
    end
-   print(("\nAdvertencias:\n\n %- 27s  %- 17s"):format("Nom. largo", "Nom. corto"))
+   print(("\nAdvertencias:\n\n %-27s  %-17s"):format("Nom. largo", "Nom. corto"))
    for i = 1, #WARNINGS do
       local W = WARNINGS[i]
-      print((" %- 27s  %- 17s"):format(W[1], W[2]))
+      print((" %-27s  %-17s"):format(W[1], W[2]))
       print("    " .. W[4])
       if i ~= #WARNINGS then
          print()
