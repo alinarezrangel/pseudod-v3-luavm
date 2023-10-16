@@ -102,7 +102,7 @@ rs <- s+
 comment <- ";" [^%nl]* / "--" [^%nl]*
 
 str <- {| {:str: '"' {(escape / [^%nl"])*} '"' :} |}
-escape <- "\" ([qntr0b] / "u" [0-9a-fA-F]^10)
+escape <- "\" ([qntr0b] / "\" / "u" [0-9a-fA-F]^10)
 
 id <- {| {:id: [0-9]+ :} |}
 int <- {| {:int: "-"? [0-9]+ :} |}
@@ -253,6 +253,7 @@ local function processoparg(tbl)
       end
       return r
    else
+      assert(tbl.str)
       local escapes = {
          ["q"] = "\"",
          ["n"] = "\n",
@@ -260,8 +261,9 @@ local function processoparg(tbl)
          ["r"] = "\r",
          ["0"] = "\0",
          ["b"] = "\\",
+         ["\\"] = "\\",
       }
-      return string.gsub(tbl.str, "\\[qntr0b]", escapes)
+      return string.gsub(tbl.str, "\\([qntr0b\\])", escapes)
    end
 end
 

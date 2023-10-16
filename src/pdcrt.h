@@ -301,6 +301,11 @@ typedef struct pdcrt_espacio_de_nombres pdcrt_espacio_de_nombres;
 struct pdcrt_arreglo;
 typedef struct pdcrt_arreglo pdcrt_arreglo;
 
+typedef long pdcrt_entero;
+#define PDCRT_ENTERO_FMT "%ld"
+typedef double pdcrt_float;
+#define PDCRT_FLOAT_FMT "%f"
+
 // El tipo `pdcrt_objeto`.
 //
 // `pdcrt_objeto` es el tipo que el runtime utiliza para manipular y
@@ -358,8 +363,8 @@ typedef struct pdcrt_objeto
     } tag;
     union
     {
-        int i; // entero
-        float f; // float
+        pdcrt_entero i; // entero
+        pdcrt_float f; // float
         pdcrt_closure c; // closure y objetos
         pdcrt_texto* t; // texto
         pdcrt_arreglo* a; // arreglo
@@ -845,9 +850,9 @@ const char* pdcrt_tipo_como_texto(pdcrt_tipo_de_objeto tipo);
 void pdcrt_objeto_debe_tener_tipo(pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo);
 
 // Crea un objeto entero (con el valor `v`).
-pdcrt_objeto pdcrt_objeto_entero(int v);
+pdcrt_objeto pdcrt_objeto_entero(pdcrt_entero v);
 // Crea un objeto real (con el valor `v`).
-pdcrt_objeto pdcrt_objeto_float(float v);
+pdcrt_objeto pdcrt_objeto_float(pdcrt_float v);
 // Crea un objeto "marca de pila".
 pdcrt_objeto pdcrt_objeto_marca_de_pila(void);
 // Crea un objeto desde un bool.
@@ -903,13 +908,6 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
 pdcrt_continuacion pdcrt_recv_espacio_de_nombres(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 pdcrt_continuacion pdcrt_recv_voidptr(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
-
-// Formatear:
-pdcrt_error pdcrt_formatear_texto(struct pdcrt_marco* marco,
-                                  PDCRT_OUT pdcrt_texto** res,
-                                  pdcrt_texto* fmt,
-                                  PDCRT_ARR(num_objs) pdcrt_objeto* objs,
-                                  size_t num_objs);
 
 
 // La pila de valores.
@@ -1367,10 +1365,10 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
 // Véase el ensamblador para ver que hace cada uno. Cada una de estas funciones
 // corresponde casi 1-a-1 con un opcode.
 
-void pdcrt_op_iconst(pdcrt_marco* marco, int c);
+void pdcrt_op_iconst(pdcrt_marco* marco, pdcrt_entero c);
 void pdcrt_op_bconst(pdcrt_marco* marco, bool c);
 void pdcrt_op_lconst(pdcrt_marco* marco, int c);
-void pdcrt_op_fconst(pdcrt_marco* marco, float c);
+void pdcrt_op_fconst(pdcrt_marco* marco, pdcrt_float c);
 
 pdcrt_continuacion pdcrt_op_sum(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
 pdcrt_continuacion pdcrt_op_sub(pdcrt_marco* marco, pdcrt_proc_continuacion proc);
@@ -1470,5 +1468,6 @@ PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_arreglo_distinto_de);
 PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_arreglo_operador_igual);
 PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_arreglo_operador_distinto);
 PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_arreglo_mapear);
+PDCRT_DECLARE_RT_EXTERN(pdcrt_frt_texto_formatear);
 
 #endif /* PDCRT_H */

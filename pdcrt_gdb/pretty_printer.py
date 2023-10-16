@@ -293,7 +293,29 @@ def inspeccionar_pila(arg, from_tty):
                 print('{}: {}'.format(i, val['elementos'][i]))
             print()
         else:
-            print('El valor no es ni un pdcrt_env ni un pdcrt_objeto de tipo CLOSURE')
+            print('El valor no es una pdcrt_pila')
+    except gdb.MemoryError:
+        pass
+
+
+@gdb_command('pdcrt-espnom', gdb.COMMAND_DATA)
+def inspeccionar_espacio_de_nombres(arg, from_tty):
+    val = gdb.parse_and_eval(arg)
+    try:
+        val = dereference_everything(val)
+        tag = val.type.strip_typedefs().tag
+        if tag == 'pdcrt_espacio_de_nombres':
+            size = val['num_nombres']
+            print('#{} (último nombre creado: #{})'.format(size, val['ultimo_nombre_creado']))
+            for i in range(size):
+                edn = val['nombres'][i]
+                if edn['es_autoejecutable']:
+                    prefix = 'procedimiento'
+                else:
+                    prefix = 'variable     '
+                print(' #{: >3} {} {: <10} {}'.format(i, prefix, PDCRT_Texto(edn['nombre']).to_string(), edn['valor']))
+        else:
+            print('El valor no es un pdcrt_espacio_de_nombres')
     except gdb.MemoryError:
         pass
 
