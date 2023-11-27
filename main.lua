@@ -411,6 +411,7 @@ end
 local PRAGMAS_SPECS = {
    CNAME = "string",
    IMPORT = "any",
+   FRAME_NAME = "string",
 }
 
 local function preppragmas(pragmas, specs)
@@ -1387,6 +1388,10 @@ function toc.compparts(emit, state, proc)
    for i = #proc.params, 1, -1 do
       local p = proc.params[i]
       emit:stmt("PDCRT_PARAM(«1:localid», «1:localname»)", p[2])
+   end
+   if proc.pragmas.FRAME_NAME then
+      assert(type(proc.pragmas.FRAME_NAME) == "string", "`PRAGMA FRAME_NAME` needs a string argument.")
+      emit:stmt("PDCRT_FRAME_NAME(«1:strlit»)", proc.pragmas.FRAME_NAME)
    end
    if #proc.parts > 0 then
       log.dbg("emitting main part for procedure %s", proc.id)

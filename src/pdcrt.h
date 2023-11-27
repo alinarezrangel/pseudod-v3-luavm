@@ -34,8 +34,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <string.h>
+#include <limits.h>
+#include <float.h>
 
 
 // Las siguientes macros son usadas como "marcadores" de algunas variables:
@@ -227,6 +230,10 @@ struct pdcrt_objeto;
 struct pdcrt_marco;
 struct pdcrt_env;
 
+#define PDCRT_CABECERA_GC()                     \
+    unsigned int generacion;                    \
+    void* anterior
+
 
 // Un puntero a función.
 //
@@ -281,6 +288,7 @@ typedef struct pdcrt_closure
 // texto.
 typedef struct pdcrt_texto
 {
+    PDCRT_CABECERA_GC();
     PDCRT_NULL PDCRT_ARR(longitud) char* contenido;
     size_t longitud;
 } pdcrt_texto;
@@ -303,8 +311,26 @@ typedef struct pdcrt_arreglo pdcrt_arreglo;
 
 typedef long pdcrt_entero;
 #define PDCRT_ENTERO_FMT "%ld"
+#define PDCRT_ENTERO_ATR(name) LONG_##name
+#define PDCRT_ENTERO_MIN LONG_MIN
+#define PDCRT_ENTERO_MAX LONG_MAX
+
+typedef unsigned long pdcrt_uentero;
+#define PDCRT_UENTERO_FMT "%lu"
+#define PDCRT_UENTERO_ATR(name) ULONG_##name
+#define PDCRT_UENTERO_MIN ULONG_MIN
+#define PDCRT_UENTERO_MAX ULONG_MAX
+
 typedef double pdcrt_float;
 #define PDCRT_FLOAT_FMT "%f"
+#define PDCRT_FLOAT_ATR(name) FLT_##name
+#define PDCRT_FLOAT_DIG_SIG PDCRT_FLOAT_ATR(MANT_DIG)
+#define PDCRT_FLOAT_FREXP(x, exp) frexp(x, exp)
+#define PDCRT_FLOAT_MODF(x, fr) modf(x, fr)
+#define PDCRT_FLOAT_FMOD(x, y) fmod(x, y)
+#define PDCRT_FLOAT_FLOOR(x) floorl(x)
+#define PDCRT_FLOAT_CEIL(x) ceill(x)
+
 
 // El tipo `pdcrt_objeto`.
 //
@@ -392,6 +418,7 @@ typedef struct pdcrt_edn_triple pdcrt_edn_triple;
 // exportado.
 typedef struct pdcrt_espacio_de_nombres
 {
+    PDCRT_CABECERA_GC();
     PDCRT_NULL PDCRT_ARR(num_nombres) pdcrt_edn_triple* nombres;
     size_t num_nombres;
     size_t ultimo_nombre_creado; // Cuando se está creando un espacio de
@@ -445,6 +472,7 @@ bool pdcrt_obtener_campo_del_espacio_de_nombres(pdcrt_espacio_de_nombres* espaci
 // `elementos[longitud..capacidad]` no tienen un valor definido.
 typedef struct pdcrt_arreglo
 {
+    PDCRT_CABECERA_GC();
     PDCRT_ARR(capacidad) pdcrt_objeto* elementos;
     size_t capacidad;
     size_t longitud;
@@ -524,6 +552,11 @@ pdcrt_error pdcrt_arreglo_mover_elementos(
     pdcrt_arreglo* destino,
     size_t inicio_destino
 );
+
+
+// Hashea un objeto. Solo puede hashear enteros, floats, nulos, textos, marcas
+// de pila, booleanos y voidptrs.
+pdcrt_entero pdcrt_hashear_objeto(pdcrt_objeto obj, pdcrt_uentero n);
 
 
 // Una continuación.
@@ -823,6 +856,7 @@ typedef pdcrt_continuacion (*pdcrt_recvmsj)(struct pdcrt_marco* marco, pdcrt_obj
 // O(1) de forma asintótica no importa.
 typedef struct pdcrt_env
 {
+    PDCRT_CABECERA_GC();
     size_t env_size;
     PDCRT_ARR(env_size) pdcrt_objeto env[];
 } pdcrt_env;
@@ -887,10 +921,14 @@ pdcrt_error pdcrt_objeto_aloj_espacio_de_nombres(PDCRT_OUT pdcrt_objeto* obj, pd
 // de PseudoD. Te recomiendo que veas el "Reporte del lenguaje de programación
 // PseudoD", sección "¿Qué es la Igualdad?" para los detalles.
 
-// Determina si dos objetos tienen el mismo valor.
+// Determina si dos objetos escalares tienen el mismo valor.
 //
 // No llama a sus métodos `igualA`/`operador_=`, incluso si tienen uno.
-bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b);
+//
+// Solo puede comparar closures, números, booleanos, textos, nulos, voidptrs y
+// espacios de nombres. Para los demás tipos (objetos y arreglos), esta función
+// devuelve lo mismo que `pdcrt_objeto_identicos`.
+bool pdcrt_objeto_escalar_iguales(pdcrt_objeto a, pdcrt_objeto b);
 // Determina si `a` y `b` son el mismo objeto.
 bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b);
 
@@ -1082,6 +1120,7 @@ typedef struct pdcrt_contexto
     char** argv;
     pdcrt_objeto claseObjeto;
     pdcrt_objeto entornoBootstrap;
+    unsigned int generacionDelRecolector;
 } pdcrt_contexto;
 
 // Variantes de las funciones con el mismo nombre pero sin el `_simple` al
@@ -1147,6 +1186,7 @@ typedef struct pdcrt_marco
     // Para solucionar este problema, cada marco tiene este entero que es
     // inicializado al valor del parámetro `rets`.
     int num_valores_a_devolver;
+    PDCRT_NULL const char* nombre;
 } pdcrt_marco;
 
 // Inicializa y desinicializa un marco. `num_locales` es el número de locales,
@@ -1171,6 +1211,9 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
 // Ajusta la pila para que una función recién llamada que recibió #nargs
 // argumentos pero pedía #nparams parámetros pueda ejecutarse.
 pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t nparams, bool variadic);
+
+// Fija el nombre de depuración de un marco.
+void pdcrt_marco_fijar_nombre(pdcrt_marco* marco, const char* nombre);
 
 // La macro `PDCRT_RASTREAR_MARCO(marco, procname, info)` emitirá una llamada a
 // `pdcrt_mostrar_marco` si `PDCRT_DBG_RASTREAR_MARCOS` está definido, o se
@@ -1315,6 +1358,9 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
 #define PDCRT_CONT_PRELUDE(name, k)                     \
     pdcrt_marco* marco = name##marco_actual;            \
     PDCRT_RASTREAR_MARCO(marco, #name, "continuar");
+
+#define PDCRT_FRAME_NAME(name)                  \
+    pdcrt_marco_fijar_nombre(marco, (name));
 
 // Declara una función antes de usarla.
 #define PDCRT_DECLARE_PROC(name, visibility)    \

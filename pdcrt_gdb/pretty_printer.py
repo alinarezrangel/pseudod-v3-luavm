@@ -231,6 +231,7 @@ def inspeccionar_marco(arg, from_tty):
                 break
             else:
                 print('#{}: contexto = {}, marco_anterior = {}, num_valores_a_devolver = {}'.format(frame_index, val['contexto'], val['marco_anterior'], val['num_valores_a_devolver']))
+                print(' {}: {}'.format(frame_index, val['nombre']))
                 size = int(val['num_locales'])
                 for i in range(size):
                     if i < PDCRT_NUM_LOCALES_ESP:

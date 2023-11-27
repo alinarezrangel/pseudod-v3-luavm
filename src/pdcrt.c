@@ -861,6 +861,15 @@ const char* pdcrt_tipo_como_texto(pdcrt_tipo_de_objeto tipo)
     return tipos[tipo];
 }
 
+static void pdcrt_escribir_traceback(pdcrt_marco* marco)
+{
+    for(pdcrt_marco* m = marco; m; m = m->marco_anterior)
+    {
+        if(m->nombre)
+            fprintf(stderr, "  %s\n", m->nombre);
+    }
+}
+
 void pdcrt_objeto_debe_tener_tipo(pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo)
 {
     if(obj.tag != tipo)
@@ -874,7 +883,8 @@ void pdcrt_objeto_debe_tener_tipo(pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo)
     }
 }
 
-static void pdcrt_objeto_debe_tener_uno_de_los_tipos(pdcrt_objeto obj,
+static void pdcrt_objeto_debe_tener_uno_de_los_tipos(pdcrt_marco* marco,
+                                                     pdcrt_objeto obj,
                                                      pdcrt_tipo_de_objeto tipo1,
                                                      pdcrt_tipo_de_objeto tipo2)
 {
@@ -885,6 +895,7 @@ static void pdcrt_objeto_debe_tener_uno_de_los_tipos(pdcrt_objeto obj,
                 pdcrt_tipo_como_texto(obj.tag),
                 pdcrt_tipo_como_texto(tipo1),
                 pdcrt_tipo_como_texto(tipo2));
+        pdcrt_escribir_traceback(marco);
         if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA)
         {
             pdcrt_notifica_error_interno();
@@ -893,9 +904,23 @@ static void pdcrt_objeto_debe_tener_uno_de_los_tipos(pdcrt_objeto obj,
     }
 }
 
-static void pdcrt_objeto_debe_tener_closure(pdcrt_objeto obj)
+static void pdcrt_objeto_debe_tener_tipo_tb(pdcrt_marco* marco, pdcrt_objeto obj, pdcrt_tipo_de_objeto tipo)
 {
-    pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
+    if(obj.tag != tipo)
+    {
+        fprintf(stderr, u8"Objeto de tipo %s debía tener tipo %s\n", pdcrt_tipo_como_texto(obj.tag), pdcrt_tipo_como_texto(tipo));
+        pdcrt_escribir_traceback(marco);
+        if(obj.tag == PDCRT_TOBJ_MARCA_DE_PILA || tipo == PDCRT_TOBJ_MARCA_DE_PILA)
+        {
+            pdcrt_notifica_error_interno();
+        }
+        pdcrt_abort();
+    }
+}
+
+static void pdcrt_objeto_debe_tener_closure(pdcrt_marco* marco, pdcrt_objeto obj)
+{
+    pdcrt_objeto_debe_tener_uno_de_los_tipos(marco, obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
 }
 
 pdcrt_objeto pdcrt_objeto_entero(pdcrt_entero v)
@@ -1029,11 +1054,269 @@ pdcrt_error pdcrt_objeto_aloj_espacio_de_nombres(PDCRT_OUT pdcrt_objeto* obj, pd
 
 // Igualdad:
 
+// La mayoría de los tipos son fáciles de comparar (por igualdad). Sin embargo,
+// los números nos presentan un problema: no todos los enteros son floats y no
+// todos los floats son enteros.
+//
+// Específicamente, los «floats enteros» (como 3.0 o -7.0) no necesariamente
+// pueden convertirse a un pdcrt_entero. Esto es debido a que los floats
+// (incluso los «pequeños» de 32 bits) pueden representar enteros con
+// magnitudes mucho mayores a PDCRT_ENTERO_MAX o menores a PDCRT_ENTERO_MIN.
+//
+// Además, como los floats pierden precisión rápidamente a medida que se alejan
+// de 0, los enteros grandes tampoco pueden ser representados como floats. Por
+// ejemplo, el entero 9223372036854775806L no puede ser representado como un
+// float de 32 bits: es redondeado a 9223372036854775808.0f.
+//
+// No podemos realizar `ent == (pdcrt_entero) flt` porque `(pdcrt_entero) flt`
+// podría hacer overflow, así que primero hay que verificar que `flt` se
+// encuentre en el rango de los enteros. En teoría es tan sencillo como `flt >=
+// (pdcrt_float) PDCRT_ENTERO_MIN && flt <= (pdcrt_float) PDCRT_ENTERO_MAX`,
+// pero como ya dije ¡Algunos enteros son irrepresentables! Si PDCRT_ENTERO_MIN
+// o PDCRT_ENTERO_MAX son irrepresentables entonces este condicional fallaría
+// al aceptar más o menos valores de los esperados.
+//
+// Una solución sencilla, utilizada por Lua <http://www.lua.org> 5.4
+// <http://www.lua.org/versions.html#5.4>, es la siguiente:
+//
+// 1. Determinamos cual es el rango de enteros que pueden ser representados por
+// pdcrt_float sin pérdida de precisión.
+//
+// 2. Al comparar `ent` y `flt`, primero convertimos `ent` a un pdcrt_float *si
+// se encuentra en este rango seguro*. Si este es el caso, comparamos con `flt
+// == (pdcrt_float) ent`.
+//
+// 3. Si este no es el caso, tratamos de convertir `flt` a un entero mediante
+// la condición anteriormente descrita (`flt >= (pdcrt_float) PDCRT_ENTERO_MIN
+// && flt <= (pdcrt_float) PDCRT_ENTERO_MAX`).
+//
+// Lua no maneja el caso en el que PDCRT_ENTERO_MAX no pueda ser un float. En
+// cambio, ellos documentan que este caso está «indefinído».
+//
+// Python <https://www.python.org> 3.13.0a1 (commit
+// 1c7ed7e9ebc53290c831d7b610219fa737153a1b) implementa la siguiente estrategia
+// (función `float_richcompare`, `Objects/floatobject.c` línea 414):
+//
+// 1. Si tienen signos distintos, no son iguales.
+//
+// 2. Si el float es NaN o ±inf, no son iguales.
+//
+// 3. Si el entero tiene menos bits que pdcrt_float tiene de precisión, `flt ==
+// (pdcrt_float) ent`. `(pdcrt_float) ent` siempre podrá representar `ent`.
+//
+// Recuerda que todos los números en coma flotante son de la forma `flt === sig
+// * 2**exp`. La función `frexp(3)` te permite obtener `sig` y `exp`. Si
+// ninguno de los casos anteriores funciona, Python procede a desestructurar
+// `flt` en sus componentes `sig` y `exp` y a compararlos con `ent`.
+
+
+// Sacado de
+// <https://stackoverflow.com/questions/64842669/how-to-test-if-a-target-has-twos-complement-integers-with-the-c-preprocessor>
+_Static_assert((-1 & 3) == 3,
+               u8"tu compilador debe implementar los enteros como números en complemento a 2");
+
+#if !__STDC_IEC_559__ || !__STDC_IEC_60559_BFP__
+#error tu compilador debe implementar float/double/long double como números IEEE-754 / IEC 60559
+#endif
+
+_Static_assert(FLT_RADIX == 2, "float/double/long double deben ser binarios");
+_Static_assert(sizeof(float) == 4, "float debe ser de 32 bits");
+_Static_assert(sizeof(double) == 8, "double debe ser de 64 bits");
+
+// Determina si `t` es un tipo numérico (entero o float).
+static bool pdcrt_es_numero(pdcrt_tipo_de_objeto t)
+{
+    return (t == PDCRT_TOBJ_ENTERO) || (t == PDCRT_TOBJ_FLOAT);
+}
+
+// La cantidad de bits en un entero.
+#define PDCRT_ENTERO_BITS (sizeof(pdcrt_entero) * 8)
+
+enum pdcrt_comparacion
+{
+    //                              ABC
+    PDCRT_MENOR_QUE       = 1,  // 0001
+    PDCRT_MENOR_O_IGUAL_A = 3,  // 0011
+    PDCRT_MAYOR_QUE       = 4,  // 0100
+    PDCRT_MAYOR_O_IGUAL_A = 6,  // 0110
+    PDCRT_IGUAL_A         = 10  // 1010
+    // El bit A es si es "mayor que", el bit B es el bit "igual a", el bit C es
+    // el bit "menor que".
+};
+
+static inline bool pdcrt_es_menor_que(enum pdcrt_comparacion op)
+{
+    return op & 1;
+}
+
+static inline bool pdcrt_es_igual_a(enum pdcrt_comparacion op)
+{
+    return op & 2;
+}
+
+static inline bool pdcrt_es_mayor_que(enum pdcrt_comparacion op)
+{
+    return op & 4;
+}
+
+static bool pdcrt_comparar_floats(pdcrt_float a, pdcrt_float b, enum pdcrt_comparacion op)
+{
+    switch(op)
+    {
+    case PDCRT_MENOR_QUE:
+        return a < b;
+    case PDCRT_MENOR_O_IGUAL_A:
+        return a <= b;
+    case PDCRT_MAYOR_QUE:
+        return a > b;
+    case PDCRT_MAYOR_O_IGUAL_A:
+        return a >= b;
+    case PDCRT_IGUAL_A:
+        return a == b;
+    }
+    pdcrt_inalcanzable();
+}
+
+static bool pdcrt_comparar_enteros(pdcrt_entero a, pdcrt_entero b, enum pdcrt_comparacion op)
+{
+    switch(op)
+    {
+    case PDCRT_MENOR_QUE:
+        return a < b;
+    case PDCRT_MENOR_O_IGUAL_A:
+        return a <= b;
+    case PDCRT_MAYOR_QUE:
+        return a > b;
+    case PDCRT_MAYOR_O_IGUAL_A:
+        return a >= b;
+    case PDCRT_IGUAL_A:
+        return a == b;
+    }
+    pdcrt_inalcanzable();
+}
+
+static bool pdcrt_comparar_entero_y_float(pdcrt_entero e, pdcrt_float f, enum pdcrt_comparacion op)
+{
+    if(PDCRT_FLOAT_DIG_SIG >= PDCRT_ENTERO_BITS) // (1)
+    {
+        return pdcrt_comparar_floats((pdcrt_float) e, f, op);
+    }
+
+    if(isnan(f))
+    {
+        return false; // No son comparables.
+    }
+    else if(isinf(f))
+    {
+        return f > 0 ? pdcrt_es_menor_que(op) : pdcrt_es_mayor_que(op);
+    }
+
+    // Debido a (1), sabemos que PDCRT_FLOAT_DIG_SIG < PDCRT_ENTERO_BITS
+    const pdcrt_entero max_entero_repr_float = (1U << PDCRT_FLOAT_DIG_SIG) - 1U;
+    const pdcrt_entero min_entero_repr_float = -(1U << PDCRT_FLOAT_DIG_SIG);
+
+    if((e >= min_entero_repr_float) && (e <= max_entero_repr_float))
+    {
+        return pdcrt_comparar_floats((pdcrt_float) e, f, op);
+    }
+
+    if((e < 0 && f >= 0.0) || (e <= 0 && f > 0.0))
+    {
+        return pdcrt_es_menor_que(op);
+    }
+
+    if((e > 0 && f <= 0.0) || (e >= 0 && f < 0.0))
+    {
+        return pdcrt_es_mayor_que(op);
+    }
+
+    if(e == 0 && f == 0.0)
+    {
+        return pdcrt_es_igual_a(op);
+    }
+
+    // Ahora sabemos que `e` y `f` tienen el mismo signo (ambos positivos o
+    // ambos negativos).
+
+    pdcrt_float f_ent, f_floor;
+    f_floor = PDCRT_FLOAT_FLOOR(f);
+    if(f_floor == f)
+    {
+        // `f` es un "float entero" (por ejemplo: 3.0)
+        f_ent = f;
+    }
+    else
+    {
+        // `f` tiene una parte fraccional.
+        switch(op)
+        {
+        case PDCRT_IGUAL_A:
+            // Un float "normal" como 2.4 jamás será igual a un entero.
+            return false;
+        case PDCRT_MAYOR_O_IGUAL_A:
+            // `e >= f` => `e >= floor(f)`
+        case PDCRT_MAYOR_QUE:
+            // `e > f` => `e > floor(f)`
+            f_ent = f_floor;
+            break;
+        case PDCRT_MENOR_O_IGUAL_A:
+            // `e <= f` => `e <= ceil(f)`
+        case PDCRT_MENOR_QUE:
+            // `e < f` => `e < ceil(f)`
+            f_ent = PDCRT_FLOAT_CEIL(f);
+            break;
+        }
+    }
+
+    int exp = 0;
+    PDCRT_FLOAT_FREXP(f_ent, &exp);
+    PDCRT_ASSERT(exp > 0); // `exp > 0` significa que `f_ent` contiene un
+                           // entero.
+
+    size_t f_bits = exp;
+
+    // Además, como es positivo, el exponente es la cantidad de bits antes
+    // del punto decimal (¿punto decimal? ¿o punto binario?).
+    if(f_bits > PDCRT_ENTERO_BITS)
+    {
+        // `f` es más grande o más pequeño que cualquier entero.
+        return (f_ent > 0) ? op == PDCRT_MENOR_QUE : op == PDCRT_MAYOR_QUE;
+    }
+    else
+    {
+        PDCRT_ASSERT(f_bits <= PDCRT_ENTERO_BITS);
+        // Ahora sabemos que tienen cantidades comparables de bits, hay que
+        // comparar sus magnitudes.
+
+        // Este cast es seguro (no hará overflow) ya que sabemos que f tiene la
+        // misma cantidad de bits *en su parte entera*.
+        return pdcrt_comparar_enteros(e, (pdcrt_entero) f_ent, op);
+    }
+}
+
 bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b)
 {
     if(a.tag != b.tag)
     {
-        return false;
+        if(pdcrt_es_numero(a.tag) && pdcrt_es_numero(b.tag))
+        {
+            // Entero = Float o Float = Entero
+            if(a.tag == PDCRT_TOBJ_ENTERO)
+            {
+                PDCRT_ASSERT(b.tag == PDCRT_TOBJ_FLOAT);
+                return pdcrt_comparar_entero_y_float(a.value.i, b.value.f, PDCRT_IGUAL_A);
+            }
+            else
+            {
+                PDCRT_ASSERT(a.tag == PDCRT_TOBJ_FLOAT);
+                PDCRT_ASSERT(b.tag == PDCRT_TOBJ_ENTERO);
+                return pdcrt_comparar_entero_y_float(b.value.i, a.value.f, PDCRT_IGUAL_A);
+            }
+        }
+        else
+        {
+            return false;
+        }
     }
     switch(a.tag)
     {
@@ -1046,55 +1329,6 @@ bool pdcrt_objeto_iguales(pdcrt_objeto a, pdcrt_objeto b)
                 return false;
         }
         return true;
-    case PDCRT_TOBJ_CLOSURE:
-    case PDCRT_TOBJ_OBJETO:
-        if(a.value.c.proc != b.value.c.proc)
-        {
-            return false;
-        }
-        else if(a.value.c.env == b.value.c.env)
-        {
-            return true;
-        }
-        else if(a.value.c.env->env_size != b.value.c.env->env_size)
-        {
-            return false;
-        }
-        else
-        {
-            for(size_t i = 0; i < a.value.c.env->env_size; i++)
-            {
-                pdcrt_objeto oa = a.value.c.env->env[i];
-                pdcrt_objeto ob = b.value.c.env->env[i];
-                if(!pdcrt_objeto_iguales(oa, ob))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-    case PDCRT_TOBJ_ARREGLO:
-        if(a.value.a->longitud != b.value.a->longitud)
-        {
-            return false;
-        }
-        else if(a.value.a == b.value.a)
-        {
-            return true;
-        }
-        else
-        {
-            for(size_t i = 0; i < a.value.a->longitud; i++)
-            {
-                pdcrt_objeto oa = a.value.a->elementos[i];
-                pdcrt_objeto ob = b.value.a->elementos[i];
-                if(!pdcrt_objeto_iguales(oa, ob))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
     default:
         return pdcrt_objeto_identicos(a, b);
     }
@@ -1129,6 +1363,68 @@ bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b)
     case PDCRT_TOBJ_CLOSURE:
     case PDCRT_TOBJ_OBJETO:
         return (a.value.c.proc == b.value.c.proc) && (a.value.c.env == b.value.c.env);
+    default:
+        pdcrt_inalcanzable();
+    }
+}
+
+
+// Hasheo:
+
+static pdcrt_entero pdcrt_hashear_bytes(const char* bytes, size_t longitud, pdcrt_uentero n)
+{
+    pdcrt_uentero hash = 0;
+    for(size_t i = 0; i < longitud; i++)
+    {
+        unsigned char c = bytes[i];
+        hash = ((hash << 8) + c) * (pdcrt_uentero) n;
+    }
+    return hash % (pdcrt_uentero) n;
+}
+
+pdcrt_entero pdcrt_hashear_objeto(pdcrt_objeto obj, pdcrt_uentero n)
+{
+    switch(obj.tag)
+    {
+    case PDCRT_TOBJ_ENTERO:
+        return obj.value.i % n;
+    case PDCRT_TOBJ_FLOAT:
+        if(isnan(obj.value.f))
+        {
+            return n / 3;
+        }
+        else if(isinf(obj.value.f))
+        {
+            return (obj.value.f < 0) ? 0 : (n - 1);
+        }
+        else
+        {
+            int exp;
+            PDCRT_FLOAT_FREXP(obj.value.f, &exp);
+            if(exp > 0 && ((size_t) exp) < PDCRT_ENTERO_BITS)
+            {
+                return ((pdcrt_entero) obj.value.f) % n;
+            }
+            else if(exp > 0)
+            {
+                return ((pdcrt_entero) PDCRT_FLOAT_FMOD(obj.value.f, (pdcrt_float) n)) % n;
+            }
+            else
+            {
+                PDCRT_ASSERT(exp <= 0);
+                return pdcrt_hashear_bytes((const char*)&obj.value.f, sizeof(obj.value.f), n);
+            }
+        }
+    case PDCRT_TOBJ_BOOLEANO:
+        return obj.value.b? 0 : (n - 1);
+    case PDCRT_TOBJ_NULO:
+        return n / 2;
+    case PDCRT_TOBJ_MARCA_DE_PILA:
+        return n - 1;
+    case PDCRT_TOBJ_TEXTO:
+        return pdcrt_hashear_bytes(obj.value.t->contenido, obj.value.t->longitud, n);
+    case PDCRT_TOBJ_VOIDPTR:
+        return ((pdcrt_entero) obj.value.p) % n;
     default:
         pdcrt_inalcanzable();
     }
@@ -1205,7 +1501,7 @@ static void pdcrt_deainic_constructor_de_texto(pdcrt_alojador alojador, struct p
 static int pdcrt_texto_cmp_lit(pdcrt_texto* lhs, const char* rhs)
 {
     // FIXME: El siguiente strlen itera sobre todo rhs lo cual realentiza este
-    // caso incluso si sus tamaños son distíntos. La solución sería unificar el
+    // caso incluso si sus tamaños son distintos. La solución sería unificar el
     // bucle de memcmp y el de strlen.
     size_t rhslon = strlen(rhs);
     if(lhs->longitud != rhslon)
@@ -1267,7 +1563,7 @@ static void pdcrt_ajustar_valores_devueltos_para_c(pdcrt_contexto* ctx, int espe
 
 static pdcrt_objeto pdcrt_closure_desde_callback_del_runtime(pdcrt_marco* marco, pdcrt_proc_t cb)
 {
-    pdcrt_objeto_debe_tener_closure(marco->contexto->entornoBootstrap);
+    pdcrt_objeto_debe_tener_closure(marco, marco->contexto->entornoBootstrap);
     pdcrt_objeto clz;
     clz.tag = PDCRT_TOBJ_CLOSURE;
     clz.value.c.proc = (pdcrt_funcion_generica) cb;
@@ -1276,16 +1572,74 @@ static pdcrt_objeto pdcrt_closure_desde_callback_del_runtime(pdcrt_marco* marco,
     return clz;
 }
 
+static enum pdcrt_comparacion pdcrt_invertir_comparacion(enum pdcrt_comparacion op)
+{
+    switch(op)
+    {
+    case PDCRT_MENOR_QUE:
+        return PDCRT_MAYOR_O_IGUAL_A;
+    case PDCRT_MENOR_O_IGUAL_A:
+        return PDCRT_MAYOR_QUE;
+    case PDCRT_MAYOR_QUE:
+        return PDCRT_MENOR_O_IGUAL_A;
+    case PDCRT_MAYOR_O_IGUAL_A:
+        return PDCRT_MENOR_QUE;
+    case PDCRT_IGUAL_A:
+        return PDCRT_IGUAL_A;
+    }
+    pdcrt_inalcanzable();
+}
+
+static void pdcrt_comparar_numeros(pdcrt_marco* marco, pdcrt_objeto yo, int args, int rets, enum pdcrt_comparacion op)
+{
+    enum pdcrt_comparacion rop = pdcrt_invertir_comparacion(op);
+    pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
+    pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
+    pdcrt_objeto_debe_tener_uno_de_los_tipos(marco, rhs, PDCRT_TOBJ_ENTERO, PDCRT_TOBJ_FLOAT);
+    switch(yo.tag)
+    {
+    case PDCRT_TOBJ_ENTERO:
+        switch(rhs.tag)
+        {
+        case PDCRT_TOBJ_ENTERO:
+            no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_comparar_enteros(yo.value.i, rhs.value.i, op))));
+            break;
+        case PDCRT_TOBJ_FLOAT:
+            no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_comparar_entero_y_float(yo.value.i, rhs.value.f, op))));
+            break;
+        default:
+            pdcrt_inalcanzable();
+        }
+        break;
+    case PDCRT_TOBJ_FLOAT:
+        switch(rhs.tag)
+        {
+        case PDCRT_TOBJ_ENTERO:
+            no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_comparar_entero_y_float(rhs.value.i, yo.value.f, rop))));
+            break;
+        case PDCRT_TOBJ_FLOAT:
+            no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(pdcrt_comparar_floats(yo.value.f, rhs.value.f, op))));
+            break;
+        default:
+            pdcrt_inalcanzable();
+        }
+        break;
+    default:
+        pdcrt_inalcanzable();
+    }
+    pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+}
+
 pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
 
 #define PDCRT_NUMOP(op, ffn, efn)                                       \
     do                                                                  \
     {                                                                   \
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);      \
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila); \
-        pdcrt_objeto_debe_tener_uno_de_los_tipos(rhs, PDCRT_TOBJ_ENTERO, PDCRT_TOBJ_FLOAT); \
+        pdcrt_objeto_debe_tener_uno_de_los_tipos(marco, rhs, PDCRT_TOBJ_ENTERO, PDCRT_TOBJ_FLOAT); \
         switch(rhs.tag)                                                 \
         {                                                               \
         case PDCRT_TOBJ_ENTERO:                                         \
@@ -1341,7 +1695,7 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_uno_de_los_tipos(rhs, PDCRT_TOBJ_ENTERO, PDCRT_TOBJ_FLOAT);
+        pdcrt_objeto_debe_tener_uno_de_los_tipos(marco, rhs, PDCRT_TOBJ_ENTERO, PDCRT_TOBJ_FLOAT);
         pdcrt_float flhs, frhs;
         switch(yo.tag)
         {
@@ -1371,38 +1725,22 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_<") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "menorQue") == 0)
     {
-        PDCRT_NUMOP(<, pdcrt_objeto_entero, pdcrt_objeto_entero);
-        pdcrt_objeto bb = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        bb = pdcrt_objeto_booleano(bb.value.i != 0);
-        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, bb));
-        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        pdcrt_comparar_numeros(marco, yo, args, rets, PDCRT_MENOR_QUE);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_>") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "mayorQue") == 0)
     {
-        PDCRT_NUMOP(>, pdcrt_objeto_entero, pdcrt_objeto_entero);
-        pdcrt_objeto bb = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        bb = pdcrt_objeto_booleano(bb.value.i != 0);
-        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, bb));
-        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        pdcrt_comparar_numeros(marco, yo, args, rets, PDCRT_MAYOR_QUE);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_=<") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "menorOIgualA") == 0)
     {
-        PDCRT_NUMOP(<=, pdcrt_objeto_entero, pdcrt_objeto_entero);
-        pdcrt_objeto bb = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        bb = pdcrt_objeto_booleano(bb.value.i != 0);
-        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, bb));
-        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        pdcrt_comparar_numeros(marco, yo, args, rets, PDCRT_MENOR_O_IGUAL_A);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "operador_>=") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "mayorOIgualA") == 0)
     {
-        PDCRT_NUMOP(>=, pdcrt_objeto_entero, pdcrt_objeto_entero);
-        pdcrt_objeto bb = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        bb = pdcrt_objeto_booleano(bb.value.i != 0);
-        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, bb));
-        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        pdcrt_comparar_numeros(marco, yo, args, rets, PDCRT_MAYOR_O_IGUAL_A);
         return pdcrt_continuacion_devolver();
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
@@ -1550,6 +1888,17 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "hashPara") == 0)
+    {
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
+        pdcrt_objeto on = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo(on, PDCRT_TOBJ_ENTERO);
+        pdcrt_uentero n = on.value.i;
+        pdcrt_entero hash = pdcrt_hashear_objeto(yo, n);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(hash)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        return pdcrt_continuacion_devolver();
+    }
     else
     {
         printf("Mensaje ");
@@ -1576,7 +1925,7 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
 
 pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "longitud") == 0)
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
@@ -1692,7 +2041,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, obj, PDCRT_TOBJ_ENTERO);
         pdcrt_entero i = obj.value.i;
         if((i < 0) || (((size_t) i) >= yo.value.t->longitud))
         {
@@ -1719,7 +2068,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_TEXTO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, obj, PDCRT_TOBJ_TEXTO);
         pdcrt_texto* res;
         no_falla(pdcrt_aloj_texto(&res, marco->contexto->alojador, obj.value.t->longitud + yo.value.t->longitud));
         memcpy(res->contenido, yo.value.t->contenido, yo.value.t->longitud);
@@ -1728,35 +2077,53 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
-    else if(pdcrt_texto_cmp_lit(msj.value.t, "subTexto") == 0)
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "parteDelTexto") == 0)
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
-        pdcrt_objeto oinic = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto ofinal = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(oinic, PDCRT_TOBJ_ENTERO);
-        pdcrt_objeto_debe_tener_tipo(ofinal, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto oinic = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, oinic, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, ofinal, PDCRT_TOBJ_ENTERO);
         pdcrt_entero inic = oinic.value.i, final = ofinal.value.i;
         PDCRT_ASSERT(inic >= 0);
-        PDCRT_ASSERT(final >= inic);
-        PDCRT_ASSERT(((size_t) final) <= yo.value.t->longitud);
+        PDCRT_ASSERT(final >= 0);
         pdcrt_texto* res;
-        no_falla(pdcrt_aloj_texto(&res, marco->contexto->alojador, final - inic));
-        memcpy(res->contenido, yo.value.t->contenido + inic, final - inic);
+        if((final <= inic) || (((size_t) inic) >= yo.value.t->longitud))
+        {
+            no_falla(pdcrt_aloj_texto_desde_c(&res, marco->contexto->alojador, ""));
+        }
+        else
+        {
+            if(((size_t) final) > yo.value.t->longitud)
+            {
+                final = yo.value.t->longitud;
+            }
+            no_falla(pdcrt_aloj_texto(&res, marco->contexto->alojador, final - inic));
+            memcpy(res->contenido, yo.value.t->contenido + inic, final - inic);
+        }
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(res)));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
-    else if(pdcrt_texto_cmp_lit(msj.value.t, "parteDelTexto") == 0)
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "subTexto") == 0)
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
-        pdcrt_objeto oinic = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto olon = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(oinic, PDCRT_TOBJ_ENTERO);
-        pdcrt_objeto_debe_tener_tipo(olon, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto oinic = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, oinic, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, olon, PDCRT_TOBJ_ENTERO);
         pdcrt_entero inic = oinic.value.i, lon = olon.value.i;
         PDCRT_ASSERT(inic >= 0);
         PDCRT_ASSERT(lon >= 0);
-        PDCRT_ASSERT(((size_t) (inic + lon)) <= yo.value.t->longitud);
+        if(((size_t) inic) > yo.value.t->longitud)
+        {
+            inic = yo.value.t->longitud;
+            lon = 0;
+        }
+        if(((size_t) (inic + lon)) > yo.value.t->longitud)
+        {
+            lon = yo.value.t->longitud - inic;
+        }
         pdcrt_texto* res;
         no_falla(pdcrt_aloj_texto(&res, marco->contexto->alojador, lon));
         memcpy(res->contenido, yo.value.t->contenido + inic, lon);
@@ -1769,14 +2136,13 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto otxt = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto oinic = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(otxt, PDCRT_TOBJ_TEXTO);
-        pdcrt_objeto_debe_tener_tipo(oinic, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, otxt, PDCRT_TOBJ_TEXTO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, oinic, PDCRT_TOBJ_ENTERO);
         size_t inic = oinic.value.i, pos = 0;
         bool encontrado = false;
-        PDCRT_ASSERT(inic < yo.value.t->longitud);
-        if(otxt.value.t->longitud > yo.value.t->longitud)
+        if((otxt.value.t->longitud > yo.value.t->longitud) || (inic >= yo.value.t->longitud))
         {
-            no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(-1)));
+            no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_nulo()));
         }
         else if(otxt.value.t->longitud == 0)
         {
@@ -1801,7 +2167,17 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
                     break;
                 }
             }
-            no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(encontrado? pos : -1)));
+
+            pdcrt_objeto res;
+            if(encontrado)
+            {
+                res = pdcrt_objeto_entero(pos);
+            }
+            else
+            {
+                res = pdcrt_objeto_nulo();
+            }
+            no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, res));
         }
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
@@ -1826,7 +2202,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, obj, PDCRT_TOBJ_ENTERO);
         pdcrt_entero i = obj.value.i;
         if((i < 0) || (((size_t) i) >= yo.value.t->longitud))
         {
@@ -1844,6 +2220,17 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         }
         int c = yo.value.t->contenido[i];
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(c)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        return pdcrt_continuacion_devolver();
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "hashPara") == 0)
+    {
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
+        pdcrt_objeto on = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo(on, PDCRT_TOBJ_ENTERO);
+        pdcrt_uentero n = on.value.i;
+        pdcrt_entero hash = pdcrt_hashear_objeto(yo, n);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(hash)));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
@@ -1867,7 +2254,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
 
 pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "llamar") == 0)
     {
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
@@ -1895,6 +2282,24 @@ pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo
         yo.tag = PDCRT_TOBJ_OBJETO;
         yo.recv = (pdcrt_funcion_generica) &pdcrt_recv_objeto;
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        return pdcrt_continuacion_devolver();
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, u8"__códigoIgualA") == 0)
+    {
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
+        pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo(rhs, PDCRT_TOBJ_CLOSURE);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(yo.value.c.proc == rhs.value.c.proc)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        return pdcrt_continuacion_devolver();
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "__entornoIgualA") == 0)
+    {
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
+        pdcrt_objeto rhs = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo(rhs, PDCRT_TOBJ_CLOSURE);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(yo.value.c.env == rhs.value.c.env)));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
@@ -1949,7 +2354,7 @@ pdcrt_continuacion pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_obj
 
 pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
@@ -2012,7 +2417,7 @@ pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto y
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto otro = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(otro, PDCRT_TOBJ_BOOLEANO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, otro, PDCRT_TOBJ_BOOLEANO);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(yo.value.b && otro.value.b)));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
@@ -2021,8 +2426,19 @@ pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto y
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto otro = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(otro, PDCRT_TOBJ_BOOLEANO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, otro, PDCRT_TOBJ_BOOLEANO);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(yo.value.b || otro.value.b)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        return pdcrt_continuacion_devolver();
+    }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "hashPara") == 0)
+    {
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
+        pdcrt_objeto on = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo(on, PDCRT_TOBJ_ENTERO);
+        pdcrt_uentero n = on.value.i;
+        pdcrt_entero hash = pdcrt_hashear_objeto(yo, n);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(hash)));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
@@ -2038,7 +2454,7 @@ pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto y
 
 pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
@@ -2071,6 +2487,17 @@ pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, p
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
+    else if(pdcrt_texto_cmp_lit(msj.value.t, "hashPara") == 0)
+    {
+        pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
+        pdcrt_objeto on = pdcrt_sacar_de_pila(&marco->contexto->pila);
+        pdcrt_objeto_debe_tener_tipo(on, PDCRT_TOBJ_ENTERO);
+        pdcrt_uentero n = on.value.i;
+        pdcrt_entero hash = pdcrt_hashear_objeto(yo, n);
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(hash)));
+        pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
+        return pdcrt_continuacion_devolver();
+    }
     else
     {
         printf("Mensaje ");
@@ -2083,7 +2510,7 @@ pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, p
 
 pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_OBJETO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_OBJETO);
     pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, args, msj);
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
     return pdcrt_continuacion_tail_iniciar((pdcrt_proc_t) yo.value.c.proc, marco, args + 2, rets);
@@ -2091,8 +2518,8 @@ pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, pdcrt_objeto yo,
 
 pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_ARREGLO);
-    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_ARREGLO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "agregarAlFinal") == 0)
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
@@ -2123,7 +2550,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto obj_indice = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(obj_indice, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, obj_indice, PDCRT_TOBJ_ENTERO);
         PDCRT_ASSERT(obj_indice.value.i >= 0);
         size_t indice = obj_indice.value.i;
         PDCRT_ASSERT(indice < yo.value.a->longitud);
@@ -2137,7 +2564,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto obj_valor = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto obj_indice = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(obj_indice, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, obj_indice, PDCRT_TOBJ_ENTERO);
         PDCRT_ASSERT(obj_indice.value.i >= 0);
         size_t indice = obj_indice.value.i;
         PDCRT_ASSERT(indice < yo.value.a->longitud);
@@ -2149,7 +2576,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto nueva_longitud_obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(nueva_longitud_obj, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, nueva_longitud_obj, PDCRT_TOBJ_ENTERO);
         PDCRT_ASSERT(nueva_longitud_obj.value.i >= 0);
         size_t nueva_longitud = nueva_longitud_obj.value.i;
         no_falla(pdcrt_arreglo_redimensionar(marco->contexto->alojador, yo.value.a, nueva_longitud));
@@ -2230,8 +2657,8 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
 
 pdcrt_continuacion pdcrt_recv_espacio_de_nombres(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_ESPACIO_DE_NOMBRES);
-    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_ESPACIO_DE_NOMBRES);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     pdcrt_edn_triple* encontrado = NULL;
     for(size_t i = 0; i < yo.value.e->num_nombres; i++)
     {
@@ -2286,7 +2713,7 @@ pdcrt_continuacion pdcrt_recv_voidptr(struct pdcrt_marco* marco, pdcrt_objeto yo
     (void) marco;
     (void) args;
     (void) rets;
-    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_VOIDPTR);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_VOIDPTR);
     printf("Mensaje ");
     pdcrt_escribir_texto(msj.value.t);
     printf(" no entendido para el puntero a C %p\n", yo.value.p);
@@ -2708,8 +3135,10 @@ static int pdcrt_getopt(int argc, char* argv[], const char* opts, char** optarg,
 
 void pdcrt_procesar_cli(pdcrt_contexto* ctx, int argc, char* argv[])
 {
-    ctx->argc = argc;
-    ctx->argv = argv;
+    ctx->argc = argc - 1;
+    ctx->argv = argv + 1;
+
+    return;
 
     static bool check = false;
     PDCRT_ASSERT(!check);
@@ -2766,6 +3195,7 @@ pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_
         return PDCRT_ENOMEM;
     }
     marco->contexto = contexto;
+    marco->nombre = NULL;
     marco->marco_anterior = marco_anterior;
     marco->num_valores_a_devolver = num_valores_a_devolver;
     marco->num_locales = num_real_de_locales;
@@ -2839,6 +3269,78 @@ pdcrt_objeto pdcrt_ajustar_parametros(pdcrt_marco* marco, size_t nargs, size_t n
     }
     pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, variadic? nargs : nparams, pdcrt_objeto_marca_de_pila());
     return esup;
+}
+
+void pdcrt_marco_fijar_nombre(pdcrt_marco* marco, const char* nombre)
+{
+    marco->nombre = nombre;
+}
+
+
+// Recolector de basura (sencillo):
+
+static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen)
+{
+    switch(obj.tag)
+    {
+    case PDCRT_TOBJ_ENTERO:
+    case PDCRT_TOBJ_FLOAT:
+    case PDCRT_TOBJ_MARCA_DE_PILA:
+    case PDCRT_TOBJ_BOOLEANO:
+    case PDCRT_TOBJ_NULO:
+    case PDCRT_TOBJ_VOIDPTR:
+    case PDCRT_TOBJ_TEXTO:
+        return;
+    case PDCRT_TOBJ_CLOSURE:
+    case PDCRT_TOBJ_OBJETO:
+        if(obj.value.c.env->generacion == gen)
+            return;
+        obj.value.c.env->generacion = gen;
+        for(size_t i = 0; i < obj.value.c.env->env_size; i++)
+        {
+            pdcrt_fijar_generacion_objeto(obj.value.c.env->env[i], gen);
+        }
+        break;
+    case PDCRT_TOBJ_ARREGLO:
+        if(obj.value.a->generacion == gen)
+            return;
+        obj.value.a->generacion = gen;
+        for(size_t i = 0; i < obj.value.a->longitud; i++)
+        {
+            pdcrt_fijar_generacion_objeto(obj.value.a->elementos[i], gen);
+        }
+        break;
+    case PDCRT_TOBJ_ESPACIO_DE_NOMBRES:
+        if(obj.value.e->generacion == gen)
+            return;
+        obj.value.e->generacion = gen;
+        for(size_t i = 0; i < obj.value.e->ultimo_nombre_creado; i++)
+        {
+            pdcrt_fijar_generacion_objeto(obj.value.e->nombres[i].valor, gen);
+        }
+        break;
+    }
+}
+
+static void pdcrt_fijar_generacion_en_objetos_vivos(pdcrt_marco* marco, unsigned int gen)
+{
+    for(pdcrt_marco* act = marco; act != NULL; act = act->marco_anterior)
+    {
+        for(size_t i = 0; i < act->num_locales; i++)
+        {
+            pdcrt_fijar_generacion_objeto(act->locales[i], gen);
+        }
+    }
+}
+
+static void pdcrt_recolectar_basura(pdcrt_marco* marco)
+{
+    if(marco->contexto->generacionDelRecolector == UINT_MAX)
+    {
+        marco->contexto->generacionDelRecolector = 0;
+    }
+    unsigned int gen = ++marco->contexto->generacionDelRecolector;
+    pdcrt_fijar_generacion_en_objetos_vivos(marco, gen);
 }
 
 
@@ -2940,10 +3442,10 @@ void pdcrt_op_lsetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
     for(size_t i = 0; i < alt; i++)
     {
-        pdcrt_objeto_debe_tener_closure(env);
+        pdcrt_objeto_debe_tener_closure(marco, env);
         env = env.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
     }
-    pdcrt_objeto_debe_tener_closure(env);
+    pdcrt_objeto_debe_tener_closure(marco, env);
     env.value.c.env->env[((pdcrt_local_index) ind) + PDCRT_NUM_LOCALES_ESP] = obj;
 }
 
@@ -2951,10 +3453,10 @@ void pdcrt_op_lgetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind
 {
     for(size_t i = 0; i < alt; i++)
     {
-        pdcrt_objeto_debe_tener_closure(env);
+        pdcrt_objeto_debe_tener_closure(marco, env);
         env = env.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
     }
-    pdcrt_objeto_debe_tener_closure(env);
+    pdcrt_objeto_debe_tener_closure(marco, env);
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila,
                                    marco->contexto->alojador,
                                    env.value.c.env->env[((pdcrt_local_index) ind) + PDCRT_NUM_LOCALES_ESP]));
@@ -2984,7 +3486,7 @@ pdcrt_objeto pdcrt_op_open_frame(pdcrt_marco* marco, pdcrt_local_index padreidx,
 void pdcrt_op_einit(pdcrt_marco* marco, pdcrt_objeto env, size_t i, pdcrt_objeto local)
 {
     (void) marco;
-    pdcrt_objeto_debe_tener_closure(env);
+    pdcrt_objeto_debe_tener_closure(marco, env);
     env.value.c.env->env[i + PDCRT_NUM_LOCALES_ESP] = local;
 }
 
@@ -2998,7 +3500,7 @@ void pdcrt_op_close_frame(pdcrt_marco* marco, pdcrt_objeto env)
 void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc)
 {
     pdcrt_objeto cima = pdcrt_obtener_local(marco, env);
-    pdcrt_objeto_debe_tener_closure(cima);
+    pdcrt_objeto_debe_tener_closure(marco, cima);
     pdcrt_objeto nuevo_env;
     nuevo_env.tag = PDCRT_TOBJ_CLOSURE;
     nuevo_env.value.c.env = cima.value.c.env;
@@ -3067,7 +3569,7 @@ void pdcrt_op_retn(pdcrt_marco* marco, int n)
     }
 
     pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, marco->num_valores_a_devolver);
-    pdcrt_objeto_debe_tener_tipo(marca, PDCRT_TOBJ_MARCA_DE_PILA);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, marca, PDCRT_TOBJ_MARCA_DE_PILA);
 }
 
 int pdcrt_real_return(pdcrt_marco* marco)
@@ -3085,7 +3587,7 @@ int pdcrt_passthru_return(pdcrt_marco* marco)
 bool pdcrt_op_choose(pdcrt_marco* marco)
 {
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_BOOLEANO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, obj, PDCRT_TOBJ_BOOLEANO);
     return obj.value.b;
 }
 
@@ -3145,14 +3647,14 @@ pdcrt_continuacion pdcrt_op_cmp(pdcrt_marco* marco, pdcrt_cmp cmp, pdcrt_proc_co
 void pdcrt_op_not(pdcrt_marco* marco)
 {
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_BOOLEANO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, obj, PDCRT_TOBJ_BOOLEANO);
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_booleano(!obj.value.b)));
 }
 
 void pdcrt_op_mtrue(pdcrt_marco* marco)
 {
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_BOOLEANO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, obj, PDCRT_TOBJ_BOOLEANO);
     if(!obj.value.b)
     {
         fprintf(stderr, u8"Error: instrucción `necesitas` con condición falsa.\n");
@@ -3204,7 +3706,7 @@ pdcrt_continuacion pdcrt_op_msg(pdcrt_marco* marco, pdcrt_proc_continuacion proc
 pdcrt_continuacion pdcrt_op_tail_msg(pdcrt_marco* marco, int cid, int args, int rets)
 {
     pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, args + 1);
-    pdcrt_objeto_debe_tener_tipo(marca, PDCRT_TOBJ_MARCA_DE_PILA);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, marca, PDCRT_TOBJ_MARCA_DE_PILA);
 
     pdcrt_marco* marco_superior = marco->marco_anterior;
     pdcrt_deinic_marco(marco);
@@ -3222,7 +3724,7 @@ static size_t pdcrt_desvariadicear_argumentos(pdcrt_marco* marco, const unsigned
         {
             size_t rel = args - (i + 1);
             pdcrt_objeto arreglo = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, rel);
-            pdcrt_objeto_debe_tener_tipo(arreglo, PDCRT_TOBJ_ARREGLO);
+            pdcrt_objeto_debe_tener_tipo_tb(marco, arreglo, PDCRT_TOBJ_ARREGLO);
             for(size_t j = 0; j < arreglo.value.a->longitud; j++)
             {
                 pdcrt_objeto el = arreglo.value.a->elementos[j];
@@ -3264,7 +3766,7 @@ pdcrt_continuacion pdcrt_op_dynmsg(pdcrt_marco* marco, pdcrt_proc_continuacion p
 pdcrt_continuacion pdcrt_op_tail_dynmsg(pdcrt_marco* marco, int args, int rets)
 {
     pdcrt_objeto marca = pdcrt_eliminar_elemento_en_pila(&marco->contexto->pila, args + 1);
-    pdcrt_objeto_debe_tener_tipo(marca, PDCRT_TOBJ_MARCA_DE_PILA);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, marca, PDCRT_TOBJ_MARCA_DE_PILA);
 
     pdcrt_marco* marco_superior = marco->marco_anterior;
     pdcrt_deinic_marco(marco);
@@ -3308,12 +3810,12 @@ void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index
 {
     pdcrt_objeto o_eact = pdcrt_obtener_local(marco, eact);
     pdcrt_objeto o_esup = pdcrt_obtener_local(marco, esup);
-    pdcrt_objeto_debe_tener_closure(o_eact);
-    pdcrt_objeto_debe_tener_closure(o_esup);
+    pdcrt_objeto_debe_tener_closure(marco, o_eact);
+    pdcrt_objeto_debe_tener_closure(marco, o_esup);
     PDCRT_ASSERT(o_eact.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP].value.c.env == o_esup.value.c.env);
     o_esup = o_esup.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
     o_eact = o_eact.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP];
-    pdcrt_objeto_debe_tener_closure(o_eact);
+    pdcrt_objeto_debe_tener_closure(marco, o_eact);
     // No es necesario verificar que ESUP sea una CLOSURE porque el primer EACT
     // de un procedimiento no tiene ESUP, o en otras palabras: si EACT es el
     // primero del procedimiento (lo que corresponde con `SPOP`-ear al ámbito
@@ -3326,7 +3828,7 @@ void pdcrt_op_spop(pdcrt_marco* marco, pdcrt_local_index eact, pdcrt_local_index
 void pdcrt_op_clztoobj(pdcrt_marco* marco)
 {
     pdcrt_objeto clz = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(clz, PDCRT_TOBJ_CLOSURE);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, clz, PDCRT_TOBJ_CLOSURE);
     clz.tag = PDCRT_TOBJ_OBJETO;
     clz.recv = (pdcrt_funcion_generica) &pdcrt_recv_objeto;
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
@@ -3335,7 +3837,7 @@ void pdcrt_op_clztoobj(pdcrt_marco* marco)
 void pdcrt_op_objtoclz(pdcrt_marco* marco)
 {
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(obj, PDCRT_TOBJ_OBJETO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, obj, PDCRT_TOBJ_OBJETO);
     obj.tag = PDCRT_TOBJ_CLOSURE;
     obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, obj));
@@ -3345,8 +3847,8 @@ void pdcrt_op_objattr(pdcrt_marco* marco)
 {
     pdcrt_objeto idx = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(idx, PDCRT_TOBJ_ENTERO);
-    pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, idx, PDCRT_TOBJ_ENTERO);
+    pdcrt_objeto_debe_tener_uno_de_los_tipos(marco, obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
     size_t real_idx = idx.value.i;
     PDCRT_ASSERT(real_idx >= 0 && real_idx < obj.value.c.env->env_size);
     pdcrt_objeto v = obj.value.c.env->env[real_idx];
@@ -3358,8 +3860,8 @@ void pdcrt_op_objattrset(pdcrt_marco* marco)
     pdcrt_objeto v = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto idx = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(idx, PDCRT_TOBJ_ENTERO);
-    pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, idx, PDCRT_TOBJ_ENTERO);
+    pdcrt_objeto_debe_tener_uno_de_los_tipos(marco, obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
     size_t real_idx = idx.value.i;
     PDCRT_ASSERT(real_idx >= 0 && real_idx < obj.value.c.env->env_size);
     obj.value.c.env->env[real_idx] = v;
@@ -3368,7 +3870,7 @@ void pdcrt_op_objattrset(pdcrt_marco* marco)
 void pdcrt_op_objsz(pdcrt_marco* marco)
 {
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_uno_de_los_tipos(obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
+    pdcrt_objeto_debe_tener_uno_de_los_tipos(marco, obj, PDCRT_TOBJ_CLOSURE, PDCRT_TOBJ_OBJETO);
     size_t tam = obj.value.c.env->env_size;
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_entero(tam)));
 }
@@ -3460,7 +3962,7 @@ void pdcrt_op_drop(pdcrt_marco* marco)
 void pdcrt_op_nslookup(pdcrt_marco* marco, int cid)
 {
     pdcrt_objeto valor = pdcrt_sacar_de_pila(&marco->contexto->pila);
-    pdcrt_objeto_debe_tener_tipo(valor, PDCRT_TOBJ_ESPACIO_DE_NOMBRES);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, valor, PDCRT_TOBJ_ESPACIO_DE_NOMBRES);
     pdcrt_objeto res = pdcrt_objeto_nulo();
     pdcrt_texto* nombre = marco->contexto->constantes.textos[cid];
     if(pdcrt_obtener_campo_del_espacio_de_nombres(valor.value.e, nombre, &res))
@@ -3496,7 +3998,7 @@ pdcrt_continuacion pdcrt_frt_obtener_rt(pdcrt_marco* marco_actual, pdcrt_marco* 
 struct pdcrt_archivo
 {
     FILE* archivo;
-    const char* nombre_del_archivo;
+    pdcrt_objeto nombre_del_archivo;
     int modo;
 };
 
@@ -3524,7 +4026,6 @@ struct pdcrt_archivo* pdcrt_abrir_archivo(pdcrt_alojador alojador, pdcrt_texto* 
         fprintf(stderr, "\n");
         pdcrt_abort();
     }
-    printf("!!!! %s  %03ld\n", modo_cstr, modo);
 
     char* nombre_cstr = pdcrt_alojar_simple(alojador, nombre->longitud + 1);
     if(!nombre_cstr)
@@ -3536,6 +4037,8 @@ struct pdcrt_archivo* pdcrt_abrir_archivo(pdcrt_alojador alojador, pdcrt_texto* 
     }
     memcpy(nombre_cstr, nombre->contenido, nombre->longitud);
     nombre_cstr[nombre->longitud] = '\0';
+
+    printf("!!!! %s  %03ld  %s\n", modo_cstr, modo, nombre_cstr);
 
     struct pdcrt_archivo* archivo = pdcrt_alojar_simple(alojador, sizeof(struct pdcrt_archivo));
     if(!archivo)
@@ -3556,7 +4059,7 @@ struct pdcrt_archivo* pdcrt_abrir_archivo(pdcrt_alojador alojador, pdcrt_texto* 
         pdcrt_abort();
     }
 
-    archivo->nombre_del_archivo = nombre;
+    archivo->nombre_del_archivo = pdcrt_objeto_desde_texto(nombre);
     archivo->modo = modo;
     archivo->archivo = handle;
     return archivo;
@@ -3564,8 +4067,8 @@ struct pdcrt_archivo* pdcrt_abrir_archivo(pdcrt_alojador alojador, pdcrt_texto* 
 
 pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_VOIDPTR);
-    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_VOIDPTR);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "argc") == 0)
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
@@ -3577,10 +4080,10 @@ pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdc
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto i = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(i, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, i, PDCRT_TOBJ_ENTERO);
         if(i.value.i < 0 || i.value.i >= marco->contexto->argc)
         {
-            fprintf(stderr, u8"Índice inválido para __RT#argv: %d\n", i.value.i);
+            fprintf(stderr, u8"Índice inválido para __RT#argv: %ld\n", i.value.i);
             pdcrt_abort();
         }
         pdcrt_objeto res;
@@ -3593,7 +4096,7 @@ pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdc
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto msj = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
         fprintf(stderr, "Error: ");
         pdcrt_escribir_texto_al_archivo(stderr, msj.value.t);
         fprintf(stderr, "\n");
@@ -3631,20 +4134,20 @@ pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdc
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_objeto arr = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(arr, PDCRT_TOBJ_ARREGLO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, arr, PDCRT_TOBJ_ARREGLO);
         struct pdcrt_constructor_de_texto cons;
         size_t capacidad = 0;
         for(size_t i = 0; i < arr.value.a->longitud; i++)
         {
             pdcrt_objeto el = arr.value.a->elementos[i];
-            pdcrt_objeto_debe_tener_tipo(el, PDCRT_TOBJ_TEXTO);
+            pdcrt_objeto_debe_tener_tipo_tb(marco, el, PDCRT_TOBJ_TEXTO);
             capacidad += el.value.t->longitud;
         }
         pdcrt_inic_constructor_de_texto(&cons, marco->contexto->alojador, capacidad);
         for(size_t i = 0; i < arr.value.a->longitud; i++)
         {
             pdcrt_objeto el = arr.value.a->elementos[i];
-            pdcrt_objeto_debe_tener_tipo(el, PDCRT_TOBJ_TEXTO);
+            pdcrt_objeto_debe_tener_tipo_tb(marco, el, PDCRT_TOBJ_TEXTO);
             pdcrt_constructor_agregar(marco->contexto->alojador, &cons,
                                       el.value.t->contenido, el.value.t->longitud);
         }
@@ -3670,10 +4173,12 @@ pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdc
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 2);
         pdcrt_objeto modo = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto nombre = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(nombre, PDCRT_TOBJ_TEXTO);
-        pdcrt_objeto_debe_tener_tipo(modo, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, nombre, PDCRT_TOBJ_TEXTO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, modo, PDCRT_TOBJ_ENTERO);
         struct pdcrt_archivo* archivo = pdcrt_abrir_archivo(marco->contexto->alojador, nombre.value.t, modo.value.i);
-        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_voidptr(archivo)));
+        pdcrt_objeto obj = pdcrt_objeto_voidptr(archivo);
+        obj.recv = (pdcrt_funcion_generica) &pdcrt_recv_archivo;
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, obj));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }
@@ -3688,8 +4193,8 @@ pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdc
 
 pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
-    pdcrt_objeto_debe_tener_tipo(yo, PDCRT_TOBJ_VOIDPTR);
-    pdcrt_objeto_debe_tener_tipo(msj, PDCRT_TOBJ_TEXTO);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_VOIDPTR);
+    pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     struct pdcrt_archivo* archivo = yo.value.p;
 
 #define PDCRT_FALLA_SI_ESTA_CERRADO(metodo)                             \
@@ -3779,7 +4284,7 @@ pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, pdcrt_objeto yo
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         PDCRT_FALLA_SI_ESTA_CERRADO("escribirByte");
         pdcrt_objeto entero = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(entero, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, entero, PDCRT_TOBJ_ENTERO);
         fputc(entero.value.i, archivo->archivo);
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 0);
         return pdcrt_continuacion_devolver();
@@ -3789,7 +4294,7 @@ pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, pdcrt_objeto yo
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         PDCRT_FALLA_SI_ESTA_CERRADO("escribirTexto");
         pdcrt_objeto texto = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(texto, PDCRT_TOBJ_TEXTO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, texto, PDCRT_TOBJ_TEXTO);
         fwrite(texto.value.t->contenido, sizeof(char), texto.value.t->longitud, archivo->archivo);
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 0);
         return pdcrt_continuacion_devolver();
@@ -3810,7 +4315,7 @@ pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, pdcrt_objeto yo
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         PDCRT_FALLA_SI_ESTA_CERRADO("cambiarPosicion");
         pdcrt_objeto entero = pdcrt_sacar_de_pila(&marco->contexto->pila);
-        pdcrt_objeto_debe_tener_tipo(entero, PDCRT_TOBJ_ENTERO);
+        pdcrt_objeto_debe_tener_tipo_tb(marco, entero, PDCRT_TOBJ_ENTERO);
         _Static_assert(sizeof(long) <= sizeof(pdcrt_entero),
                        "necesito sacar una posicion textual (ftell) de un entero");
         fseek(archivo->archivo, entero.value.i, SEEK_SET);
@@ -3836,9 +4341,7 @@ pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, pdcrt_objeto yo
     else if(pdcrt_texto_cmp_lit(msj.value.t, "nombreDelArchivo") == 0)
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
-        pdcrt_objeto nombre;
-        pdcrt_objeto_aloj_texto_desde_cstr(&nombre, marco->contexto->alojador, archivo->nombre_del_archivo);
-        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, nombre));
+        no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, archivo->nombre_del_archivo));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
     }

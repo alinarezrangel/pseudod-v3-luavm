@@ -30,7 +30,7 @@ GCOVFLAGS=--branch-probabilities --display-progress --human-readable
 
 # Opciones de "profiling". Si agregas PROFFLAGS a CFLAGS entonces activarás la
 # medición de rendimiento con gprof.
-PROFFLAGS=-pg
+PROFFLAGS=-pg -fprofile-arcs
 
 # Las banderas usadas para compilar:
 #
@@ -52,7 +52,7 @@ PROFFLAGS=-pg
 #
 # 4. Quitar `-march=native` para obtener binarios más portables pero menos
 # eficientes.
-CFLAGS=-std=c18 -Wall $(SANFLAGS) -march=native $(RTOPTS) -I$(INCLUDEDIR)
+CFLAGS=-std=c18 -Wall -march=native $(RTOPTS) -I$(INCLUDEDIR)
 CLIBS=-L$(LIBDIR) -lpdcrt -lm
 # Las opciones de LOCALCFLAGS y LOCALCLIBS tienen prioridad por sobre CFLAGS y
 # CLIBS.
@@ -76,6 +76,18 @@ sample.c: main.lua
 sample: sample.c libpdcrt.a
 	$(CC) $(CFLAGS) $(LOCALCFLAGS) $< $(LOCALCLIBS) $(CLIBS) -o $@
 
+usample: sample.c sample2.c dummy-bootstrap.o libpdcrt.a
+	$(CC) $(CFLAGS) $(LOCALCFLAGS) sample2.c sample.c dummy-bootstrap.o $(LOCALCLIBS) $(CLIBS) -o $@
+
+dummy-bootstrap.o: dummy-bootstrap.c libpdcrt.a
+	$(CC) -c $(CFLAGS) $(LOCALCFLAGS) $< $(LOCALCLIBS) $(CLIBS) -o $@
+
+bootstrap.o: bootstrap.c src/pdcrt.h
+	$(CC) -c $(CFLAGS) $(LOCALCFLAGS) $< $(LOCALCLIBS) $(CLIBS) -o $@
+
+caso%: caso%.c libpdcrt.a src/pdcrt.h
+	$(CC) $(CFLAGS) $(LOCALCFLAGS) -w $< $(LOCALCLIBS) libpdcrt.a $(CLIBS) -o $@
+
 pdcrt.o: src/pdcrt.c src/pdcrt.h
 	$(CC) $(CFLAGS) $(LOCALCFLAGS) -c $< -o $@
 
@@ -96,3 +108,6 @@ pdcrt.pc: pdcrt.pc.in main.lua lua-escape-table.lua pkg-config-configure.lua
 pdcrt.c.gcov: libpdcrt.a run-tests.sh main.lua
 	./run-tests.sh
 	$(GCOV) $(GCOVFLAGS) pdcrt
+
+ht: ./src/hashtable.c
+	$(CC) -O0 -g -Wall -fsanitize=undefined -fsanitize=address $< -o $@
