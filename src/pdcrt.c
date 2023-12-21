@@ -140,7 +140,7 @@ static void* pdcrt_alojador_de_malloc_impl(void* datos_del_usuario, void* ptr, s
     }
     else if(tam_viejo == 0)
     {
-        return malloc(tam_nuevo);
+        return calloc(1, tam_nuevo);
     }
     else
     {
@@ -279,14 +279,14 @@ void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj)
         else
             cant_alojaciones_por_desvstd[2]++;
     }
-    printf(u8"|Desalojando alojador de arena: %zd elementos, %zd bytes en total, máxima alojación de %zd bytes.\n",
+    printf(u8"|Desalojando alojador de arena: %zu elementos, %zu bytes en total, máxima alojación de %zu bytes.\n",
            arena->num_punteros, total, maxaloj);
-    printf(u8"|  Total de %zd bytes, %zd KiB, %zd MiB\n", total, total / 1024, (total / 1024) / 1024);
-    printf(u8"|  Máxima alojación de %zd bytes, %zd KiB, %zd MiB\n|\n", maxaloj, maxaloj / 1024, (maxaloj / 1024) / 1024);
+    printf(u8"|  Total de %zu bytes, %zu KiB, %zu MiB\n", total, total / 1024, (total / 1024) / 1024);
+    printf(u8"|  Máxima alojación de %zu bytes, %zu KiB, %zu MiB\n|\n", maxaloj, maxaloj / 1024, (maxaloj / 1024) / 1024);
 
-    printf(u8"|  Tamaño promedio: %.2F bytes / %zd bytes\n", tamprom, (size_t) tamprom);
-    printf(u8"|  Varianza: %.2F bytes / %zd bytes\n", var, (size_t) var);
-    printf(u8"|  Desviación estándar: %.2F bytes / %zd bytes\n|\n", desvstd, (size_t) desvstd);
+    printf(u8"|  Tamaño promedio: %.2F bytes / %zu bytes\n", tamprom, (size_t) tamprom);
+    printf(u8"|  Varianza: %.2F bytes / %zu bytes\n", var, (size_t) var);
+    printf(u8"|  Desviación estándar: %.2F bytes / %zu bytes\n|\n", desvstd, (size_t) desvstd);
 
     printf(u8"|  %d alojaciones (%.2F%%) tienen 1 desv. std. o menos\n",
            cant_alojaciones_por_desvstd[0],
@@ -298,7 +298,7 @@ void pdcrt_dealoj_alojador_de_arena(pdcrt_alojador aloj)
            cant_alojaciones_por_desvstd[2],
            100 * (((double)cant_alojaciones_por_desvstd[2]) / ((double)arena->num_punteros)));
 #else
-    printf(u8"|Desalojando alojador de arena: %zd elementos\n", arena->num_punteros);
+    printf(u8"|Desalojando alojador de arena: %zu elementos\n", arena->num_punteros);
     printf(u8"|  Advertencia: no se pudo solicitar el tamaño en bytes de los elementos\n");
 #endif
 #endif
@@ -331,9 +331,9 @@ void* pdcrt_realojar_simple(pdcrt_alojador alojador, void* ptr, size_t tam_actua
 
 // Textos:
 
-pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, size_t lon)
+pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_gc* gc, size_t lon)
 {
-    *texto = pdcrt_alojar_simple(alojador, sizeof(pdcrt_texto));
+    *texto = (pdcrt_texto*) pdcrt_gc_alojar(gc, sizeof(pdcrt_texto), PDCRT_GC_TEXTO);
     if(*texto == NULL)
     {
         PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, "pdcrt_aloj_texto: alojando el texto mismo");
@@ -345,11 +345,12 @@ pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador aloja
     }
     else
     {
-        (*texto)->contenido = pdcrt_alojar_simple(alojador, sizeof(char) * lon);
+        (*texto)->contenido = pdcrt_alojar_simple(gc->alojador, sizeof(char) * lon);
         if((*texto)->contenido == NULL)
         {
             PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, "pdcrt_aloj_texto: alojando el contenido del texto");
-            pdcrt_dealojar_simple(alojador, *texto, sizeof(pdcrt_texto));
+            pdcrt_gc_olvidar(gc, (pdcrt_cabecera_gc*) *texto);
+            pdcrt_dealojar_simple(gc->alojador, *texto, sizeof(pdcrt_texto));
             return PDCRT_ENOMEM;
         }
     }
@@ -357,10 +358,10 @@ pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador aloja
     return PDCRT_OK;
 }
 
-pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, const char* cstr)
+pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_gc* gc, const char* cstr)
 {
     size_t len = strlen(cstr);
-    pdcrt_error errc = pdcrt_aloj_texto(texto, alojador, len);
+    pdcrt_error errc = pdcrt_aloj_texto(texto, gc, len);
     if(errc != PDCRT_OK)
     {
         PDCRT_ESCRIBIR_ERROR(errc, __func__);
@@ -421,9 +422,9 @@ static void pdcrt_escribir_texto_max(pdcrt_texto* texto, size_t max)
     }
 }
 
-pdcrt_error pdcrt_aloj_espacio_de_nombres(pdcrt_alojador alojador, PDCRT_OUT pdcrt_espacio_de_nombres** espacio, size_t num)
+pdcrt_error pdcrt_aloj_espacio_de_nombres(pdcrt_gc* gc, PDCRT_OUT pdcrt_espacio_de_nombres** espacio, size_t num)
 {
-    *espacio = pdcrt_alojar_simple(alojador, sizeof(pdcrt_espacio_de_nombres));
+    *espacio = (pdcrt_espacio_de_nombres*) pdcrt_gc_alojar(gc, sizeof(pdcrt_espacio_de_nombres), PDCRT_GC_ESPACIO_DE_NOMBRES);
     if(!*espacio)
     {
         return PDCRT_ENOMEM;
@@ -437,10 +438,11 @@ pdcrt_error pdcrt_aloj_espacio_de_nombres(pdcrt_alojador alojador, PDCRT_OUT pdc
     }
     else
     {
-        p->nombres = pdcrt_alojar_simple(alojador, sizeof(pdcrt_edn_triple) * num);
+        p->nombres = pdcrt_alojar_simple(gc->alojador, sizeof(pdcrt_edn_triple) * num);
         if(!p->nombres)
         {
-            free(*espacio);
+            pdcrt_gc_olvidar(gc, (pdcrt_cabecera_gc*) *espacio);
+            pdcrt_dealojar_simple(gc->alojador, *espacio, sizeof(pdcrt_espacio_de_nombres));
             *espacio = NULL;
             return PDCRT_ENOMEM;
         }
@@ -448,12 +450,11 @@ pdcrt_error pdcrt_aloj_espacio_de_nombres(pdcrt_alojador alojador, PDCRT_OUT pdc
     return PDCRT_OK;
 }
 
-void pdcrt_dealoj_espacio_de_nombres(pdcrt_alojador alojador, pdcrt_espacio_de_nombres** espacio)
+void pdcrt_dealoj_espacio_de_nombres(pdcrt_alojador alojador, pdcrt_espacio_de_nombres* espacio)
 {
-    if((*espacio)->num_nombres > 0)
-        pdcrt_dealojar_simple(alojador, (*espacio)->nombres, sizeof(pdcrt_edn_triple) * (*espacio)->num_nombres);
-    pdcrt_dealojar_simple(alojador, *espacio, sizeof(pdcrt_espacio_de_nombres));
-    *espacio = NULL;
+    if(espacio->num_nombres > 0)
+        pdcrt_dealojar_simple(alojador, espacio->nombres, sizeof(pdcrt_edn_triple) * espacio->num_nombres);
+    pdcrt_dealojar_simple(alojador, espacio, sizeof(pdcrt_espacio_de_nombres));
 }
 
 void pdcrt_agregar_nombre_al_espacio_de_nombres(pdcrt_espacio_de_nombres* espacio, pdcrt_texto* nombre, bool es_autoejecutable, pdcrt_objeto valor)
@@ -483,52 +484,56 @@ bool pdcrt_obtener_campo_del_espacio_de_nombres(pdcrt_espacio_de_nombres* espaci
     return false;
 }
 
-pdcrt_error pdcrt_aloj_arreglo(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, size_t capacidad)
+pdcrt_error pdcrt_aloj_arreglo(pdcrt_gc* gc, PDCRT_OUT pdcrt_arreglo** arr, size_t capacidad)
 {
-    arr->capacidad = pdcrt_siguiente_capacidad(capacidad, 0, 0);
-    arr->elementos = pdcrt_alojar_simple(alojador, arr->capacidad * sizeof(pdcrt_objeto));
-    if(!arr->elementos)
+    *arr = (pdcrt_arreglo*) pdcrt_gc_alojar(gc, sizeof(pdcrt_arreglo), PDCRT_GC_ARREGLO);
+    if(!*arr)
+        return PDCRT_ENOMEM;
+    (*arr)->capacidad = pdcrt_siguiente_capacidad(capacidad, 0, 0);
+    (*arr)->elementos = pdcrt_alojar_simple(gc->alojador, (*arr)->capacidad * sizeof(pdcrt_objeto));
+    if(!(*arr)->elementos)
     {
+        pdcrt_gc_olvidar(gc, (pdcrt_cabecera_gc*) *arr);
+        pdcrt_dealojar_simple(gc->alojador, *arr, sizeof(pdcrt_arreglo));
         return PDCRT_ENOMEM;
     }
-    arr->longitud = 0;
+    (*arr)->longitud = 0;
     return PDCRT_OK;
 }
 
 void pdcrt_dealoj_arreglo(pdcrt_alojador alojador, pdcrt_arreglo* arr)
 {
     pdcrt_dealojar_simple(alojador, arr->elementos, arr->capacidad * sizeof(pdcrt_objeto));
-    arr->capacidad = 0;
-    arr->longitud = 0;
+    pdcrt_dealojar_simple(alojador, arr, sizeof(pdcrt_arreglo));
 }
 
-pdcrt_error pdcrt_aloj_arreglo_vacio(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr)
+pdcrt_error pdcrt_aloj_arreglo_vacio(pdcrt_gc* gc, PDCRT_OUT pdcrt_arreglo** arr)
 {
-    return pdcrt_aloj_arreglo(alojador, arr, 0);
+    return pdcrt_aloj_arreglo(gc, arr, 0);
 }
 
-pdcrt_error pdcrt_aloj_arreglo_con_1(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, pdcrt_objeto el0)
+pdcrt_error pdcrt_aloj_arreglo_con_1(pdcrt_gc* gc, PDCRT_OUT pdcrt_arreglo** arr, pdcrt_objeto el0)
 {
-    pdcrt_error pderrno = pdcrt_aloj_arreglo(alojador, arr, 1);
+    pdcrt_error pderrno = pdcrt_aloj_arreglo(gc, arr, 1);
     if(pderrno != PDCRT_OK)
     {
         return pderrno;
     }
-    arr->longitud = 1;
-    arr->elementos[0] = el0;
+    (*arr)->longitud = 1;
+    (*arr)->elementos[0] = el0;
     return PDCRT_OK;
 }
 
-pdcrt_error pdcrt_aloj_arreglo_con_2(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, pdcrt_objeto el0, pdcrt_objeto el1)
+pdcrt_error pdcrt_aloj_arreglo_con_2(pdcrt_gc* gc, PDCRT_OUT pdcrt_arreglo** arr, pdcrt_objeto el0, pdcrt_objeto el1)
 {
-    pdcrt_error pderrno = pdcrt_aloj_arreglo(alojador, arr, 2);
+    pdcrt_error pderrno = pdcrt_aloj_arreglo(gc, arr, 2);
     if(pderrno != PDCRT_OK)
     {
         return pderrno;
     }
-    arr->longitud = 2;
-    arr->elementos[0] = el0;
-    arr->elementos[1] = el1;
+    (*arr)->longitud = 2;
+    (*arr)->elementos[0] = el0;
+    (*arr)->elementos[1] = el1;
     return PDCRT_OK;
 }
 
@@ -750,8 +755,13 @@ void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k)
         // para la continuación actual, otro para la nueva función).
         if(tam_pila >= (PDCRT_TAM_PILA_DE_CONTINUACIONES - 2))
         {
-            fprintf(stderr, u8"Límite de recursión alcanzado: %zd llamadas recursivas\n", tam_pila);
+            fprintf(stderr, u8"Límite de recursión alcanzado: %zu llamadas recursivas\n", tam_pila);
             pdcrt_abort();
+        }
+
+        if(pdcrt_deberia_recolectar_basura(&marco->contexto->gc))
+        {
+            pdcrt_recolectar_basura(marcos, tam_pila, &marcos[tam_pila - 1], pila, tam_pila);
         }
 
         pdcrt_continuacion sk = pila[tam_pila - 1];
@@ -780,13 +790,14 @@ void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k)
         {
             pdcrt_proc_continuacion kproc = (pdcrt_proc_continuacion) sk.valor.enviar_mensaje.recv;
             pila[tam_pila - 1] = pdcrt_continuacion_normal(kproc, sk.valor.enviar_mensaje.marco);
-            tam_pila += 1;
-            pila[tam_pila - 1] = PDCRT_ENVIAR_MENSAJE(
+            pila[tam_pila] = PDCRT_CONV_RECV(sk.valor.enviar_mensaje.yo.recv)(
+                &marcos[tam_pila],
                 sk.valor.enviar_mensaje.marco,
                 sk.valor.enviar_mensaje.yo,
                 sk.valor.enviar_mensaje.mensaje,
                 sk.valor.enviar_mensaje.args,
                 sk.valor.enviar_mensaje.rets);
+            tam_pila += 1;
             break;
         }
         case PDCRT_CONT_DEVOLVER:
@@ -796,7 +807,7 @@ void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k)
         {
             pdcrt_proc_t fproc = (pdcrt_proc_t) sk.valor.tail_iniciar.proc;
             pila[tam_pila - 1] = (*fproc)(
-                &marcos[tam_pila],
+                &marcos[tam_pila - 1],
                 sk.valor.tail_iniciar.marco_superior,
                 sk.valor.tail_iniciar.args,
                 sk.valor.tail_iniciar.rets);
@@ -804,7 +815,8 @@ void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k)
         }
         case PDCRT_CONT_TAIL_ENVIAR_MENSAJE:
         {
-            pila[tam_pila - 1] = PDCRT_ENVIAR_MENSAJE(
+            pila[tam_pila - 1] = PDCRT_CONV_RECV(sk.valor.tail_enviar_mensaje.yo.recv)(
+                &marcos[tam_pila - 1],
                 sk.valor.tail_enviar_mensaje.marco_superior,
                 sk.valor.tail_enviar_mensaje.yo,
                 sk.valor.tail_enviar_mensaje.mensaje,
@@ -820,9 +832,9 @@ void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k)
 
 // Entornos:
 
-pdcrt_error pdcrt_aloj_env(pdcrt_env** env, pdcrt_alojador alojador, size_t env_size)
+pdcrt_error pdcrt_aloj_env(PDCRT_OUT pdcrt_env** env, pdcrt_gc* gc, size_t env_size)
 {
-    *env = pdcrt_alojar_simple(alojador, sizeof(pdcrt_env) + sizeof(pdcrt_objeto) * env_size);
+    *env = (pdcrt_env*) pdcrt_gc_alojar(gc, sizeof(pdcrt_env) + sizeof(pdcrt_objeto) * env_size, PDCRT_GC_ENV);
     if(!*env)
     {
         PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, __func__);
@@ -975,26 +987,26 @@ pdcrt_objeto pdcrt_objeto_voidptr(void* ptr)
     return obj;
 }
 
-pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc, size_t env_size, pdcrt_objeto* obj)
+pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_gc* gc, pdcrt_proc_t proc, size_t env_size, pdcrt_objeto* obj)
 {
     obj->tag = PDCRT_TOBJ_CLOSURE;
     obj->value.c.proc = (pdcrt_funcion_generica) proc;
     obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
-    return pdcrt_aloj_env(&obj->value.c.env, alojador, env_size + PDCRT_NUM_LOCALES_ESP);
+    return pdcrt_aloj_env(&obj->value.c.env, gc, env_size + PDCRT_NUM_LOCALES_ESP);
 }
 
-pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t lon)
+pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_gc* gc, size_t lon)
 {
     obj->tag = PDCRT_TOBJ_TEXTO;
     obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
-    return pdcrt_aloj_texto(&obj->value.t, alojador, lon);
+    return pdcrt_aloj_texto(&obj->value.t, gc, lon);
 }
 
-pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, const char* cstr)
+pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_gc* gc, const char* cstr)
 {
     obj->tag = PDCRT_TOBJ_TEXTO;
     obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_texto;
-    return pdcrt_aloj_texto_desde_c(&obj->value.t, alojador, cstr);
+    return pdcrt_aloj_texto_desde_c(&obj->value.t, gc, cstr);
 }
 
 pdcrt_objeto pdcrt_objeto_desde_arreglo(pdcrt_arreglo* arreglo)
@@ -1006,22 +1018,11 @@ pdcrt_objeto pdcrt_objeto_desde_arreglo(pdcrt_arreglo* arreglo)
     return obj;
 }
 
-pdcrt_error pdcrt_objeto_aloj_arreglo(pdcrt_alojador alojador, size_t capacidad, PDCRT_OUT pdcrt_objeto* out)
+pdcrt_error pdcrt_objeto_aloj_arreglo(pdcrt_gc* gc, size_t capacidad, PDCRT_OUT pdcrt_objeto* obj)
 {
-    out->recv = (pdcrt_funcion_generica) &pdcrt_recv_arreglo;
-    out->value.a = pdcrt_alojar_simple(alojador, sizeof(pdcrt_arreglo));
-    if(!out->value.a)
-    {
-        return PDCRT_ENOMEM;
-    }
-    out->tag = PDCRT_TOBJ_ARREGLO;
-    pdcrt_error pderrno = pdcrt_aloj_arreglo(alojador, out->value.a, capacidad);
-    if(pderrno != PDCRT_OK)
-    {
-        pdcrt_dealojar_simple(alojador, out->value.a, sizeof(pdcrt_arreglo));
-        return pderrno;
-    }
-    return PDCRT_OK;
+    obj->tag = PDCRT_TOBJ_ARREGLO;
+    obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_arreglo;
+    return pdcrt_aloj_arreglo(gc, &obj->value.a, capacidad);
 }
 
 pdcrt_objeto pdcrt_objeto_desde_texto(pdcrt_texto* texto)
@@ -1033,7 +1034,7 @@ pdcrt_objeto pdcrt_objeto_desde_texto(pdcrt_texto* texto)
     return obj;
 }
 
-pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, pdcrt_recvmsj recv, size_t num_attrs)
+pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_gc* gc, pdcrt_recvmsj recv, size_t num_attrs)
 {
     PDCRT_ASSERT(false);
     /* obj->tag = PDCRT_TOBJ_OBJETO; */
@@ -1044,11 +1045,11 @@ pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador
     return PDCRT_ENOMEM;
 }
 
-pdcrt_error pdcrt_objeto_aloj_espacio_de_nombres(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t num_nombres)
+pdcrt_error pdcrt_objeto_aloj_espacio_de_nombres(PDCRT_OUT pdcrt_objeto* obj, pdcrt_gc* gc, size_t num_nombres)
 {
     obj->tag = PDCRT_TOBJ_ESPACIO_DE_NOMBRES;
     obj->recv = (pdcrt_funcion_generica) &pdcrt_recv_espacio_de_nombres;
-    return pdcrt_aloj_espacio_de_nombres(alojador, &obj->value.e, num_nombres);
+    return pdcrt_aloj_espacio_de_nombres(gc, &obj->value.e, num_nombres);
 }
 
 
@@ -1468,14 +1469,15 @@ static void pdcrt_constructor_agregar(pdcrt_alojador alojador, struct pdcrt_cons
         cons->contenido = nuevo;
         cons->capacidad = nueva_cap;
     }
-    memcpy(cons->contenido + cons->longitud, contenido, longitud);
+    if(longitud > 0)
+        memcpy(cons->contenido + cons->longitud, contenido, longitud);
     cons->longitud += longitud;
     PDCRT_ASSERT(cons->longitud <= cons->capacidad);
 }
 
-static void pdcrt_finalizar_constructor(pdcrt_alojador alojador, struct pdcrt_constructor_de_texto* cons, PDCRT_OUT pdcrt_texto** res)
+static void pdcrt_finalizar_constructor(pdcrt_gc* gc, struct pdcrt_constructor_de_texto* cons, PDCRT_OUT pdcrt_texto** res)
 {
-    no_falla(pdcrt_aloj_texto(res, alojador, cons->longitud));
+    no_falla(pdcrt_aloj_texto(res, gc, cons->longitud));
     if((*res)->contenido == NULL || cons->contenido == NULL)
     {
         PDCRT_ASSERT(cons->longitud == 0);
@@ -1630,8 +1632,10 @@ static void pdcrt_comparar_numeros(pdcrt_marco* marco, pdcrt_objeto yo, int args
     pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
 }
 
-pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de Numero";
     pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
 
 #define PDCRT_NUMOP(op, ffn, efn)                                       \
@@ -1762,7 +1766,7 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
         }
         size_t lonbuff = strlen(buffer);
         pdcrt_objeto res;
-        no_falla(pdcrt_objeto_aloj_texto(&res, marco->contexto->alojador, lonbuff));
+        no_falla(pdcrt_objeto_aloj_texto(&res, &marco->contexto->gc, lonbuff));
         memcpy(res.value.t->contenido, buffer, lonbuff);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, res));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
@@ -1870,7 +1874,7 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         pdcrt_objeto texto;
-        no_falla(pdcrt_objeto_aloj_texto(&texto, marco->contexto->alojador, 1));
+        no_falla(pdcrt_objeto_aloj_texto(&texto, &marco->contexto->gc, 1));
         char c;
         switch(yo.tag)
         {
@@ -1923,8 +1927,10 @@ pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo,
 #undef PDCRT_NUMOP
 }
 
-pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de Texto";
     pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "longitud") == 0)
     {
@@ -2046,7 +2052,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         if((i < 0) || (((size_t) i) >= yo.value.t->longitud))
         {
             fprintf(stderr,
-                    u8"Error: índice " PDCRT_ENTERO_FMT " fuera del rango válido para indexar al texto (rango válido: desde 0 hasta %zd). Texto: «",
+                    u8"Error: índice " PDCRT_ENTERO_FMT " fuera del rango válido para indexar al texto (rango válido: desde 0 hasta %zu). Texto: «",
                     i, yo.value.t->longitud);
             pdcrt_escribir_texto_max(yo.value.t, 30);
             fprintf(stderr, u8"»");
@@ -2058,7 +2064,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
             pdcrt_abort();
         }
         pdcrt_texto* texto;
-        no_falla(pdcrt_aloj_texto(&texto, marco->contexto->alojador, 1));
+        no_falla(pdcrt_aloj_texto(&texto, &marco->contexto->gc, 1));
         texto->contenido[0] = yo.value.t->contenido[i];
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(texto)));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
@@ -2070,9 +2076,11 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto_debe_tener_tipo_tb(marco, obj, PDCRT_TOBJ_TEXTO);
         pdcrt_texto* res;
-        no_falla(pdcrt_aloj_texto(&res, marco->contexto->alojador, obj.value.t->longitud + yo.value.t->longitud));
-        memcpy(res->contenido, yo.value.t->contenido, yo.value.t->longitud);
-        memcpy(res->contenido + yo.value.t->longitud, obj.value.t->contenido, obj.value.t->longitud);
+        no_falla(pdcrt_aloj_texto(&res, &marco->contexto->gc, obj.value.t->longitud + yo.value.t->longitud));
+        if(yo.value.t->longitud > 0)
+            memcpy(res->contenido, yo.value.t->contenido, yo.value.t->longitud);
+        if(obj.value.t->longitud > 0)
+            memcpy(res->contenido + yo.value.t->longitud, obj.value.t->contenido, obj.value.t->longitud);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(res)));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
@@ -2090,7 +2098,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         pdcrt_texto* res;
         if((final <= inic) || (((size_t) inic) >= yo.value.t->longitud))
         {
-            no_falla(pdcrt_aloj_texto_desde_c(&res, marco->contexto->alojador, ""));
+            no_falla(pdcrt_aloj_texto_desde_c(&res, &marco->contexto->gc, ""));
         }
         else
         {
@@ -2098,7 +2106,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
             {
                 final = yo.value.t->longitud;
             }
-            no_falla(pdcrt_aloj_texto(&res, marco->contexto->alojador, final - inic));
+            no_falla(pdcrt_aloj_texto(&res, &marco->contexto->gc, final - inic));
             memcpy(res->contenido, yo.value.t->contenido + inic, final - inic);
         }
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(res)));
@@ -2125,7 +2133,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
             lon = yo.value.t->longitud - inic;
         }
         pdcrt_texto* res;
-        no_falla(pdcrt_aloj_texto(&res, marco->contexto->alojador, lon));
+        no_falla(pdcrt_aloj_texto(&res, &marco->contexto->gc, lon));
         memcpy(res->contenido, yo.value.t->contenido + inic, lon);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(res)));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
@@ -2192,7 +2200,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
     else if(pdcrt_texto_cmp_lit(msj.value.t, "formatear") == 0)
     {
         pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, args, yo);
-        return pdcrt_continuacion_tail_enviar_mensaje(marco,
+        return pdcrt_continuacion_tail_enviar_mensaje(marco_superior,
                                                       pdcrt_closure_desde_callback_del_runtime(marco, &pdcrt_frt_texto_formatear),
                                                       pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar),
                                                       args + 1,
@@ -2207,7 +2215,7 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
         if((i < 0) || (((size_t) i) >= yo.value.t->longitud))
         {
             fprintf(stderr,
-                    u8"Error: índice " PDCRT_ENTERO_FMT " fuera del rango válido para indexar al texto (rango válido: desde 0 hasta %zd). Texto: «",
+                    u8"Error: índice " PDCRT_ENTERO_FMT " fuera del rango válido para indexar al texto (rango válido: desde 0 hasta %zu). Texto: «",
                     i, yo.value.t->longitud);
             pdcrt_escribir_texto_max(yo.value.t, 30);
             fprintf(stderr, u8"»");
@@ -2252,13 +2260,15 @@ pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, 
     return pdcrt_continuacion_devolver();
 }
 
-pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de Procedimiento";
     pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "llamar") == 0)
     {
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
-        return pdcrt_continuacion_tail_iniciar((pdcrt_proc_t) yo.value.c.proc, marco, args + 1, rets);
+        return pdcrt_continuacion_tail_iniciar((pdcrt_proc_t) yo.value.c.proc, marco_superior, args + 1, rets);
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "igualA") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_=") == 0)
     {
@@ -2315,12 +2325,12 @@ pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         char* texto = malloc(128);
         snprintf(texto, 127,
-                 u8"(Procedimiento proc: 0x%zX  env: 0x%zX #%zd)",
+                 u8"(Procedimiento proc: 0x%zX  env: 0x%zX #%zu)",
                  (intptr_t) yo.value.c.proc,
                  (intptr_t) yo.value.c.env,
                  yo.value.c.env->env_size);
         pdcrt_objeto res;
-        no_falla(pdcrt_objeto_aloj_texto_desde_cstr(&res, marco->contexto->alojador, texto));
+        no_falla(pdcrt_objeto_aloj_texto_desde_cstr(&res, &marco->contexto->gc, texto));
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, res));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
@@ -2330,7 +2340,7 @@ pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo
         printf("Mensaje ");
         pdcrt_escribir_texto(msj.value.t);
         printf(" no entendido para la closure ");
-        printf(u8"(Procedimiento proc: 0x%zX  env: 0x%zX #%zd)\n",
+        printf(u8"(Procedimiento proc: 0x%zX  env: 0x%zX #%zu)\n",
                (intptr_t) yo.value.c.proc,
                (intptr_t) yo.value.c.env,
                yo.value.c.env->env_size);
@@ -2340,7 +2350,7 @@ pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo
     return pdcrt_continuacion_devolver();
 }
 
-pdcrt_continuacion pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
     (void) marco;
     (void) yo;
@@ -2352,8 +2362,10 @@ pdcrt_continuacion pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_obj
     pdcrt_abort();
 }
 
-pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de Booleano";
     pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
@@ -2411,7 +2423,7 @@ pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto y
         pdcrt_objeto b = pdcrt_sacar_de_pila(&marco->contexto->pila);
         pdcrt_objeto res = yo.value.b? a : b;
         pdcrt_objeto llamar_msj = pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar);
-        return pdcrt_continuacion_tail_enviar_mensaje(marco, res, llamar_msj, 0, rets);
+        return pdcrt_continuacion_tail_enviar_mensaje(marco_superior, res, llamar_msj, 0, rets);
     }
     else if(pdcrt_texto_cmp_lit(msj.value.t, "y") == 0 || pdcrt_texto_cmp_lit(msj.value.t, "operador_&&") == 0)
     {
@@ -2452,8 +2464,10 @@ pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto y
     return pdcrt_continuacion_devolver();
 }
 
-pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de TipoNulo";
     pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "comoTexto") == 0)
     {
@@ -2508,16 +2522,20 @@ pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, p
     return pdcrt_continuacion_devolver();
 }
 
-pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de Objeto";
     pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_OBJETO);
     pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, args, msj);
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
-    return pdcrt_continuacion_tail_iniciar((pdcrt_proc_t) yo.value.c.proc, marco, args + 2, rets);
+    return pdcrt_continuacion_tail_iniciar((pdcrt_proc_t) yo.value.c.proc, marco_superior, args + 2, rets);
 }
 
-pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de Arreglo";
     pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_ARREGLO);
     pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "agregarAlFinal") == 0)
@@ -2540,7 +2558,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
-        return pdcrt_continuacion_tail_enviar_mensaje(marco,
+        return pdcrt_continuacion_tail_enviar_mensaje(marco_superior,
                                                       pdcrt_closure_desde_callback_del_runtime(marco, &pdcrt_frt_arreglo_como_texto),
                                                       pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar),
                                                       1,
@@ -2587,7 +2605,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 1);
         pdcrt_insertar_elemento_en_pila(&marco->contexto->pila, marco->contexto->alojador, 1, yo);
-        return pdcrt_continuacion_tail_enviar_mensaje(marco,
+        return pdcrt_continuacion_tail_enviar_mensaje(marco_superior,
                                                       pdcrt_closure_desde_callback_del_runtime(marco, &pdcrt_frt_arreglo_mapear),
                                                       pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar),
                                                       2,
@@ -2597,7 +2615,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     {
         pdcrt_ajustar_argumentos_para_c(marco->contexto, args, 0);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
-        return pdcrt_continuacion_tail_enviar_mensaje(marco,
+        return pdcrt_continuacion_tail_enviar_mensaje(marco_superior,
                                                       pdcrt_closure_desde_callback_del_runtime(marco, &pdcrt_frt_clonar_arreglo),
                                                       pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar),
                                                       1,
@@ -2617,7 +2635,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
         {
             no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, otro));
             no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
-            return pdcrt_continuacion_tail_enviar_mensaje(marco,
+            return pdcrt_continuacion_tail_enviar_mensaje(marco_superior,
                                                           pdcrt_closure_desde_callback_del_runtime(marco, &pdcrt_frt_arreglo_igual_a),
                                                           pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar),
                                                           2,
@@ -2638,7 +2656,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
         {
             no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, otro));
             no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, yo));
-            return pdcrt_continuacion_tail_enviar_mensaje(marco,
+            return pdcrt_continuacion_tail_enviar_mensaje(marco_superior,
                                                           pdcrt_closure_desde_callback_del_runtime(marco, &pdcrt_frt_arreglo_distinto_de),
                                                           pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar),
                                                           2,
@@ -2655,8 +2673,10 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo
     return pdcrt_continuacion_devolver();
 }
 
-pdcrt_continuacion pdcrt_recv_espacio_de_nombres(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_espacio_de_nombres(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de EspacioDeNombres";
     pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_ESPACIO_DE_NOMBRES);
     pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     pdcrt_edn_triple* encontrado = NULL;
@@ -2689,7 +2709,7 @@ pdcrt_continuacion pdcrt_recv_espacio_de_nombres(struct pdcrt_marco* marco, pdcr
     else if(encontrado->es_autoejecutable)
     {
         pdcrt_objeto llamar = pdcrt_objeto_desde_texto(marco->contexto->constantes.msj_llamar);
-        return pdcrt_continuacion_tail_enviar_mensaje(marco, encontrado->valor, llamar, args, rets);
+        return pdcrt_continuacion_tail_enviar_mensaje(marco_superior, encontrado->valor, llamar, args, rets);
     }
     else if(args != 0 || (rets != 0 && rets != 1))
     {
@@ -2708,8 +2728,10 @@ pdcrt_continuacion pdcrt_recv_espacio_de_nombres(struct pdcrt_marco* marco, pdcr
     }
 }
 
-pdcrt_continuacion pdcrt_recv_voidptr(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_voidptr(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de VoidPtr";
     (void) marco;
     (void) args;
     (void) rets;
@@ -2815,7 +2837,7 @@ void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, 
 
 // Constantes:
 
-#define PDCRT_TABLA(M)                                              \
+#define PDCRT_TABLA_DE_TEXTOS(M)                                    \
     M(operador_mas, "operador_+");                                  \
     M(operador_menos, "operador_-");                                \
     M(operador_por, "operador_*");                                  \
@@ -2842,30 +2864,30 @@ void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, 
     M(txt_falso, "FALSO");                                          \
     M(txt_nulo, "NULO");
 
-pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_constantes* consts)
+pdcrt_error pdcrt_aloj_constantes(pdcrt_gc* gc, PDCRT_OUT pdcrt_constantes* consts)
 {
     pdcrt_error pderrno;
     consts->textos = NULL;
     consts->num_textos = 0;
 
 #define PDCRT_INIC_CONST_TXT(cm, lit)                                   \
-    if((pderrno = pdcrt_aloj_texto_desde_c(&consts->cm, alojador, lit)) != PDCRT_OK) \
+    if((pderrno = pdcrt_aloj_texto_desde_c(&consts->cm, gc, lit)) != PDCRT_OK) \
     {                                                                   \
         goto error;                                                     \
     }
-#define PDCRT_DEINIC_CONST_TXT(cm, _lit)            \
-    if(consts->cm != NULL)                          \
-    {                                               \
-        pdcrt_dealoj_texto(alojador, consts->cm);   \
+#define PDCRT_DEINIC_CONST_TXT(cm, _lit)                \
+    if(consts->cm != NULL)                              \
+    {                                                   \
+        pdcrt_dealoj_texto(gc->alojador, consts->cm);   \
     }
 #define PDCRT_NULL_CONST_TXT(cm, _lit)          \
     consts->cm = NULL;
 
-    PDCRT_TABLA(PDCRT_NULL_CONST_TXT)
-    PDCRT_TABLA(PDCRT_INIC_CONST_TXT)
+    PDCRT_TABLA_DE_TEXTOS(PDCRT_NULL_CONST_TXT)
+    PDCRT_TABLA_DE_TEXTOS(PDCRT_INIC_CONST_TXT)
     return PDCRT_OK;
 error:
-    PDCRT_TABLA(PDCRT_DEINIC_CONST_TXT)
+    PDCRT_TABLA_DE_TEXTOS(PDCRT_DEINIC_CONST_TXT)
 
 #undef PDCRT_DEINIC_CONST_TXT
 #undef PDCRT_INIC_CONST_TXT
@@ -2879,17 +2901,15 @@ void pdcrt_dealoj_constantes_internas(pdcrt_alojador alojador, pdcrt_constantes*
 {
 #define PDCRT_DEALOJ(cm, _lit) pdcrt_dealoj_texto(alojador, consts->cm);
 
-    PDCRT_TABLA(PDCRT_DEALOJ)
+    PDCRT_TABLA_DE_TEXTOS(PDCRT_DEALOJ)
 
 #undef PDCRT_DEALOJ
 }
 
 void pdcrt_dealoj_constante(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx)
 {
-    pdcrt_dealoj_texto(alojador, consts->textos[idx]);
+    //pdcrt_dealoj_texto(alojador, consts->textos[idx]);
 }
-
-#undef PDCRT_TABLA
 
 pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto)
 {
@@ -3003,6 +3023,7 @@ pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador, si
     ctx->argv = NULL;
     ctx->claseObjeto = pdcrt_objeto_nulo();
     ctx->entornoBootstrap = pdcrt_objeto_nulo();
+    ctx->generacionDelRecolector = 1;
     pdcrt_error pderrno;
     if((pderrno = pdcrt_inic_pila(&ctx->pila, alojador)) != PDCRT_OK)
     {
@@ -3014,7 +3035,12 @@ pdcrt_error pdcrt_inic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador, si
         pdcrt_deinic_pila(&ctx->pila, alojador);
         return pderrno;
     }
-    if((pderrno = pdcrt_aloj_constantes(alojador, &ctx->constantes)) != PDCRT_OK)
+    if((pderrno = pdcrt_inic_gc(&ctx->gc, alojador)) != PDCRT_OK)
+    {
+        pdcrt_deinic_pila(&ctx->pila, alojador);
+        return pderrno;
+    }
+    if((pderrno = pdcrt_aloj_constantes(&ctx->gc, &ctx->constantes)) != PDCRT_OK)
     {
         pdcrt_deinic_pila(&ctx->pila, alojador);
         return pderrno;
@@ -3026,7 +3052,8 @@ void pdcrt_deinic_contexto(pdcrt_contexto* ctx, pdcrt_alojador alojador)
 {
     PDCRT_DEPURAR_CONTEXTO(ctx, "Deinicializando el contexto");
     pdcrt_deinic_pila(&ctx->pila, alojador);
-    pdcrt_dealoj_constantes_internas(alojador, &ctx->constantes);
+    //pdcrt_dealoj_constantes_internas(alojador, &ctx->constantes);
+    pdcrt_deinic_gc(&ctx->gc);
 }
 
 static void pdcrt_depurar_objeto(pdcrt_objeto obj)
@@ -3048,7 +3075,7 @@ static void pdcrt_depurar_objeto(pdcrt_objeto obj)
     case PDCRT_TOBJ_CLOSURE:
         printf(u8"|    Closure/función\n");
         printf(u8"|      proc => 0x%zX\n", (intptr_t) obj.value.c.proc);
-        printf(u8"|      env 0x%zX  #%zd\n", (intptr_t) obj.value.c.env, obj.value.c.env->env_size);
+        printf(u8"|      env 0x%zX  #%zu\n", (intptr_t) obj.value.c.env, obj.value.c.env->env_size);
         break;
     default:
         pdcrt_inalcanzable();
@@ -3058,7 +3085,7 @@ static void pdcrt_depurar_objeto(pdcrt_objeto obj)
 void pdcrt_depurar_contexto(pdcrt_contexto* ctx, const char* extra)
 {
     printf("|Contexto: %s\n", extra);
-    printf("|  Pila [%zd elementos de %zd max.]\n", ctx->pila.num_elementos, ctx->pila.capacidad);
+    printf("|  Pila [%zu elementos de %zu max.]\n", ctx->pila.num_elementos, ctx->pila.capacidad);
     for(size_t i = 0; i < ctx->pila.num_elementos; i++)
     {
         pdcrt_objeto obj = ctx->pila.elementos[i];
@@ -3233,10 +3260,10 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
     fprintf(out, "|  %d:", PDCRT_NUM_LOCALES_ESP);
     for(pdcrt_marco* m = marco; m != NULL; m = m->marco_anterior)
     {
-        fprintf(out, " > 0x%zX(%zd)", (intptr_t) m, m->num_locales);
+        fprintf(out, " > 0x%zX(%zu)", (intptr_t) m, m->num_locales);
         n += 1;
     }
-    fprintf(out, "  (Tiene %zd marcos.)\n", n);
+    fprintf(out, "  (Tiene %zu marcos.)\n", n);
     pdcrt_objeto frm = pdcrt_obtener_local(marco, PDCRT_ID_EACT);
     if(frm.tag == PDCRT_TOBJ_CLOSURE)
     {
@@ -3244,10 +3271,10 @@ void pdcrt_mostrar_marco(pdcrt_marco* marco, const char* procname, const char* i
         fprintf(out, "|  env %d:", PDCRT_NUM_LOCALES_ESP);
         for(pdcrt_objeto f = frm; f.tag == PDCRT_TOBJ_CLOSURE; f = f.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP])
         {
-            fprintf(out, " > %zd", f.value.c.env->env_size);
+            fprintf(out, " > %zu", f.value.c.env->env_size);
             n += 1;
         }
-        fprintf(out, "  (Tiene %zd envs.)\n", n);
+        fprintf(out, "  (Tiene %zu envs.)\n", n);
     }
     fprintf(out, "|  %s\n", info);
 }
@@ -3279,7 +3306,134 @@ void pdcrt_marco_fijar_nombre(pdcrt_marco* marco, const char* nombre)
 
 // Recolector de basura (sencillo):
 
-static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen)
+static size_t pdcrt_tam_de_objeto_de_tipo(pdcrt_tipo_objeto_gc tipo)
+{
+    switch(tipo)
+    {
+    case PDCRT_GC_TEXTO:
+        return sizeof(pdcrt_texto);
+    case PDCRT_GC_ESPACIO_DE_NOMBRES:
+        return sizeof(pdcrt_espacio_de_nombres);
+    case PDCRT_GC_ARREGLO:
+        return sizeof(pdcrt_arreglo);
+    case PDCRT_GC_ENV:
+        return sizeof(pdcrt_env);
+    default:
+        pdcrt_inalcanzable();
+    }
+}
+
+size_t pdcrt_tam_de_objeto(pdcrt_cabecera_gc* obj)
+{
+    return pdcrt_tam_de_objeto_de_tipo(obj->tipo);
+}
+
+static void* pdcrt_alojador_de_gc_impl(void* datos_del_usuario, void* ptr, size_t tam_viejo, size_t tam_nuevo)
+{
+    pdcrt_gc* gc = datos_del_usuario;
+    gc->usado -= tam_viejo;
+    gc->usado += tam_nuevo;
+    return (*gc->alojador_original.alojar)(gc->alojador_original.datos, ptr, tam_viejo, tam_nuevo);
+}
+
+static pdcrt_alojador pdcrt_alojador_de_gc(pdcrt_gc* gc)
+{
+    return (pdcrt_alojador){ .alojar = &pdcrt_alojador_de_gc_impl, .datos = gc };
+}
+
+pdcrt_error pdcrt_inic_gc(PDCRT_OUT pdcrt_gc* gc, pdcrt_alojador aloj)
+{
+    gc->alojador_original = aloj;
+    gc->primer_objeto_alojado = NULL;
+    gc->ultimo_objeto_alojado = NULL;
+    gc->usado = 0;
+    gc->num_objetos = 0;
+    gc->alojador = pdcrt_alojador_de_gc(gc);
+    gc->cnt = 0;
+    return PDCRT_OK;
+}
+
+void pdcrt_deinic_gc(pdcrt_gc* gc)
+{
+    for(pdcrt_cabecera_gc* obj = gc->primer_objeto_alojado; obj != NULL;)
+    {
+        pdcrt_cabecera_gc* sig = obj->siguiente;
+        pdcrt_gc_dealojar(gc, obj);
+        obj = sig;
+    }
+}
+
+pdcrt_cabecera_gc* pdcrt_gc_alojar(pdcrt_gc* gc, size_t sz, pdcrt_tipo_objeto_gc tipo)
+{
+    pdcrt_cabecera_gc* obj = pdcrt_alojar_simple(gc->alojador, sz);
+    if(!obj)
+        return NULL;
+    obj->generacion = 0;
+    obj->siguiente = NULL;
+    obj->anterior = gc->ultimo_objeto_alojado;
+    if(obj->anterior)
+    {
+        PDCRT_ASSERT(obj->anterior->siguiente == NULL);
+        obj->anterior->siguiente = obj;
+    }
+    obj->tipo = tipo;
+    gc->ultimo_objeto_alojado = obj;
+    if(!gc->primer_objeto_alojado)
+    {
+        gc->primer_objeto_alojado = obj;
+    }
+    gc->num_objetos += 1;
+    return obj;
+}
+
+void pdcrt_gc_olvidar(pdcrt_gc* gc, pdcrt_cabecera_gc* obj)
+{
+    if(obj == gc->primer_objeto_alojado)
+    {
+        PDCRT_ASSERT(obj->anterior == NULL);
+        gc->primer_objeto_alojado = obj->siguiente;
+    }
+    if(obj == gc->ultimo_objeto_alojado)
+    {
+        PDCRT_ASSERT(obj->siguiente == NULL);
+        gc->ultimo_objeto_alojado = obj->anterior;
+    }
+    if(obj->anterior)
+    {
+        obj->anterior->siguiente = obj->siguiente;
+    }
+    if(obj->siguiente)
+    {
+        obj->siguiente->anterior = obj->anterior;
+    }
+    obj->siguiente = NULL;
+    obj->anterior = NULL;
+    gc->num_objetos -= 1;
+}
+
+void pdcrt_gc_dealojar(pdcrt_gc* gc, pdcrt_cabecera_gc* obj)
+{
+    pdcrt_gc_olvidar(gc, obj);
+    switch(obj->tipo)
+    {
+    case PDCRT_GC_TEXTO:
+        pdcrt_dealoj_texto(gc->alojador, (pdcrt_texto*) obj);
+        break;
+    case PDCRT_GC_ESPACIO_DE_NOMBRES:
+        pdcrt_dealoj_espacio_de_nombres(gc->alojador, (pdcrt_espacio_de_nombres*) obj);
+        break;
+    case PDCRT_GC_ARREGLO:
+        pdcrt_dealoj_arreglo(gc->alojador, (pdcrt_arreglo*) obj);
+        break;
+    case PDCRT_GC_ENV:
+        pdcrt_dealoj_env((pdcrt_env*) obj, gc->alojador);
+        break;
+    default:
+        pdcrt_inalcanzable();
+    }
+}
+
+static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen, size_t* n)
 {
     switch(obj.tag)
     {
@@ -3289,58 +3443,168 @@ static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen)
     case PDCRT_TOBJ_BOOLEANO:
     case PDCRT_TOBJ_NULO:
     case PDCRT_TOBJ_VOIDPTR:
+        break;
     case PDCRT_TOBJ_TEXTO:
-        return;
+        if(obj.value.t->gc.generacion == gen)
+            return;
+        *n += 1;
+        obj.value.t->gc.generacion = gen;
+        break;
     case PDCRT_TOBJ_CLOSURE:
     case PDCRT_TOBJ_OBJETO:
-        if(obj.value.c.env->generacion == gen)
+        if(obj.value.c.env->gc.generacion == gen)
             return;
-        obj.value.c.env->generacion = gen;
+        *n += 1;
+        obj.value.c.env->gc.generacion = gen;
         for(size_t i = 0; i < obj.value.c.env->env_size; i++)
         {
-            pdcrt_fijar_generacion_objeto(obj.value.c.env->env[i], gen);
+            pdcrt_fijar_generacion_objeto(obj.value.c.env->env[i], gen, n);
         }
         break;
     case PDCRT_TOBJ_ARREGLO:
-        if(obj.value.a->generacion == gen)
+        if(obj.value.a->gc.generacion == gen)
             return;
-        obj.value.a->generacion = gen;
+        *n += 1;
+        obj.value.a->gc.generacion = gen;
         for(size_t i = 0; i < obj.value.a->longitud; i++)
         {
-            pdcrt_fijar_generacion_objeto(obj.value.a->elementos[i], gen);
+            pdcrt_fijar_generacion_objeto(obj.value.a->elementos[i], gen, n);
         }
         break;
     case PDCRT_TOBJ_ESPACIO_DE_NOMBRES:
-        if(obj.value.e->generacion == gen)
+        if(obj.value.e->gc.generacion == gen)
             return;
-        obj.value.e->generacion = gen;
+        *n += 1;
+        obj.value.e->gc.generacion = gen;
         for(size_t i = 0; i < obj.value.e->ultimo_nombre_creado; i++)
         {
-            pdcrt_fijar_generacion_objeto(obj.value.e->nombres[i].valor, gen);
+            pdcrt_fijar_generacion_objeto(obj.value.e->nombres[i].valor, gen, n);
         }
         break;
     }
 }
 
-static void pdcrt_fijar_generacion_en_objetos_vivos(pdcrt_marco* marco, unsigned int gen)
+static void pdcrt_fijar_generacion_en_objetos_vivos(pdcrt_marco* marco, unsigned int gen, size_t* n)
 {
     for(pdcrt_marco* act = marco; act != NULL; act = act->marco_anterior)
     {
         for(size_t i = 0; i < act->num_locales; i++)
         {
-            pdcrt_fijar_generacion_objeto(act->locales[i], gen);
+            pdcrt_fijar_generacion_objeto(act->locales[i], gen, n);
         }
+    }
+
+    for(size_t i = 0; i < marco->contexto->pila.num_elementos; i++)
+    {
+        pdcrt_fijar_generacion_objeto(marco->contexto->pila.elementos[i], gen, n);
+    }
+
+    for(size_t i = 0; i < marco->contexto->constantes.num_textos; i++)
+    {
+        pdcrt_texto* texto = marco->contexto->constantes.textos[i];
+        *n += 1;
+        texto->gc.generacion = gen;
+    }
+
+#define PDCRT_FIJAR_GEN(cm, _lit) marco->contexto->constantes.cm->gc.generacion = gen
+    PDCRT_TABLA_DE_TEXTOS(PDCRT_FIJAR_GEN)
+#undef PDCRT_FIJAR_GEN
+
+    for(size_t i = 0; i < marco->contexto->registro.num_modulos; i++)
+    {
+        pdcrt_modulo mod = marco->contexto->registro.modulos[i];
+        *n += 1;
+        mod.nombre->gc.generacion = gen;
+        pdcrt_fijar_generacion_objeto(mod.valor, gen, n);
+    }
+
+    pdcrt_fijar_generacion_objeto(marco->contexto->claseObjeto, gen, n);
+    pdcrt_fijar_generacion_objeto(marco->contexto->entornoBootstrap, gen, n);
+}
+
+static void pdcrt_recolectar_objetos_inalcanzables(pdcrt_contexto* contexto, unsigned int gen, size_t* m, size_t* t)
+{
+    for(pdcrt_cabecera_gc* obj = contexto->gc.primer_objeto_alojado;
+        obj != NULL;)
+    {
+        *t += 1;
+        pdcrt_cabecera_gc* sig = obj->siguiente;
+        if(obj->generacion != gen)
+        {
+            pdcrt_gc_dealojar(&contexto->gc, obj);
+            *m += 1;
+        }
+        obj = sig;
     }
 }
 
-static void pdcrt_recolectar_basura(pdcrt_marco* marco)
+void pdcrt_recolectar_basura(PDCRT_ARR(num_marcos) struct pdcrt_marco* marcos,
+                             size_t num_marcos,
+                             struct pdcrt_marco* marco,
+                             PDCRT_ARR(num_cont) pdcrt_continuacion* continuaciones,
+                             size_t num_cont)
 {
-    if(marco->contexto->generacionDelRecolector == UINT_MAX)
+    pdcrt_contexto* contexto = marco->contexto;
+    if(contexto->generacionDelRecolector == UINT_MAX)
     {
-        marco->contexto->generacionDelRecolector = 0;
+        contexto->generacionDelRecolector = 0;
     }
-    unsigned int gen = ++marco->contexto->generacionDelRecolector;
-    pdcrt_fijar_generacion_en_objetos_vivos(marco, gen);
+    unsigned int gen = ++contexto->generacionDelRecolector;
+#ifdef PDCRT_DBG_GC
+    printf("|GC %u usando %lld bytes\n", gen, contexto->gc.usado);
+#endif
+    size_t n = 0, m = 0, t = 0;
+    pdcrt_fijar_generacion_en_objetos_vivos(marco, gen, &n);
+    for(size_t i = 0; i < num_marcos; i++)
+    {
+        pdcrt_fijar_generacion_en_objetos_vivos(&marcos[i], gen, &n);
+    }
+    for(size_t i = 0; i < num_cont; i++)
+    {
+        switch(continuaciones[i].tipo)
+        {
+        case PDCRT_CONT_DEVOLVER:
+            break;
+        case PDCRT_CONT_INICIAR:
+            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.iniciar.marco_superior, gen, &n);
+            break;
+        case PDCRT_CONT_CONTINUAR:
+            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.continuar.marco_actual, gen, &n);
+            break;
+        case PDCRT_CONT_ENVIAR_MENSAJE:
+            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.enviar_mensaje.marco, gen, &n);
+            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.enviar_mensaje.yo, gen, &n);
+            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.enviar_mensaje.mensaje, gen, &n);
+            break;
+        case PDCRT_CONT_TAIL_INICIAR:
+            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.tail_iniciar.marco_superior, gen, &n);
+            break;
+        case PDCRT_CONT_TAIL_ENVIAR_MENSAJE:
+            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.tail_enviar_mensaje.marco_superior, gen, &n);
+            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.tail_enviar_mensaje.yo, gen, &n);
+            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.tail_enviar_mensaje.mensaje, gen, &n);
+            break;
+        }
+    }
+#ifdef PDCRT_DBG_GC
+    printf("|Marcados %zu objetos\n", n);
+#endif
+    pdcrt_recolectar_objetos_inalcanzables(contexto, gen, &m, &t);
+#ifdef PDCRT_DBG_GC
+    printf("|Recolectados %zu objetos\n", m);
+    printf("|Total 1: %zu objetos\n", t);
+    printf("|Total 2: %zu objetos\n", contexto->gc.num_objetos);
+#endif
+}
+
+bool pdcrt_deberia_recolectar_basura(pdcrt_gc* gc)
+{
+#ifdef PDCRT_PRB_SIEMPRE_GC
+    return true;
+#else
+    gc->cnt = (gc->cnt + 1) % 10000;
+    return gc->cnt == 0;
+#endif
 }
 
 
@@ -3474,7 +3738,7 @@ pdcrt_objeto pdcrt_op_open_frame(pdcrt_marco* marco, pdcrt_local_index padreidx,
         padre = pdcrt_obtener_local(marco, padreidx);
     }
     pdcrt_objeto env;
-    no_falla(pdcrt_objeto_aloj_closure(marco->contexto->alojador, NULL, tam, &env));
+    no_falla(pdcrt_objeto_aloj_closure(&marco->contexto->gc, NULL, tam, &env));
     for(size_t i = 0; i < env.value.c.env->env_size; i++)
     {
         env.value.c.env->env[i] = pdcrt_objeto_nulo();
@@ -3515,14 +3779,14 @@ void pdcrt_op_mk0clz(pdcrt_marco* marco, pdcrt_proc_t proc)
     clz.tag = PDCRT_TOBJ_CLOSURE;
     clz.value.c.proc = (pdcrt_funcion_generica) proc;
     clz.recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
-    no_falla(pdcrt_aloj_env(&clz.value.c.env, marco->contexto->alojador, 0));
+    no_falla(pdcrt_aloj_env(&clz.value.c.env, &marco->contexto->gc, 0));
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, clz));
 }
 
 void pdcrt_op_mkarr(pdcrt_marco* marco, size_t tam)
 {
     pdcrt_objeto arr;
-    no_falla(pdcrt_objeto_aloj_arreglo(marco->contexto->alojador, tam, &arr));
+    no_falla(pdcrt_objeto_aloj_arreglo(&marco->contexto->gc, tam, &arr));
     arr.value.a->longitud = tam;
     for(size_t i = 0; i < tam; i++)
     {
@@ -3878,7 +4142,7 @@ void pdcrt_op_objsz(pdcrt_marco* marco)
 void pdcrt_op_opnexp(pdcrt_marco* marco, size_t num_exp)
 {
     pdcrt_objeto edn;
-    no_falla(pdcrt_objeto_aloj_espacio_de_nombres(&edn, marco->contexto->alojador, num_exp));
+    no_falla(pdcrt_objeto_aloj_espacio_de_nombres(&edn, &marco->contexto->gc, num_exp));
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, edn));
 }
 
@@ -3986,6 +4250,7 @@ void pdcrt_op_getclsobj(pdcrt_marco* marco)
 pdcrt_continuacion pdcrt_frt_obtener_rt(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets)
 {
     no_falla(pdcrt_inic_marco(marco_actual, marco_superior->contexto, 0, marco_superior, rets));
+    marco_actual->nombre = u8"__ObtenerRT";
     pdcrt_ajustar_argumentos_para_c(marco_actual->contexto, args, 1);
     (void) pdcrt_sacar_de_pila(&marco_actual->contexto->pila);
     pdcrt_objeto obj = pdcrt_objeto_voidptr(NULL);
@@ -4002,7 +4267,7 @@ struct pdcrt_archivo
     int modo;
 };
 
-pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+static pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 struct pdcrt_archivo* pdcrt_abrir_archivo(pdcrt_alojador alojador, pdcrt_texto* nombre, pdcrt_entero modo)
 {
@@ -4065,8 +4330,10 @@ struct pdcrt_archivo* pdcrt_abrir_archivo(pdcrt_alojador alojador, pdcrt_texto* 
     return archivo;
 }
 
-pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de __RT";
     pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_VOIDPTR);
     pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     if(pdcrt_texto_cmp_lit(msj.value.t, "argc") == 0)
@@ -4087,7 +4354,7 @@ pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdc
             pdcrt_abort();
         }
         pdcrt_objeto res;
-        pdcrt_objeto_aloj_texto_desde_cstr(&res, marco->contexto->alojador, marco->contexto->argv[i.value.i]);
+        pdcrt_objeto_aloj_texto_desde_cstr(&res, &marco->contexto->gc, marco->contexto->argv[i.value.i]);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, res));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
         return pdcrt_continuacion_devolver();
@@ -4152,7 +4419,7 @@ pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdc
                                       el.value.t->contenido, el.value.t->longitud);
         }
         pdcrt_texto* texto;
-        pdcrt_finalizar_constructor(marco->contexto->alojador, &cons, &texto);
+        pdcrt_finalizar_constructor(&marco->contexto->gc, &cons, &texto);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, pdcrt_objeto_desde_texto(texto)));
         pdcrt_deainic_constructor_de_texto(marco->contexto->alojador, &cons);
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
@@ -4191,8 +4458,10 @@ pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdc
     }
 }
 
-pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
+static pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets)
 {
+    no_falla(pdcrt_inic_marco(marco, marco_superior->contexto, 0, marco_superior, rets));
+    marco->nombre = u8"método de Archivo";
     pdcrt_objeto_debe_tener_tipo_tb(marco, yo, PDCRT_TOBJ_VOIDPTR);
     pdcrt_objeto_debe_tener_tipo_tb(marco, msj, PDCRT_TOBJ_TEXTO);
     struct pdcrt_archivo* archivo = yo.value.p;
@@ -4223,7 +4492,7 @@ pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, pdcrt_objeto yo
         snprintf(buffer, PDCRT_LONGITUD_BUFFER, "Archivo %p", yo.value.p);
         size_t lonbuff = strlen(buffer);
         pdcrt_objeto res;
-        no_falla(pdcrt_objeto_aloj_texto(&res, marco->contexto->alojador, lonbuff));
+        no_falla(pdcrt_objeto_aloj_texto(&res, &marco->contexto->gc, lonbuff));
         memcpy(res.value.t->contenido, buffer, lonbuff);
         no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, res));
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 1);
@@ -4370,3 +4639,55 @@ pdcrt_continuacion pdcrt_recv_archivo(struct pdcrt_marco* marco, pdcrt_objeto yo
     }
 #undef PDCRT_FALLA_SI_ESTA_CERRADO
 }
+
+#ifdef PDCRT_DBG_NO_BUILTINS
+
+pdcrt_continuacion pdcrt_frt_arreglo_como_texto(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets)
+{
+    (void) marco_actual; (void) marco_superior; (void) args; (void) rets;
+    pdcrt_inalcanzable();
+}
+
+pdcrt_continuacion pdcrt_frt_clonar_arreglo(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets)
+{
+    (void) marco_actual; (void) marco_superior; (void) args; (void) rets;
+    pdcrt_inalcanzable();
+}
+
+pdcrt_continuacion pdcrt_frt_arreglo_igual_a(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets)
+{
+    (void) marco_actual; (void) marco_superior; (void) args; (void) rets;
+    pdcrt_inalcanzable();
+}
+
+pdcrt_continuacion pdcrt_frt_arreglo_distinto_de(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets)
+{
+    (void) marco_actual; (void) marco_superior; (void) args; (void) rets;
+    pdcrt_inalcanzable();
+}
+
+pdcrt_continuacion pdcrt_frt_arreglo_operador_igual(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets)
+{
+    (void) marco_actual; (void) marco_superior; (void) args; (void) rets;
+    pdcrt_inalcanzable();
+}
+
+pdcrt_continuacion pdcrt_frt_arreglo_operador_distinto(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets)
+{
+    (void) marco_actual; (void) marco_superior; (void) args; (void) rets;
+    pdcrt_inalcanzable();
+}
+
+pdcrt_continuacion pdcrt_frt_arreglo_mapear(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets)
+{
+    (void) marco_actual; (void) marco_superior; (void) args; (void) rets;
+    pdcrt_inalcanzable();
+}
+
+pdcrt_continuacion pdcrt_frt_texto_formatear(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets)
+{
+    (void) marco_actual; (void) marco_superior; (void) args; (void) rets;
+    pdcrt_inalcanzable();
+}
+
+#endif

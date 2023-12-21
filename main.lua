@@ -1282,6 +1282,7 @@ function toc.compconsts(emit, state)
       if c.type == "string" then
          emit:stmt("PDCRT_REGISTRAR_TXTLIT(«1:int», «2:strlit»)", i, c.value)
       elseif c.type == "proto" then
+         emit:stmt("PDCRT_REGISTRAR_TXTLIT(«1:int», \"\")", i)
          log.dbg("skipping emission of prototype constant #%s", i)
       else
          error("not implemented constant type " .. c.type)

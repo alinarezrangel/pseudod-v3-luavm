@@ -83,13 +83,19 @@
 // `pdcrt_error` que no sea `PDCRT_OK`, escribe la función, el error y la
 // operación a `stdout` (pero no termina el programa).
 //
-// `PDCRT_DBG`: Activa todas las opciones anteriores.
+// `PDCRT_DBG_GC`: Escribe estadísticas del recolector de basura cada vez que
+// se invoque.
+//
+// `PDCRT_DBG_NO_BUILTINS`: Provee implementaciones vacías de los builtins.
+//
+// `PDCRT_DBG`: Activa la mayoría de las opciones anteriores.
 
 #ifdef PDCRT_DBG
 #define PDCRT_DBG_RASTREAR_MARCOS
 #define PDCRT_DBG_ESTADISTICAS_DE_LOS_ALOJADORES
 #define PDCRT_DBG_ESCRIBIR_ERRORES
 #define PDCRT_DBG_RASTREAR_CONTEXTO
+#define PDCRT_DBG_GC
 #endif
 
 // Las macros PRB (de "prueba").
@@ -111,10 +117,13 @@
 // `PDCRT_PRB_ALOJADOR_INESTABLE`. Tiene efecto incluso si
 // `PDCRT_PRB_ALOJADOR_INESTABLE` no está definida.
 //
+// `PDCRT_PRB_SIEMPRE_GC`: Llama al recolector de basura cada vez que puedas.
+//
 // `PDCRT_PRB`: Activa todas las macros anteriores excepto `PDCRT_PRB_SRAND`.
 
 #ifdef PDCRT_PRB
 #define PDCRT_PRB_ALOJADOR_INESTABLE 2
+#define PDCRT_PRB_SIEMPRE_GC
 #endif
 
 
@@ -230,9 +239,56 @@ struct pdcrt_objeto;
 struct pdcrt_marco;
 struct pdcrt_env;
 
-#define PDCRT_CABECERA_GC()                     \
-    unsigned int generacion;                    \
-    void* anterior
+
+// Recolector de basura:
+
+typedef enum pdcrt_tipo_objeto_gc
+{
+    PDCRT_GC_TEXTO,
+    PDCRT_GC_ESPACIO_DE_NOMBRES,
+    PDCRT_GC_ARREGLO,
+    PDCRT_GC_ENV
+} pdcrt_tipo_objeto_gc;
+
+typedef struct pdcrt_cabecera_gc
+{
+    unsigned int generacion;
+    struct pdcrt_cabecera_gc* siguiente;
+    struct pdcrt_cabecera_gc* anterior;
+    pdcrt_tipo_objeto_gc tipo;
+} pdcrt_cabecera_gc;
+
+size_t pdcrt_tam_de_objeto(pdcrt_cabecera_gc* obj);
+
+#define PDCRT_CABECERA_GC() pdcrt_cabecera_gc gc
+
+typedef struct pdcrt_gc
+{
+    pdcrt_alojador alojador;
+    pdcrt_alojador alojador_original;
+    pdcrt_cabecera_gc* primer_objeto_alojado;
+    pdcrt_cabecera_gc* ultimo_objeto_alojado;
+    long long usado;
+    size_t num_objetos;
+    size_t cnt;
+} pdcrt_gc;
+
+pdcrt_error pdcrt_inic_gc(PDCRT_OUT pdcrt_gc* gc, pdcrt_alojador aloj);
+void pdcrt_deinic_gc(pdcrt_gc* gc);
+
+pdcrt_cabecera_gc* pdcrt_gc_alojar(pdcrt_gc* gc, size_t sz, pdcrt_tipo_objeto_gc tipo);
+void pdcrt_gc_olvidar(pdcrt_gc* gc, pdcrt_cabecera_gc* obj);
+void pdcrt_gc_dealojar(pdcrt_gc* gc, pdcrt_cabecera_gc* obj);
+
+struct pdcrt_continuacion;
+void pdcrt_recolectar_basura(PDCRT_ARR(num_marcos) struct pdcrt_marco* marcos,
+                             size_t num_marcos,
+                             struct pdcrt_marco* marco,
+                             PDCRT_ARR(num_cont) struct pdcrt_continuacion* continuaciones,
+                             size_t num_cont);
+
+bool pdcrt_deberia_recolectar_basura(pdcrt_gc* gc);
+
 
 
 // Un puntero a función.
@@ -294,10 +350,10 @@ typedef struct pdcrt_texto
 } pdcrt_texto;
 
 // Aloja un texto con un contenido indeterminado pero de tamaño `lon`.
-pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, size_t lon);
+pdcrt_error pdcrt_aloj_texto(PDCRT_OUT pdcrt_texto** texto, pdcrt_gc* gc, size_t lon);
 // Aloja un texto con el mismo contenido y tamaño que el C-string `cstr` (que
 // debe terminar con el byte nulo). El texto alojado no tendrá el byte nulo.
-pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_alojador alojador, const char* cstr);
+pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_gc* gc, const char* cstr);
 // Desaloja un texto.
 void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto);
 // Determina si dos textos son iguales.
@@ -443,10 +499,10 @@ typedef struct pdcrt_edn_triple
 // Este espacio de nombres tendrá `num` triples *sin inicializar*. Usar
 // cualquiera de estos antes de agregarlos caurará un *comportamiento
 // indefinído*.
-pdcrt_error pdcrt_aloj_espacio_de_nombres(pdcrt_alojador alojador, PDCRT_OUT pdcrt_espacio_de_nombres** espacio, size_t num);
+pdcrt_error pdcrt_aloj_espacio_de_nombres(pdcrt_gc* gc, PDCRT_OUT pdcrt_espacio_de_nombres** espacio, size_t num);
 // Desaloja un espacio de nombres. No desaloja los textos ni los objetos
 // contenidos en los triples de dicho espacio.
-void pdcrt_dealoj_espacio_de_nombres(pdcrt_alojador alojador, pdcrt_espacio_de_nombres** espacio);
+void pdcrt_dealoj_espacio_de_nombres(pdcrt_alojador alojador, pdcrt_espacio_de_nombres* espacio);
 // Agrega un nombre al espacio de nombres.
 //
 // Llamar a esta función más de `espacio->num_nombre` veces es un error, sin
@@ -479,16 +535,16 @@ typedef struct pdcrt_arreglo
 } pdcrt_arreglo;
 
 // Aloja un nuevo arreglo con una capacidad dada. Su longitud es de 0.
-pdcrt_error pdcrt_aloj_arreglo(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, size_t capacidad);
+pdcrt_error pdcrt_aloj_arreglo(pdcrt_gc* gc, PDCRT_OUT pdcrt_arreglo** arr, size_t capacidad);
 // Desaloja un arreglo.
 void pdcrt_dealoj_arreglo(pdcrt_alojador alojador, pdcrt_arreglo* arr);
 
 // Aloja y devuelve un arreglo vacío.
-pdcrt_error pdcrt_aloj_arreglo_vacio(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr);
+pdcrt_error pdcrt_aloj_arreglo_vacio(pdcrt_gc* gc, PDCRT_OUT pdcrt_arreglo** arr);
 // Aloja y devuelve un arreglo con un solo elemento.
-pdcrt_error pdcrt_aloj_arreglo_con_1(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, pdcrt_objeto el0);
+pdcrt_error pdcrt_aloj_arreglo_con_1(pdcrt_gc* gc, PDCRT_OUT pdcrt_arreglo** arr, pdcrt_objeto el0);
 // Aloja y devuelve en arreglo con dos elementos.
-pdcrt_error pdcrt_aloj_arreglo_con_2(pdcrt_alojador alojador, PDCRT_OUT pdcrt_arreglo* arr, pdcrt_objeto el0, pdcrt_objeto el1);
+pdcrt_error pdcrt_aloj_arreglo_con_2(pdcrt_gc* gc, PDCRT_OUT pdcrt_arreglo** arr, pdcrt_objeto el0, pdcrt_objeto el1);
 
 // Realoja un arreglo.
 //
@@ -791,26 +847,18 @@ pdcrt_continuacion pdcrt_continuacion_tail_enviar_mensaje(
 // que llama a esta función asumirá que esta siempre consumirá `args` valores y
 // devolverá `rets`.
 //
-// 3. Tal como con `pdcrt_proc_t`, `marco` no está inicializado al principio de
-// la llamada.
-typedef pdcrt_continuacion (*pdcrt_recvmsj)(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+// 3. Tal como en `pdcrt_proc_t`, `marco` no está inicializado.
+typedef pdcrt_continuacion (*pdcrt_recvmsj)(struct pdcrt_marco* marco,
+                                            struct pdcrt_marco* marco_superior,
+                                            pdcrt_objeto yo,
+                                            pdcrt_objeto msj,
+                                            int args,
+                                            int rets);
 
 // Convierte un puntero a una función genérica `pdcrt_funcion_generica` a un
 // puntero a una función que recibe mensajes `pdcrt_recvmsj`. La implementación
 // de esta macro es pública y puedes usarla libremente en tus programas.
 #define PDCRT_CONV_RECV(recv_gen) ((pdcrt_recvmsj) (recv_gen))
-
-// Envía un mensaje a un objeto (macro de conveniencia).
-//
-// La implementación de esta macro es pública y puedes usarla libremente en tus
-// programas.
-//
-// Advertencia: esta macro expande `yo` varias veces.
-//
-// `marco`, `msj`, `args` y `rets` deben tener los mismos tipos que sus
-// respectivos parámetros en `pdcrt_recvmsj`. `yo` debe ser un `pdcrt_objeto`.
-#define PDCRT_ENVIAR_MENSAJE(marco, yo, msj, args, rets)    \
-    ((*PDCRT_CONV_RECV((yo).recv))((marco), (yo), (msj), (args), (rets)))
 
 // Locales especiales.
 //
@@ -872,7 +920,7 @@ typedef long pdcrt_local_index;
 //
 // `env_size` es el número de locales del entorno. `PDCRT_NUM_LOCALES_ESP` será
 // agregado automáticamente.
-pdcrt_error pdcrt_aloj_env(PDCRT_OUT pdcrt_env** env, pdcrt_alojador alojador, size_t env_size);
+pdcrt_error pdcrt_aloj_env(PDCRT_OUT pdcrt_env** env, pdcrt_gc* gc, size_t env_size);
 void pdcrt_dealoj_env(pdcrt_env* env, pdcrt_alojador alojador);
 
 // Devuelve un C-string que es una versión legible del tipo del objeto
@@ -900,22 +948,22 @@ pdcrt_objeto pdcrt_objeto_voidptr(void*);
 //
 // `env_size` será pasado a `pdcrt_aloj_env`, mientras que `proc` será el
 // "código" de la closure.
-pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_alojador alojador, pdcrt_proc_t proc, size_t env_size, PDCRT_OUT pdcrt_objeto* out);
+pdcrt_error pdcrt_objeto_aloj_closure(pdcrt_gc* gc, pdcrt_proc_t proc, size_t env_size, PDCRT_OUT pdcrt_objeto* out);
 // Aloja un objeto textual. Similar a `pdcrt_aloj_texto`.
-pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t lon);
+pdcrt_error pdcrt_objeto_aloj_texto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_gc* gc, size_t lon);
 // Aloja un objeto textual. Similar a `pdcrt_aloj_texto_desde_c`.
-pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, const char* cstr);
+pdcrt_error pdcrt_objeto_aloj_texto_desde_cstr(PDCRT_OUT pdcrt_objeto* obj, pdcrt_gc* gc, const char* cstr);
 // Crea un objeto desde un texto.
 pdcrt_objeto pdcrt_objeto_desde_texto(pdcrt_texto* texto);
 // Crea un objeto desde un arreglo ya existente.
 pdcrt_objeto pdcrt_objeto_desde_arreglo(pdcrt_arreglo* arreglo);
 // Aloja un objeto de tipo arreglo. El arreglo estará vacío pero tendrá la
 // capacidad dada.
-pdcrt_error pdcrt_objeto_aloj_arreglo(pdcrt_alojador alojador, size_t capacidad, PDCRT_OUT pdcrt_objeto* out);
+pdcrt_error pdcrt_objeto_aloj_arreglo(pdcrt_gc* gc, size_t capacidad, PDCRT_OUT pdcrt_objeto* out);
 // Aloja un objeto "real".
-pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, pdcrt_recvmsj recv, size_t num_attrs);
+pdcrt_error pdcrt_objeto_aloj_objeto(PDCRT_OUT pdcrt_objeto* obj, pdcrt_gc* gc, pdcrt_recvmsj recv, size_t num_attrs);
 // Aloja un espacio de nombres.
-pdcrt_error pdcrt_objeto_aloj_espacio_de_nombres(PDCRT_OUT pdcrt_objeto* obj, pdcrt_alojador alojador, size_t num_nombres);
+pdcrt_error pdcrt_objeto_aloj_espacio_de_nombres(PDCRT_OUT pdcrt_objeto* obj, pdcrt_gc* gc, size_t num_nombres);
 
 // Las siguientes funciones implementan los conceptos de igualdad/desigualdad
 // de PseudoD. Te recomiendo que veas el "Reporte del lenguaje de programación
@@ -935,16 +983,16 @@ bool pdcrt_objeto_identicos(pdcrt_objeto a, pdcrt_objeto b);
 
 // Receptores de mensajes:
 
-pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-pdcrt_continuacion pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-pdcrt_continuacion pdcrt_recv_espacio_de_nombres(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
-pdcrt_continuacion pdcrt_recv_voidptr(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_numero(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_texto(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_closure(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_marca_de_pila(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_booleano(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_nulo(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_objeto(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_espacio_de_nombres(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_voidptr(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 
 
@@ -1024,7 +1072,7 @@ typedef struct pdcrt_constantes
 } pdcrt_constantes;
 
 // Aloja una nueva lista de constantes.
-pdcrt_error pdcrt_aloj_constantes(pdcrt_alojador alojador, PDCRT_OUT pdcrt_constantes* consts);
+pdcrt_error pdcrt_aloj_constantes(pdcrt_gc* gc, PDCRT_OUT pdcrt_constantes* consts);
 // Registra una constante textual en la lista. La lista es expandida en la
 // medida necesaria para que la operación funcione.
 pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto);
@@ -1105,15 +1153,16 @@ bool pdcrt_obtener_modulo(pdcrt_registro_de_modulos* registro, pdcrt_texto* nomb
 // programa, como la pila, el alojador, la lista de constantes e información de
 // depuración.
 //
-// El contexto "posee" la pila, la lista de constantes y el registro de
-// módulos: al desalojar el contexto también se desalojará la pila, la lista
-// de constantes y el registro de módulos.
+// El contexto "posee" al gc, la pila, la lista de constantes y el registro de
+// módulos: al desalojar el contexto también se desalojará la pila, la lista de
+// constantes y el registro de módulos.
 //
 // El contexto "referencia" a los parámetros argc y argv de `main`.
 typedef struct pdcrt_contexto
 {
     pdcrt_pila pila;
     pdcrt_alojador alojador;
+    pdcrt_gc gc;
     pdcrt_constantes constantes;
     pdcrt_registro_de_modulos registro;
     int argc;
@@ -1239,12 +1288,7 @@ void pdcrt_marco_fijar_nombre(pdcrt_marco* marco, const char* nombre);
     pdcrt_contexto* ctx = &ctx_real;                                    \
     pdcrt_marco marco_real;                                             \
     pdcrt_marco* marco = &marco_real;                                   \
-    pdcrt_alojador aloj;                                                \
-    if((pderrno = pdcrt_aloj_alojador_de_arena(&aloj)) != PDCRT_OK)     \
-    {                                                                   \
-        puts(pdcrt_perror(pderrno));                                    \
-        exit(PDCRT_SALIDA_ERROR);                                       \
-    }                                                                   \
+    pdcrt_alojador aloj = pdcrt_alojador_de_malloc();                   \
     if((pderrno = pdcrt_inic_contexto(&ctx_real, aloj, nmods)) != PDCRT_OK) \
     {                                                                   \
         puts(pdcrt_perror(pderrno));                                    \
@@ -1274,7 +1318,6 @@ void pdcrt_marco_fijar_nombre(pdcrt_marco* marco, const char* nombre);
     pdcrt_deinic_marco(marco);                                          \
     pdcrt_deinic_contexto(marco->contexto, marco->contexto->alojador);
 #define PDCRT_MAIN_CONT_BODY_2                                          \
-    pdcrt_dealoj_alojador_de_arena(marco->contexto->alojador);          \
     exit(PDCRT_SALIDA_EXITO);
 
 // Registra una literal textual. Solo puede llamarse dentro de `PDCRT_MAIN()`.
@@ -1285,7 +1328,7 @@ void pdcrt_marco_fijar_nombre(pdcrt_marco* marco, const char* nombre);
     {                                                                   \
         pdcrt_texto* txt;                                               \
         const char* str = (lit);                                        \
-        if((pderrno = pdcrt_aloj_texto_desde_c(&txt, aloj, str)) != PDCRT_OK) \
+        if((pderrno = pdcrt_aloj_texto_desde_c(&txt, &marco->contexto->gc, str)) != PDCRT_OK) \
         {                                                               \
             puts(pdcrt_perror(pderrno));                                \
             exit(PDCRT_SALIDA_ERROR);                                   \
@@ -1502,7 +1545,7 @@ void pdcrt_op_nslookup(pdcrt_marco* marco, int cid);
 void pdcrt_op_getclsobj(pdcrt_marco* marco);
 
 pdcrt_continuacion pdcrt_frt_obtener_rt(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets);
-pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
+pdcrt_continuacion pdcrt_recv_rt(struct pdcrt_marco* marco, struct pdcrt_marco* marco_superior, pdcrt_objeto yo, pdcrt_objeto msj, int args, int rets);
 
 #define PDCRT_DECLARE_RT_EXTERN(name)                                   \
     pdcrt_continuacion name(pdcrt_marco* marco_actual, pdcrt_marco* marco_superior, int args, int rets) // {}
