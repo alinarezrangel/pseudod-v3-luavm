@@ -743,8 +743,8 @@ pdcrt_continuacion pdcrt_continuacion_tail_enviar_mensaje(
 #define PDCRT_TAM_PILA_DE_CONTINUACIONES 512
 void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k)
 {
-    pdcrt_continuacion pila[PDCRT_TAM_PILA_DE_CONTINUACIONES];
-    pdcrt_marco marcos[PDCRT_TAM_PILA_DE_CONTINUACIONES];
+    pdcrt_continuacion pila[PDCRT_TAM_PILA_DE_CONTINUACIONES] = {0};
+    pdcrt_marco marcos[PDCRT_TAM_PILA_DE_CONTINUACIONES] = {0};
     pila[0] = k;
     marcos[0] = *marco;
     size_t tam_pila = 1;
@@ -801,10 +801,12 @@ void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k)
             break;
         }
         case PDCRT_CONT_DEVOLVER:
+            pdcrt_deinic_marco(&marcos[tam_pila - 1]);
             tam_pila -= 1;
             break;
         case PDCRT_CONT_TAIL_INICIAR:
         {
+            pdcrt_deinic_marco(&marcos[tam_pila - 1]);
             pdcrt_proc_t fproc = (pdcrt_proc_t) sk.valor.tail_iniciar.proc;
             pila[tam_pila - 1] = (*fproc)(
                 &marcos[tam_pila - 1],
@@ -815,6 +817,7 @@ void pdcrt_trampolin(struct pdcrt_marco* marco, pdcrt_continuacion k)
         }
         case PDCRT_CONT_TAIL_ENVIAR_MENSAJE:
         {
+            pdcrt_deinic_marco(&marcos[tam_pila - 1]);
             pila[tam_pila - 1] = PDCRT_CONV_RECV(sk.valor.tail_enviar_mensaje.yo.recv)(
                 &marcos[tam_pila - 1],
                 sk.valor.tail_enviar_mensaje.marco_superior,
@@ -3221,6 +3224,7 @@ pdcrt_error pdcrt_inic_marco(pdcrt_marco* marco, pdcrt_contexto* contexto, size_
         PDCRT_ESCRIBIR_ERROR(PDCRT_ENOMEM, "pdcrt_inic_marco: alojando las locales");
         return PDCRT_ENOMEM;
     }
+    marco->esta_vivo = true;
     marco->contexto = contexto;
     marco->nombre = NULL;
     marco->marco_anterior = marco_anterior;
@@ -3238,6 +3242,7 @@ void pdcrt_deinic_marco(pdcrt_marco* marco)
     PDCRT_DEPURAR_CONTEXTO(marco->contexto, "Deinicializando un marco");
     pdcrt_dealojar(marco->contexto, marco->locales, sizeof(pdcrt_objeto) * marco->num_locales);
     marco->num_locales = 0;
+    marco->esta_vivo = false;
 }
 
 void pdcrt_fijar_local(pdcrt_marco* marco, pdcrt_local_index n, pdcrt_objeto obj)
@@ -3344,18 +3349,27 @@ static pdcrt_alojador pdcrt_alojador_de_gc(pdcrt_gc* gc)
 pdcrt_error pdcrt_inic_gc(PDCRT_OUT pdcrt_gc* gc, pdcrt_alojador aloj)
 {
     gc->alojador_original = aloj;
-    gc->primer_objeto_alojado = NULL;
-    gc->ultimo_objeto_alojado = NULL;
+    gc->primer_objeto_joven_alojado = NULL;
+    gc->ultimo_objeto_joven_alojado = NULL;
+    gc->primer_objeto_viejo_alojado = NULL;
+    gc->ultimo_objeto_viejo_alojado = NULL;
     gc->usado = 0;
     gc->num_objetos = 0;
     gc->alojador = pdcrt_alojador_de_gc(gc);
     gc->cnt = 0;
+    gc->mcnt = 0;
     return PDCRT_OK;
 }
 
 void pdcrt_deinic_gc(pdcrt_gc* gc)
 {
-    for(pdcrt_cabecera_gc* obj = gc->primer_objeto_alojado; obj != NULL;)
+    for(pdcrt_cabecera_gc* obj = gc->primer_objeto_joven_alojado; obj != NULL;)
+    {
+        pdcrt_cabecera_gc* sig = obj->siguiente;
+        pdcrt_gc_dealojar(gc, obj);
+        obj = sig;
+    }
+    for(pdcrt_cabecera_gc* obj = gc->primer_objeto_viejo_alojado; obj != NULL;)
     {
         pdcrt_cabecera_gc* sig = obj->siguiente;
         pdcrt_gc_dealojar(gc, obj);
@@ -3368,19 +3382,20 @@ pdcrt_cabecera_gc* pdcrt_gc_alojar(pdcrt_gc* gc, size_t sz, pdcrt_tipo_objeto_gc
     pdcrt_cabecera_gc* obj = pdcrt_alojar_simple(gc->alojador, sz);
     if(!obj)
         return NULL;
+    obj->joven = true;
+    obj->tipo = tipo;
     obj->generacion = 0;
     obj->siguiente = NULL;
-    obj->anterior = gc->ultimo_objeto_alojado;
+    obj->anterior = gc->ultimo_objeto_joven_alojado;
     if(obj->anterior)
     {
         PDCRT_ASSERT(obj->anterior->siguiente == NULL);
         obj->anterior->siguiente = obj;
     }
-    obj->tipo = tipo;
-    gc->ultimo_objeto_alojado = obj;
-    if(!gc->primer_objeto_alojado)
+    gc->ultimo_objeto_joven_alojado = obj;
+    if(!gc->primer_objeto_joven_alojado)
     {
-        gc->primer_objeto_alojado = obj;
+        gc->primer_objeto_joven_alojado = obj;
     }
     gc->num_objetos += 1;
     return obj;
@@ -3388,15 +3403,25 @@ pdcrt_cabecera_gc* pdcrt_gc_alojar(pdcrt_gc* gc, size_t sz, pdcrt_tipo_objeto_gc
 
 void pdcrt_gc_olvidar(pdcrt_gc* gc, pdcrt_cabecera_gc* obj)
 {
-    if(obj == gc->primer_objeto_alojado)
+    if(obj == gc->primer_objeto_joven_alojado)
     {
         PDCRT_ASSERT(obj->anterior == NULL);
-        gc->primer_objeto_alojado = obj->siguiente;
+        gc->primer_objeto_joven_alojado = obj->siguiente;
     }
-    if(obj == gc->ultimo_objeto_alojado)
+    if(obj == gc->ultimo_objeto_joven_alojado)
     {
         PDCRT_ASSERT(obj->siguiente == NULL);
-        gc->ultimo_objeto_alojado = obj->anterior;
+        gc->ultimo_objeto_joven_alojado = obj->anterior;
+    }
+    if(obj == gc->primer_objeto_viejo_alojado)
+    {
+        PDCRT_ASSERT(obj->anterior == NULL);
+        gc->primer_objeto_viejo_alojado = obj->siguiente;
+    }
+    if(obj == gc->ultimo_objeto_viejo_alojado)
+    {
+        PDCRT_ASSERT(obj->siguiente == NULL);
+        gc->ultimo_objeto_viejo_alojado = obj->anterior;
     }
     if(obj->anterior)
     {
@@ -3433,7 +3458,43 @@ void pdcrt_gc_dealojar(pdcrt_gc* gc, pdcrt_cabecera_gc* obj)
     }
 }
 
-static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen, size_t* n)
+static void pdcrt_gc_envejecer(pdcrt_gc* gc, pdcrt_cabecera_gc* obj)
+{
+    if(!obj->joven)
+        return;
+    if(obj == gc->primer_objeto_joven_alojado)
+    {
+        PDCRT_ASSERT(obj->anterior == NULL);
+        gc->primer_objeto_joven_alojado = obj->siguiente;
+    }
+    if(obj == gc->ultimo_objeto_joven_alojado)
+    {
+        PDCRT_ASSERT(obj->siguiente == NULL);
+        gc->ultimo_objeto_joven_alojado = obj->anterior;
+    }
+    if(obj->anterior)
+    {
+        obj->anterior->siguiente = obj->siguiente;
+    }
+    if(obj->siguiente)
+    {
+        obj->siguiente->anterior = obj->anterior;
+    }
+    obj->anterior = gc->ultimo_objeto_viejo_alojado;
+    if(obj->anterior)
+    {
+        obj->anterior->siguiente = obj;
+    }
+    gc->ultimo_objeto_viejo_alojado = obj;
+    if(!gc->primer_objeto_viejo_alojado)
+    {
+        gc->primer_objeto_viejo_alojado = obj;
+    }
+    obj->siguiente = NULL;
+    obj->joven = false;
+}
+
+static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen, size_t* n, bool joven)
 {
     switch(obj.tag)
     {
@@ -3447,6 +3508,8 @@ static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen, si
     case PDCRT_TOBJ_TEXTO:
         if(obj.value.t->gc.generacion == gen)
             return;
+        /* if(joven && !obj.value.t->gc.joven) */
+        /*     return; */
         *n += 1;
         obj.value.t->gc.generacion = gen;
         break;
@@ -3454,77 +3517,119 @@ static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen, si
     case PDCRT_TOBJ_OBJETO:
         if(obj.value.c.env->gc.generacion == gen)
             return;
+        /* if(joven && !obj.value.c.env->gc.joven) */
+        /*     return; */
         *n += 1;
         obj.value.c.env->gc.generacion = gen;
         for(size_t i = 0; i < obj.value.c.env->env_size; i++)
         {
-            pdcrt_fijar_generacion_objeto(obj.value.c.env->env[i], gen, n);
+            pdcrt_fijar_generacion_objeto(obj.value.c.env->env[i], gen, n, joven);
         }
         break;
     case PDCRT_TOBJ_ARREGLO:
         if(obj.value.a->gc.generacion == gen)
             return;
+        /* if(joven && !obj.value.a->gc.joven) */
+        /*     return; */
         *n += 1;
         obj.value.a->gc.generacion = gen;
         for(size_t i = 0; i < obj.value.a->longitud; i++)
         {
-            pdcrt_fijar_generacion_objeto(obj.value.a->elementos[i], gen, n);
+            pdcrt_fijar_generacion_objeto(obj.value.a->elementos[i], gen, n, joven);
         }
         break;
     case PDCRT_TOBJ_ESPACIO_DE_NOMBRES:
         if(obj.value.e->gc.generacion == gen)
             return;
+        /* if(joven && !obj.value.e->gc.joven) */
+        /*     return; */
         *n += 1;
         obj.value.e->gc.generacion = gen;
         for(size_t i = 0; i < obj.value.e->ultimo_nombre_creado; i++)
         {
-            pdcrt_fijar_generacion_objeto(obj.value.e->nombres[i].valor, gen, n);
+            pdcrt_fijar_generacion_objeto(obj.value.e->nombres[i].valor, gen, n, joven);
         }
         break;
     }
 }
 
-static void pdcrt_fijar_generacion_en_objetos_vivos(pdcrt_marco* marco, unsigned int gen, size_t* n)
+static void pdcrt_fijar_generacion_en_objetos_vivos(pdcrt_marco* marco, unsigned int gen, size_t* n, bool joven)
 {
     for(pdcrt_marco* act = marco; act != NULL; act = act->marco_anterior)
     {
+        PDCRT_ASSERT(act->esta_vivo);
         for(size_t i = 0; i < act->num_locales; i++)
         {
-            pdcrt_fijar_generacion_objeto(act->locales[i], gen, n);
+            pdcrt_fijar_generacion_objeto(act->locales[i], gen, n, joven);
         }
     }
+}
 
-    for(size_t i = 0; i < marco->contexto->pila.num_elementos; i++)
+static void pdcrt_fijar_generacion_en_objetos_del_contexto(pdcrt_contexto* contexto, unsigned int gen, size_t* n, bool joven)
+{
+    for(size_t i = 0; i < contexto->pila.num_elementos; i++)
     {
-        pdcrt_fijar_generacion_objeto(marco->contexto->pila.elementos[i], gen, n);
+        pdcrt_fijar_generacion_objeto(contexto->pila.elementos[i], gen, n, joven);
     }
 
-    for(size_t i = 0; i < marco->contexto->constantes.num_textos; i++)
+    for(size_t i = 0; i < contexto->constantes.num_textos; i++)
     {
-        pdcrt_texto* texto = marco->contexto->constantes.textos[i];
+        pdcrt_texto* texto = contexto->constantes.textos[i];
         *n += 1;
         texto->gc.generacion = gen;
     }
 
-#define PDCRT_FIJAR_GEN(cm, _lit) marco->contexto->constantes.cm->gc.generacion = gen
+#define PDCRT_FIJAR_GEN(cm, _lit) contexto->constantes.cm->gc.generacion = gen
     PDCRT_TABLA_DE_TEXTOS(PDCRT_FIJAR_GEN)
 #undef PDCRT_FIJAR_GEN
 
-    for(size_t i = 0; i < marco->contexto->registro.num_modulos; i++)
-    {
-        pdcrt_modulo mod = marco->contexto->registro.modulos[i];
-        *n += 1;
-        mod.nombre->gc.generacion = gen;
-        pdcrt_fijar_generacion_objeto(mod.valor, gen, n);
-    }
+        for(size_t i = 0; i < contexto->registro.num_modulos; i++)
+        {
+            pdcrt_modulo mod = contexto->registro.modulos[i];
+            *n += 1;
+            mod.nombre->gc.generacion = gen;
+            pdcrt_fijar_generacion_objeto(mod.valor, gen, n, joven);
+        }
 
-    pdcrt_fijar_generacion_objeto(marco->contexto->claseObjeto, gen, n);
-    pdcrt_fijar_generacion_objeto(marco->contexto->entornoBootstrap, gen, n);
+    pdcrt_fijar_generacion_objeto(contexto->claseObjeto, gen, n, joven);
+    pdcrt_fijar_generacion_objeto(contexto->entornoBootstrap, gen, n, joven);
+}
+
+static void pdcrt_recolectar_objetos_jovenes_inalcanzables(pdcrt_contexto* contexto, unsigned int gen, size_t* m, size_t* t)
+{
+    for(pdcrt_cabecera_gc* obj = contexto->gc.primer_objeto_joven_alojado;
+        obj != NULL;)
+    {
+        *t += 1;
+        pdcrt_cabecera_gc* sig = obj->siguiente;
+        if(obj->joven && obj->generacion != gen)
+        {
+            pdcrt_gc_dealojar(&contexto->gc, obj);
+            *m += 1;
+        }
+        obj = sig;
+    }
 }
 
 static void pdcrt_recolectar_objetos_inalcanzables(pdcrt_contexto* contexto, unsigned int gen, size_t* m, size_t* t)
 {
-    for(pdcrt_cabecera_gc* obj = contexto->gc.primer_objeto_alojado;
+    for(pdcrt_cabecera_gc* obj = contexto->gc.primer_objeto_joven_alojado;
+        obj != NULL;)
+    {
+        *t += 1;
+        pdcrt_cabecera_gc* sig = obj->siguiente;
+        if(obj->generacion != gen)
+        {
+            pdcrt_gc_dealojar(&contexto->gc, obj);
+            *m += 1;
+        }
+        else
+        {
+            pdcrt_gc_envejecer(&contexto->gc, obj);
+        }
+        obj = sig;
+    }
+    for(pdcrt_cabecera_gc* obj = contexto->gc.primer_objeto_viejo_alojado;
         obj != NULL;)
     {
         *t += 1;
@@ -3545,7 +3650,7 @@ void pdcrt_recolectar_basura(PDCRT_ARR(num_marcos) struct pdcrt_marco* marcos,
                              size_t num_cont)
 {
     pdcrt_contexto* contexto = marco->contexto;
-    if(contexto->generacionDelRecolector == UINT_MAX)
+    if(contexto->generacionDelRecolector >= PDCRT_MAX_GENERACION)
     {
         contexto->generacionDelRecolector = 0;
     }
@@ -3553,11 +3658,15 @@ void pdcrt_recolectar_basura(PDCRT_ARR(num_marcos) struct pdcrt_marco* marcos,
 #ifdef PDCRT_DBG_GC
     printf("|GC %u usando %lld bytes\n", gen, contexto->gc.usado);
 #endif
+    contexto->gc.mcnt = (contexto->gc.mcnt + 1) % 3;
+    bool joven = contexto->gc.mcnt < 2;
     size_t n = 0, m = 0, t = 0;
-    pdcrt_fijar_generacion_en_objetos_vivos(marco, gen, &n);
+    pdcrt_fijar_generacion_en_objetos_del_contexto(marco->contexto, gen, &n, joven);
+    pdcrt_fijar_generacion_en_objetos_vivos(marco, gen, &n, joven);
     for(size_t i = 0; i < num_marcos; i++)
     {
-        pdcrt_fijar_generacion_en_objetos_vivos(&marcos[i], gen, &n);
+        PDCRT_ASSERT(marcos[i].esta_vivo);
+        pdcrt_fijar_generacion_en_objetos_vivos(&marcos[i], gen, &n, joven);
     }
     for(size_t i = 0; i < num_cont; i++)
     {
@@ -3566,30 +3675,41 @@ void pdcrt_recolectar_basura(PDCRT_ARR(num_marcos) struct pdcrt_marco* marcos,
         case PDCRT_CONT_DEVOLVER:
             break;
         case PDCRT_CONT_INICIAR:
-            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.iniciar.marco_superior, gen, &n);
+            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.iniciar.marco_superior, gen, &n, joven);
             break;
         case PDCRT_CONT_CONTINUAR:
-            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.continuar.marco_actual, gen, &n);
+            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.continuar.marco_actual, gen, &n, joven);
             break;
         case PDCRT_CONT_ENVIAR_MENSAJE:
-            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.enviar_mensaje.marco, gen, &n);
-            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.enviar_mensaje.yo, gen, &n);
-            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.enviar_mensaje.mensaje, gen, &n);
+            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.enviar_mensaje.marco, gen, &n, joven);
+            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.enviar_mensaje.yo, gen, &n, joven);
+            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.enviar_mensaje.mensaje, gen, &n, joven);
             break;
         case PDCRT_CONT_TAIL_INICIAR:
-            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.tail_iniciar.marco_superior, gen, &n);
+            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.tail_iniciar.marco_superior, gen, &n, joven);
             break;
         case PDCRT_CONT_TAIL_ENVIAR_MENSAJE:
-            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.tail_enviar_mensaje.marco_superior, gen, &n);
-            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.tail_enviar_mensaje.yo, gen, &n);
-            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.tail_enviar_mensaje.mensaje, gen, &n);
+            pdcrt_fijar_generacion_en_objetos_vivos(continuaciones[i].valor.tail_enviar_mensaje.marco_superior, gen, &n, joven);
+            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.tail_enviar_mensaje.yo, gen, &n, joven);
+            pdcrt_fijar_generacion_objeto(continuaciones[i].valor.tail_enviar_mensaje.mensaje, gen, &n, joven);
             break;
         }
     }
 #ifdef PDCRT_DBG_GC
     printf("|Marcados %zu objetos\n", n);
+    if(!joven)
+        printf("|Recoleccion joven");
+    else
+        printf("|Recoleccion completa");
 #endif
-    pdcrt_recolectar_objetos_inalcanzables(contexto, gen, &m, &t);
+    if(!joven)
+    {
+        pdcrt_recolectar_objetos_inalcanzables(contexto, gen, &m, &t);
+    }
+    else
+    {
+        pdcrt_recolectar_objetos_jovenes_inalcanzables(contexto, gen, &m, &t);
+    }
 #ifdef PDCRT_DBG_GC
     printf("|Recolectados %zu objetos\n", m);
     printf("|Total 1: %zu objetos\n", t);
@@ -3602,7 +3722,7 @@ bool pdcrt_deberia_recolectar_basura(pdcrt_gc* gc)
 #ifdef PDCRT_PRB_SIEMPRE_GC
     return true;
 #else
-    gc->cnt = (gc->cnt + 1) % 10000;
+    gc->cnt = (gc->cnt + 1) % 80000;
     return gc->cnt == 0;
 #endif
 }
@@ -3973,7 +4093,6 @@ pdcrt_continuacion pdcrt_op_tail_msg(pdcrt_marco* marco, int cid, int args, int 
     pdcrt_objeto_debe_tener_tipo_tb(marco, marca, PDCRT_TOBJ_MARCA_DE_PILA);
 
     pdcrt_marco* marco_superior = marco->marco_anterior;
-    pdcrt_deinic_marco(marco);
     pdcrt_objeto mensaje = pdcrt_objeto_desde_texto(marco_superior->contexto->constantes.textos[cid]);
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco_superior->contexto->pila);
     return pdcrt_continuacion_tail_enviar_mensaje(marco_superior, obj, mensaje, args, rets);
@@ -4033,7 +4152,6 @@ pdcrt_continuacion pdcrt_op_tail_dynmsg(pdcrt_marco* marco, int args, int rets)
     pdcrt_objeto_debe_tener_tipo_tb(marco, marca, PDCRT_TOBJ_MARCA_DE_PILA);
 
     pdcrt_marco* marco_superior = marco->marco_anterior;
-    pdcrt_deinic_marco(marco);
     pdcrt_objeto mensaje = pdcrt_sacar_de_pila(&marco->contexto->pila);
     pdcrt_objeto obj = pdcrt_sacar_de_pila(&marco_superior->contexto->pila);
     return pdcrt_continuacion_tail_enviar_mensaje(marco_superior, obj, mensaje, args, rets);
@@ -4302,8 +4420,6 @@ struct pdcrt_archivo* pdcrt_abrir_archivo(pdcrt_alojador alojador, pdcrt_texto* 
     }
     memcpy(nombre_cstr, nombre->contenido, nombre->longitud);
     nombre_cstr[nombre->longitud] = '\0';
-
-    printf("!!!! %s  %03ld  %s\n", modo_cstr, modo, nombre_cstr);
 
     struct pdcrt_archivo* archivo = pdcrt_alojar_simple(alojador, sizeof(struct pdcrt_archivo));
     if(!archivo)

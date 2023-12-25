@@ -250,12 +250,15 @@ typedef enum pdcrt_tipo_objeto_gc
     PDCRT_GC_ENV
 } pdcrt_tipo_objeto_gc;
 
+#define PDCRT_MAX_GENERACION 536870911uL
+
 typedef struct pdcrt_cabecera_gc
 {
-    unsigned int generacion;
+    bool joven : 1;
+    unsigned generacion : 29;
+    pdcrt_tipo_objeto_gc tipo : 2;
     struct pdcrt_cabecera_gc* siguiente;
     struct pdcrt_cabecera_gc* anterior;
-    pdcrt_tipo_objeto_gc tipo;
 } pdcrt_cabecera_gc;
 
 size_t pdcrt_tam_de_objeto(pdcrt_cabecera_gc* obj);
@@ -266,11 +269,14 @@ typedef struct pdcrt_gc
 {
     pdcrt_alojador alojador;
     pdcrt_alojador alojador_original;
-    pdcrt_cabecera_gc* primer_objeto_alojado;
-    pdcrt_cabecera_gc* ultimo_objeto_alojado;
+    pdcrt_cabecera_gc* primer_objeto_joven_alojado;
+    pdcrt_cabecera_gc* ultimo_objeto_joven_alojado;
+    pdcrt_cabecera_gc* primer_objeto_viejo_alojado;
+    pdcrt_cabecera_gc* ultimo_objeto_viejo_alojado;
     long long usado;
     size_t num_objetos;
     size_t cnt;
+    size_t mcnt;
 } pdcrt_gc;
 
 pdcrt_error pdcrt_inic_gc(PDCRT_OUT pdcrt_gc* gc, pdcrt_alojador aloj);
@@ -1221,6 +1227,7 @@ void pdcrt_agregar_modulo_al_contexto(pdcrt_contexto* ctx, size_t i, int const_n
 // manualmente a las locales de un marco tienes que recordarlos.
 typedef struct pdcrt_marco
 {
+    bool esta_vivo;
     pdcrt_contexto* contexto;
     PDCRT_ARR(num_locales) pdcrt_objeto* locales;
     size_t num_locales;
@@ -1432,7 +1439,6 @@ void pdcrt_marco_fijar_nombre(pdcrt_marco* marco, const char* nombre);
     {                                                             \
         pdcrt_op_retn(marco, nrets);                              \
         PDCRT_RASTREAR_MARCO(marco, "<unk>", "postludio");        \
-        pdcrt_deinic_marco(marco);                                \
         return pdcrt_continuacion_devolver();                     \
     }                                                             \
     while(0)
