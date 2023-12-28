@@ -2590,6 +2590,7 @@ pdcrt_continuacion pdcrt_recv_arreglo(struct pdcrt_marco* marco, struct pdcrt_ma
         size_t indice = obj_indice.value.i;
         PDCRT_ASSERT(indice < yo.value.a->longitud);
         yo.value.a->elementos[indice] = obj_valor;
+        pdcrt_gc_write_barrier(marco->contexto, yo, obj_valor);
         pdcrt_ajustar_valores_devueltos_para_c(marco->contexto, rets, 0);
         return pdcrt_continuacion_devolver();
     }
@@ -3309,7 +3310,44 @@ void pdcrt_marco_fijar_nombre(pdcrt_marco* marco, const char* nombre)
 }
 
 
-// Recolector de basura (sencillo):
+// Recolector de basura:
+
+
+void pdcrt_agregar_a_la_lista(pdcrt_lista_de_objetos* lista, pdcrt_cabecera_gc* obj)
+{
+    if(!lista->ultimo)
+    {
+        // Está vacía
+        PDCRT_ASSERT(!lista->primero);
+        lista->primero = obj;
+        lista->ultimo = obj;
+        obj->siguiente = NULL;
+        obj->anterior = NULL;
+    }
+    else
+    {
+        PDCRT_ASSERT(lista->ultimo->siguiente == NULL);
+        obj->anterior = lista->ultimo;
+        obj->anterior->siguiente = obj;
+        obj->siguiente = NULL;
+        lista->ultimo = obj;
+    }
+}
+
+void pdcrt_eliminar_de_la_lista(pdcrt_lista_de_objetos* lista, pdcrt_cabecera_gc* obj)
+{
+    if(lista->primero == obj)
+        lista->primero = obj->siguiente;
+    if(lista->ultimo == obj)
+        lista->ultimo = obj->anterior;
+    if(obj->siguiente)
+        obj->siguiente->anterior = NULL;
+    if(obj->anterior)
+        obj->anterior->siguiente = NULL;
+    obj->siguiente = NULL;
+    obj->anterior = NULL;
+}
+
 
 static size_t pdcrt_tam_de_objeto_de_tipo(pdcrt_tipo_objeto_gc tipo)
 {
@@ -3349,10 +3387,9 @@ static pdcrt_alojador pdcrt_alojador_de_gc(pdcrt_gc* gc)
 pdcrt_error pdcrt_inic_gc(PDCRT_OUT pdcrt_gc* gc, pdcrt_alojador aloj)
 {
     gc->alojador_original = aloj;
-    gc->primer_objeto_joven_alojado = NULL;
-    gc->ultimo_objeto_joven_alojado = NULL;
-    gc->primer_objeto_viejo_alojado = NULL;
-    gc->ultimo_objeto_viejo_alojado = NULL;
+    gc->objetos_jovenes = (pdcrt_lista_de_objetos) {NULL, NULL};
+    gc->objetos_viejos = (pdcrt_lista_de_objetos) {NULL, NULL};
+    gc->objetos_viejos_que_contienen_a_uno_joven = (pdcrt_lista_de_objetos) {NULL, NULL};
     gc->usado = 0;
     gc->num_objetos = 0;
     gc->alojador = pdcrt_alojador_de_gc(gc);
@@ -3363,13 +3400,13 @@ pdcrt_error pdcrt_inic_gc(PDCRT_OUT pdcrt_gc* gc, pdcrt_alojador aloj)
 
 void pdcrt_deinic_gc(pdcrt_gc* gc)
 {
-    for(pdcrt_cabecera_gc* obj = gc->primer_objeto_joven_alojado; obj != NULL;)
+    for(pdcrt_cabecera_gc* obj = gc->objetos_jovenes.primero; obj != NULL;)
     {
         pdcrt_cabecera_gc* sig = obj->siguiente;
         pdcrt_gc_dealojar(gc, obj);
         obj = sig;
     }
-    for(pdcrt_cabecera_gc* obj = gc->primer_objeto_viejo_alojado; obj != NULL;)
+    for(pdcrt_cabecera_gc* obj = gc->objetos_viejos.primero; obj != NULL;)
     {
         pdcrt_cabecera_gc* sig = obj->siguiente;
         pdcrt_gc_dealojar(gc, obj);
@@ -3385,55 +3422,37 @@ pdcrt_cabecera_gc* pdcrt_gc_alojar(pdcrt_gc* gc, size_t sz, pdcrt_tipo_objeto_gc
     obj->joven = true;
     obj->tipo = tipo;
     obj->generacion = 0;
+    obj->anterior = NULL;
     obj->siguiente = NULL;
-    obj->anterior = gc->ultimo_objeto_joven_alojado;
-    if(obj->anterior)
-    {
-        PDCRT_ASSERT(obj->anterior->siguiente == NULL);
-        obj->anterior->siguiente = obj;
-    }
-    gc->ultimo_objeto_joven_alojado = obj;
-    if(!gc->primer_objeto_joven_alojado)
-    {
-        gc->primer_objeto_joven_alojado = obj;
-    }
+    pdcrt_agregar_a_la_lista(&gc->objetos_jovenes, obj);
     gc->num_objetos += 1;
     return obj;
 }
 
 void pdcrt_gc_olvidar(pdcrt_gc* gc, pdcrt_cabecera_gc* obj)
 {
-    if(obj == gc->primer_objeto_joven_alojado)
-    {
-        PDCRT_ASSERT(obj->anterior == NULL);
-        gc->primer_objeto_joven_alojado = obj->siguiente;
-    }
-    if(obj == gc->ultimo_objeto_joven_alojado)
-    {
-        PDCRT_ASSERT(obj->siguiente == NULL);
-        gc->ultimo_objeto_joven_alojado = obj->anterior;
-    }
-    if(obj == gc->primer_objeto_viejo_alojado)
-    {
-        PDCRT_ASSERT(obj->anterior == NULL);
-        gc->primer_objeto_viejo_alojado = obj->siguiente;
-    }
-    if(obj == gc->ultimo_objeto_viejo_alojado)
-    {
-        PDCRT_ASSERT(obj->siguiente == NULL);
-        gc->ultimo_objeto_viejo_alojado = obj->anterior;
-    }
-    if(obj->anterior)
-    {
-        obj->anterior->siguiente = obj->siguiente;
-    }
-    if(obj->siguiente)
-    {
-        obj->siguiente->anterior = obj->anterior;
-    }
-    obj->siguiente = NULL;
-    obj->anterior = NULL;
+    pdcrt_eliminar_de_la_lista(&gc->objetos_jovenes, obj);
+    pdcrt_eliminar_de_la_lista(&gc->objetos_viejos, obj);
+    pdcrt_eliminar_de_la_lista(&gc->objetos_viejos_que_contienen_a_uno_joven, obj);
     gc->num_objetos -= 1;
+}
+
+static pdcrt_cabecera_gc* pdcrt_cabecera_de_objeto(pdcrt_objeto obj)
+{
+    switch(obj.tag)
+    {
+    case PDCRT_TOBJ_TEXTO:
+        return (pdcrt_cabecera_gc*) obj.value.t;
+    case PDCRT_TOBJ_CLOSURE:
+    case PDCRT_TOBJ_OBJETO:
+        return (pdcrt_cabecera_gc*) obj.value.c.env;
+    case PDCRT_TOBJ_ARREGLO:
+        return (pdcrt_cabecera_gc*) obj.value.a;
+    case PDCRT_TOBJ_ESPACIO_DE_NOMBRES:
+        return (pdcrt_cabecera_gc*) obj.value.e;
+    default:
+        return NULL;
+    }
 }
 
 void pdcrt_gc_dealojar(pdcrt_gc* gc, pdcrt_cabecera_gc* obj)
@@ -3462,36 +3481,128 @@ static void pdcrt_gc_envejecer(pdcrt_gc* gc, pdcrt_cabecera_gc* obj)
 {
     if(!obj->joven)
         return;
-    if(obj == gc->primer_objeto_joven_alojado)
-    {
-        PDCRT_ASSERT(obj->anterior == NULL);
-        gc->primer_objeto_joven_alojado = obj->siguiente;
-    }
-    if(obj == gc->ultimo_objeto_joven_alojado)
-    {
-        PDCRT_ASSERT(obj->siguiente == NULL);
-        gc->ultimo_objeto_joven_alojado = obj->anterior;
-    }
-    if(obj->anterior)
-    {
-        obj->anterior->siguiente = obj->siguiente;
-    }
-    if(obj->siguiente)
-    {
-        obj->siguiente->anterior = obj->anterior;
-    }
-    obj->anterior = gc->ultimo_objeto_viejo_alojado;
-    if(obj->anterior)
-    {
-        obj->anterior->siguiente = obj;
-    }
-    gc->ultimo_objeto_viejo_alojado = obj;
-    if(!gc->primer_objeto_viejo_alojado)
-    {
-        gc->primer_objeto_viejo_alojado = obj;
-    }
-    obj->siguiente = NULL;
+    pdcrt_eliminar_de_la_lista(&gc->objetos_jovenes, obj);
+    pdcrt_agregar_a_la_lista(&gc->objetos_viejos, obj);
     obj->joven = false;
+}
+
+void pdcrt_gc_marcar_como_que_contiene_joven(pdcrt_gc* gc, pdcrt_cabecera_gc* obj)
+{
+    if(obj->joven)
+        return;
+    pdcrt_eliminar_de_la_lista(&gc->objetos_viejos, obj);
+    pdcrt_agregar_a_la_lista(&gc->objetos_viejos_que_contienen_a_uno_joven, obj);
+}
+
+void pdcrt_gc_write_barrier(struct pdcrt_contexto* ctx, struct pdcrt_objeto cont, struct pdcrt_objeto val)
+{
+    pdcrt_cabecera_gc* cont_obj = pdcrt_cabecera_de_objeto(cont);
+    pdcrt_cabecera_gc* val_obj = pdcrt_cabecera_de_objeto(val);
+    if(!cont_obj || !val_obj || cont_obj->joven)
+        return;
+    pdcrt_gc_marcar_como_que_contiene_joven(&ctx->gc, cont_obj);
+}
+
+static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen, size_t* n, bool joven);
+
+static void pdcrt_fijar_generacion_en_cabecera(pdcrt_cabecera_gc* obj, unsigned int gen, size_t* n, bool joven)
+{
+    switch(obj->tipo)
+    {
+    case PDCRT_GC_TEXTO:
+        if(obj->generacion == gen)
+            return;
+        if(joven && !obj->joven)
+            return;
+        *n += 1;
+        obj->generacion = gen;
+        break;
+    case PDCRT_GC_ENV:
+        if(obj->generacion == gen)
+            return;
+        if(joven && !obj->joven)
+            return;
+        *n += 1;
+        pdcrt_env* env = (pdcrt_env*) obj;
+        obj->generacion = gen;
+        for(size_t i = 0; i < env->env_size; i++)
+        {
+            pdcrt_fijar_generacion_objeto(env->env[i], gen, n, joven);
+        }
+        break;
+    case PDCRT_GC_ARREGLO:
+        if(obj->generacion == gen)
+            return;
+        if(joven && !obj->joven)
+            return;
+        *n += 1;
+        obj->generacion = gen;
+        pdcrt_arreglo* arr = (pdcrt_arreglo*) obj;
+        for(size_t i = 0; i < arr->longitud; i++)
+        {
+            pdcrt_fijar_generacion_objeto(arr->elementos[i], gen, n, joven);
+        }
+        break;
+    case PDCRT_GC_ESPACIO_DE_NOMBRES:
+        if(obj->generacion == gen)
+            return;
+        if(joven && !obj->joven)
+            return;
+        *n += 1;
+        obj->generacion = gen;
+        pdcrt_espacio_de_nombres* esp = (pdcrt_espacio_de_nombres*) obj;
+        for(size_t i = 0; i < esp->ultimo_nombre_creado; i++)
+        {
+            pdcrt_fijar_generacion_objeto(esp->nombres[i].valor, gen, n, joven);
+        }
+        break;
+    }
+}
+
+static void pdcrt_fijar_generacion_en_objeto_viejo_que_contiene_a_uno_joven(pdcrt_cabecera_gc* obj, unsigned int gen, size_t* n)
+{
+    switch(obj->tipo)
+    {
+    case PDCRT_GC_TEXTO:
+        if(obj->generacion == gen)
+            return;
+        *n += 1;
+        obj->generacion = gen;
+        break;
+    case PDCRT_GC_ENV:
+        if(obj->generacion == gen)
+            return;
+        *n += 1;
+        pdcrt_env* env = (pdcrt_env*) obj;
+        obj->generacion = gen;
+        for(size_t i = 0; i < env->env_size; i++)
+        {
+            pdcrt_fijar_generacion_objeto(env->env[i], gen, n, true);
+        }
+        break;
+    case PDCRT_GC_ARREGLO:
+        if(obj->generacion == gen)
+            return;
+        *n += 1;
+        obj->generacion = gen;
+        pdcrt_arreglo* arr = (pdcrt_arreglo*) obj;
+        for(size_t i = 0; i < arr->longitud; i++)
+        {
+            pdcrt_fijar_generacion_objeto(arr->elementos[i], gen, n, true);
+        }
+        break;
+    case PDCRT_GC_ESPACIO_DE_NOMBRES:
+        if(obj->generacion == gen)
+            return;
+        *n += 1;
+        obj->generacion = gen;
+        pdcrt_espacio_de_nombres* esp = (pdcrt_espacio_de_nombres*) obj;
+        for(size_t i = 0; i < esp->ultimo_nombre_creado; i++)
+        {
+            pdcrt_fijar_generacion_objeto(esp->nombres[i].valor, gen, n, true);
+        }
+        break;
+    }
 }
 
 static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen, size_t* n, bool joven)
@@ -3506,50 +3617,14 @@ static void pdcrt_fijar_generacion_objeto(pdcrt_objeto obj, unsigned int gen, si
     case PDCRT_TOBJ_VOIDPTR:
         break;
     case PDCRT_TOBJ_TEXTO:
-        if(obj.value.t->gc.generacion == gen)
-            return;
-        /* if(joven && !obj.value.t->gc.joven) */
-        /*     return; */
-        *n += 1;
-        obj.value.t->gc.generacion = gen;
-        break;
+        return pdcrt_fijar_generacion_en_cabecera((pdcrt_cabecera_gc*) obj.value.t, gen, n, joven);
     case PDCRT_TOBJ_CLOSURE:
     case PDCRT_TOBJ_OBJETO:
-        if(obj.value.c.env->gc.generacion == gen)
-            return;
-        /* if(joven && !obj.value.c.env->gc.joven) */
-        /*     return; */
-        *n += 1;
-        obj.value.c.env->gc.generacion = gen;
-        for(size_t i = 0; i < obj.value.c.env->env_size; i++)
-        {
-            pdcrt_fijar_generacion_objeto(obj.value.c.env->env[i], gen, n, joven);
-        }
-        break;
+        return pdcrt_fijar_generacion_en_cabecera((pdcrt_cabecera_gc*) obj.value.c.env, gen, n, joven);
     case PDCRT_TOBJ_ARREGLO:
-        if(obj.value.a->gc.generacion == gen)
-            return;
-        /* if(joven && !obj.value.a->gc.joven) */
-        /*     return; */
-        *n += 1;
-        obj.value.a->gc.generacion = gen;
-        for(size_t i = 0; i < obj.value.a->longitud; i++)
-        {
-            pdcrt_fijar_generacion_objeto(obj.value.a->elementos[i], gen, n, joven);
-        }
-        break;
+        return pdcrt_fijar_generacion_en_cabecera((pdcrt_cabecera_gc*) obj.value.a, gen, n, joven);
     case PDCRT_TOBJ_ESPACIO_DE_NOMBRES:
-        if(obj.value.e->gc.generacion == gen)
-            return;
-        /* if(joven && !obj.value.e->gc.joven) */
-        /*     return; */
-        *n += 1;
-        obj.value.e->gc.generacion = gen;
-        for(size_t i = 0; i < obj.value.e->ultimo_nombre_creado; i++)
-        {
-            pdcrt_fijar_generacion_objeto(obj.value.e->nombres[i].valor, gen, n, joven);
-        }
-        break;
+        return pdcrt_fijar_generacion_en_cabecera((pdcrt_cabecera_gc*) obj.value.e, gen, n, joven);
     }
 }
 
@@ -3570,6 +3645,14 @@ static void pdcrt_fijar_generacion_en_objetos_del_contexto(pdcrt_contexto* conte
     for(size_t i = 0; i < contexto->pila.num_elementos; i++)
     {
         pdcrt_fijar_generacion_objeto(contexto->pila.elementos[i], gen, n, joven);
+    }
+
+    if(joven)
+    {
+        for(pdcrt_cabecera_gc* obj = contexto->gc.objetos_viejos_que_contienen_a_uno_joven.primero; obj; obj = obj->siguiente)
+        {
+            pdcrt_fijar_generacion_en_objeto_viejo_que_contiene_a_uno_joven(obj, gen, n);
+        }
     }
 
     for(size_t i = 0; i < contexto->constantes.num_textos; i++)
@@ -3597,7 +3680,7 @@ static void pdcrt_fijar_generacion_en_objetos_del_contexto(pdcrt_contexto* conte
 
 static void pdcrt_recolectar_objetos_jovenes_inalcanzables(pdcrt_contexto* contexto, unsigned int gen, size_t* m, size_t* t)
 {
-    for(pdcrt_cabecera_gc* obj = contexto->gc.primer_objeto_joven_alojado;
+    for(pdcrt_cabecera_gc* obj = contexto->gc.objetos_jovenes.primero;
         obj != NULL;)
     {
         *t += 1;
@@ -3613,7 +3696,7 @@ static void pdcrt_recolectar_objetos_jovenes_inalcanzables(pdcrt_contexto* conte
 
 static void pdcrt_recolectar_objetos_inalcanzables(pdcrt_contexto* contexto, unsigned int gen, size_t* m, size_t* t)
 {
-    for(pdcrt_cabecera_gc* obj = contexto->gc.primer_objeto_joven_alojado;
+    for(pdcrt_cabecera_gc* obj = contexto->gc.objetos_jovenes.primero;
         obj != NULL;)
     {
         *t += 1;
@@ -3629,7 +3712,19 @@ static void pdcrt_recolectar_objetos_inalcanzables(pdcrt_contexto* contexto, uns
         }
         obj = sig;
     }
-    for(pdcrt_cabecera_gc* obj = contexto->gc.primer_objeto_viejo_alojado;
+    for(pdcrt_cabecera_gc* obj = contexto->gc.objetos_viejos.primero;
+        obj != NULL;)
+    {
+        *t += 1;
+        pdcrt_cabecera_gc* sig = obj->siguiente;
+        if(obj->generacion != gen)
+        {
+            pdcrt_gc_dealojar(&contexto->gc, obj);
+            *m += 1;
+        }
+        obj = sig;
+    }
+    for(pdcrt_cabecera_gc* obj = contexto->gc.objetos_viejos_que_contienen_a_uno_joven.primero;
         obj != NULL;)
     {
         *t += 1;
@@ -3831,6 +3926,7 @@ void pdcrt_op_lsetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind
     }
     pdcrt_objeto_debe_tener_closure(marco, env);
     env.value.c.env->env[((pdcrt_local_index) ind) + PDCRT_NUM_LOCALES_ESP] = obj;
+    pdcrt_gc_write_barrier(marco->contexto, env, obj);
 }
 
 void pdcrt_op_lgetc(pdcrt_marco* marco, pdcrt_objeto env, size_t alt, size_t ind)
@@ -3864,6 +3960,7 @@ pdcrt_objeto pdcrt_op_open_frame(pdcrt_marco* marco, pdcrt_local_index padreidx,
         env.value.c.env->env[i] = pdcrt_objeto_nulo();
     }
     env.value.c.env->env[PDCRT_NUM_LOCALES_ESP + PDCRT_ID_ESUP] = padre;
+    pdcrt_gc_write_barrier(marco->contexto, env, padre);
     return env;
 }
 
@@ -3872,6 +3969,7 @@ void pdcrt_op_einit(pdcrt_marco* marco, pdcrt_objeto env, size_t i, pdcrt_objeto
     (void) marco;
     pdcrt_objeto_debe_tener_closure(marco, env);
     env.value.c.env->env[i + PDCRT_NUM_LOCALES_ESP] = local;
+    pdcrt_gc_write_barrier(marco->contexto, env, local);
 }
 
 void pdcrt_op_close_frame(pdcrt_marco* marco, pdcrt_objeto env)
@@ -3890,6 +3988,7 @@ void pdcrt_op_mkclz(pdcrt_marco* marco, pdcrt_local_index env, pdcrt_proc_t proc
     nuevo_env.value.c.env = cima.value.c.env;
     nuevo_env.value.c.proc = (pdcrt_funcion_generica) proc;
     nuevo_env.recv = (pdcrt_funcion_generica) &pdcrt_recv_closure;
+    pdcrt_gc_write_barrier(marco->contexto, nuevo_env, cima);
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, nuevo_env));
 }
 
@@ -3912,6 +4011,7 @@ void pdcrt_op_mkarr(pdcrt_marco* marco, size_t tam)
     {
         pdcrt_objeto elemento = pdcrt_sacar_de_pila(&marco->contexto->pila);
         arr.value.a->elementos[tam - i - 1] = elemento;
+        pdcrt_gc_write_barrier(marco->contexto, arr, elemento);
     }
     no_falla(pdcrt_empujar_en_pila(&marco->contexto->pila, marco->contexto->alojador, arr));
 }
@@ -4247,6 +4347,7 @@ void pdcrt_op_objattrset(pdcrt_marco* marco)
     size_t real_idx = idx.value.i;
     PDCRT_ASSERT(real_idx >= 0 && real_idx < obj.value.c.env->env_size);
     obj.value.c.env->env[real_idx] = v;
+    pdcrt_gc_write_barrier(marco->contexto, obj, v);
 }
 
 void pdcrt_op_objsz(pdcrt_marco* marco)

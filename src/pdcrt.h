@@ -265,14 +265,32 @@ size_t pdcrt_tam_de_objeto(pdcrt_cabecera_gc* obj);
 
 #define PDCRT_CABECERA_GC() pdcrt_cabecera_gc gc
 
+typedef struct pdcrt_lista_de_objetos
+{
+    pdcrt_cabecera_gc* primero;
+    pdcrt_cabecera_gc* ultimo;
+} pdcrt_lista_de_objetos;
+
+void pdcrt_agregar_a_la_lista(pdcrt_lista_de_objetos* lista, pdcrt_cabecera_gc* obj);
+void pdcrt_eliminar_de_la_lista(pdcrt_lista_de_objetos* lista, pdcrt_cabecera_gc* obj);
+
 typedef struct pdcrt_gc
 {
     pdcrt_alojador alojador;
     pdcrt_alojador alojador_original;
-    pdcrt_cabecera_gc* primer_objeto_joven_alojado;
-    pdcrt_cabecera_gc* ultimo_objeto_joven_alojado;
-    pdcrt_cabecera_gc* primer_objeto_viejo_alojado;
-    pdcrt_cabecera_gc* ultimo_objeto_viejo_alojado;
+    // Lista con los objetos jovenes (primera generación)
+    pdcrt_lista_de_objetos objetos_jovenes;
+    // Lista con los objetos viejos (segunda generación)
+    pdcrt_lista_de_objetos objetos_viejos;
+    // Para poder saber que objetos jovenes están vivos, es necesario mantener
+    // una lista de objetos viejos que contienen objetos jovenes. Todos los
+    // objetos jovenes alcanzables mediante esta lista son considerados vivos.
+    //
+    // En teoría esta lista es innecesaria ya que podríamos escanear la lista
+    // de los objetos viejos, pero esto sería muy lento. En cambio, todos los
+    // lugares en los que se fija un atributo de un objeto tienen un «write
+    // barrier» que agrega al objeto a esta lista si el valor es joven.
+    pdcrt_lista_de_objetos objetos_viejos_que_contienen_a_uno_joven;
     long long usado;
     size_t num_objetos;
     size_t cnt;
@@ -281,6 +299,9 @@ typedef struct pdcrt_gc
 
 pdcrt_error pdcrt_inic_gc(PDCRT_OUT pdcrt_gc* gc, pdcrt_alojador aloj);
 void pdcrt_deinic_gc(pdcrt_gc* gc);
+
+void pdcrt_gc_marcar_como_que_contiene_joven(pdcrt_gc* gc, pdcrt_cabecera_gc* obj);
+void pdcrt_gc_write_barrier(struct pdcrt_contexto* ctx, struct pdcrt_objeto cont, struct pdcrt_objeto val);
 
 pdcrt_cabecera_gc* pdcrt_gc_alojar(pdcrt_gc* gc, size_t sz, pdcrt_tipo_objeto_gc tipo);
 void pdcrt_gc_olvidar(pdcrt_gc* gc, pdcrt_cabecera_gc* obj);
