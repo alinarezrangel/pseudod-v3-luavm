@@ -385,6 +385,8 @@ pdcrt_error pdcrt_aloj_texto_desde_c(PDCRT_OUT pdcrt_texto** texto, pdcrt_gc* gc
 void pdcrt_dealoj_texto(pdcrt_alojador alojador, pdcrt_texto* texto);
 // Determina si dos textos son iguales.
 bool pdcrt_textos_son_iguales(pdcrt_texto* a, pdcrt_texto* b);
+// Compara un texto con un string.
+int pdcrt_texto_comparar(pdcrt_texto* a, const char* str, size_t len);
 
 struct pdcrt_espacio_de_nombres;
 typedef struct pdcrt_espacio_de_nombres pdcrt_espacio_de_nombres;
@@ -1061,6 +1063,39 @@ pdcrt_objeto pdcrt_eliminar_elemento_en_pila(pdcrt_pila* pila, size_t n);
 void pdcrt_insertar_elemento_en_pila(pdcrt_pila* pila, pdcrt_alojador alojador, size_t n, pdcrt_objeto obj);
 
 
+// Textos.
+//
+// Todos los textos del sistema exísten en esta lista de textos. Al crear un
+// texto, primero revisamos que no exísta en la lista, y si existe usamos el
+// texto ya existente en vez de crear uno nuevo. Esto significa que nunca
+// habrán dos textos con el mismo contenido, lo que significa que podemos
+// comparar textos simplemente comparando sus punteros.
+
+typedef struct pdcrt_textos
+{
+    // Arreglo ordenado de textos.
+    size_t capacidad, longitud;
+    PDCRT_ARR(capacidad) pdcrt_texto** textos;
+} pdcrt_textos;
+
+pdcrt_error pdcrt_inic_textos(pdcrt_gc* gc, size_t cap, PDCRT_OUT pdcrt_textos* textos);
+void pdcrt_deinic_textos(pdcrt_gc* gc, pdcrt_textos* textos);
+
+pdcrt_error pdcrt_textos_obtener_cstr(pdcrt_gc* gc,
+                                      pdcrt_textos* textos,
+                                      const char* cstr,
+                                      PDCRT_OUT pdcrt_texto** texto);
+
+pdcrt_error pdcrt_textos_obtener_lstr(pdcrt_gc* gc,
+                                      pdcrt_textos* textos,
+                                      const char* str,
+                                      size_t len,
+                                      PDCRT_OUT pdcrt_texto** texto);
+
+pdcrt_texto* pdcrt_obtener_texto_ctx(struct pdcrt_contexto* ctx, const char* str, size_t len);
+pdcrt_texto* pdcrt_obtener_texto_txt(pdcrt_gc* gc, pdcrt_textos* txt, const char* str, size_t len);
+
+
 // Lista de constantes ("constant pool").
 //
 // Contiene todas las constantes del programa. Tal como `pdcrt_env`, no tiene
@@ -1081,11 +1116,66 @@ typedef struct pdcrt_constantes
     pdcrt_texto* operador_mayorOIgualA;
     pdcrt_texto* operador_igualA;
     pdcrt_texto* operador_noIgualA;
+    pdcrt_texto* operador_y;
+    pdcrt_texto* operador_o;
+    pdcrt_texto* msj_sumar;
+    pdcrt_texto* msj_restar;
+    pdcrt_texto* msj_multiplicar;
+    pdcrt_texto* msj_dividir;
     pdcrt_texto* msj_igualA;
+    pdcrt_texto* msj_menorQue;
+    pdcrt_texto* msj_mayorQue;
+    pdcrt_texto* msj_menorOIgualA;
+    pdcrt_texto* msj_mayorOIgualA;
     pdcrt_texto* msj_distintoDe;
     pdcrt_texto* msj_clonar;
     pdcrt_texto* msj_llamar;
     pdcrt_texto* msj_comoTexto;
+    pdcrt_texto* msj_negar;
+    pdcrt_texto* msj_truncar;
+    pdcrt_texto* msj_piso;
+    pdcrt_texto* msj_techo;
+    pdcrt_texto* msj_comoByteEnTexto;
+    pdcrt_texto* msj_hashPara;
+    pdcrt_texto* msj_longitud;
+    pdcrt_texto* msj_comoNumeroEntero;
+    pdcrt_texto* msj_comoNumeroReal;
+    pdcrt_texto* msj_en;
+    pdcrt_texto* msj_fijarEn;
+    pdcrt_texto* msj_concatenar;
+    pdcrt_texto* msj_parteDelTexto;
+    pdcrt_texto* msj_subTexto;
+    pdcrt_texto* msj_buscar;
+    pdcrt_texto* msj_buscarEnReversa;
+    pdcrt_texto* msj_formatear;
+    pdcrt_texto* msj_byteEn;
+    pdcrt_texto* msj_comoObjeto;
+    pdcrt_texto* msj___codigoIgualA;
+    pdcrt_texto* msj___entornoIgualA;
+    pdcrt_texto* msj_escojer;
+    pdcrt_texto* msj_llamarSegun;
+    pdcrt_texto* msj_y;
+    pdcrt_texto* msj_o;
+    pdcrt_texto* msj_agregarAlFinal;
+    pdcrt_texto* msj_redimensionar;
+    pdcrt_texto* msj_entornoBootstrap;
+    pdcrt_texto* msj_fijar_entornoBootstrap;
+    pdcrt_texto* msj_leerCaracter;
+    pdcrt_texto* msj_abrirArchivo;
+    pdcrt_texto* msj_construirTexto;
+    pdcrt_texto* msj_estaAbierto;
+    pdcrt_texto* msj_leerByte;
+    pdcrt_texto* msj_cerrar;
+    pdcrt_texto* msj_obtenerSiguienteByte;
+    pdcrt_texto* msj_escribirByte;
+    pdcrt_texto* msj_escribirTexto;
+    pdcrt_texto* msj_posicionActual;
+    pdcrt_texto* msj_cambiarPosicion;
+    pdcrt_texto* msj_finDelArchivo;
+    pdcrt_texto* msj_error;
+    pdcrt_texto* msj_nombreDelArchivo;
+    pdcrt_texto* msj_modo;
+    pdcrt_texto* msj___leerTodo;
     pdcrt_texto* msj_mapear;
     pdcrt_texto* msj_reducir;
     pdcrt_texto* msj_argc;
@@ -1099,17 +1189,12 @@ typedef struct pdcrt_constantes
 } pdcrt_constantes;
 
 // Aloja una nueva lista de constantes.
-pdcrt_error pdcrt_aloj_constantes(pdcrt_gc* gc, PDCRT_OUT pdcrt_constantes* consts);
+pdcrt_error pdcrt_aloj_constantes(pdcrt_gc* gc, pdcrt_textos* textos, PDCRT_OUT pdcrt_constantes* consts);
 // Registra una constante textual en la lista. La lista es expandida en la
 // medida necesaria para que la operación funcione.
-pdcrt_error pdcrt_registrar_constante_textual(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto);
-// Desaloja las constantes con nombre de la lista de constantes.
-//
-// Las demás constantes (la que se encuentran en el campo `textos`) deben ser
-// desalojadas manualmente con `pdcrt_dealoj_constante`.
-void pdcrt_dealoj_constantes_internas(pdcrt_alojador alojador, pdcrt_constantes* consts);
-// Desaloja una constante textual.
-void pdcrt_dealoj_constante(pdcrt_alojador alojador, pdcrt_constantes* consts, size_t idx);
+pdcrt_error pdcrt_registrar_constante_textual(pdcrt_gc* gc, pdcrt_constantes* consts, size_t idx, pdcrt_texto* texto);
+// Desaloja la lista de constantes textuales.
+void pdcrt_dealoj_constantes_internas(pdcrt_gc* gc, pdcrt_constantes* consts);
 
 
 // Un módulo. Este tipo contiene tanto los datos necesarios para buscar un
@@ -1191,6 +1276,7 @@ typedef struct pdcrt_contexto
     pdcrt_alojador alojador;
     pdcrt_gc gc;
     pdcrt_constantes constantes;
+    pdcrt_textos textos;
     pdcrt_registro_de_modulos registro;
     int argc;
     char** argv;
@@ -1354,21 +1440,14 @@ void pdcrt_marco_fijar_nombre(pdcrt_marco* marco, const char* nombre);
 #define PDCRT_REGISTRAR_TXTLIT(id, lit)                                 \
     do                                                                  \
     {                                                                   \
-        pdcrt_texto* txt;                                               \
-        const char* str = (lit);                                        \
-        if((pderrno = pdcrt_aloj_texto_desde_c(&txt, &marco->contexto->gc, str)) != PDCRT_OK) \
-        {                                                               \
-            puts(pdcrt_perror(pderrno));                                \
-            exit(PDCRT_SALIDA_ERROR);                                   \
-        }                                                               \
-        pdcrt_registrar_constante_textual(aloj, &ctx->constantes, id, txt); \
+        pdcrt_texto* txt = pdcrt_obtener_texto_txt(&ctx->gc, &ctx->textos, lit, sizeof(lit) - 1); \
+        pdcrt_registrar_constante_textual(&ctx->gc, &ctx->constantes, id, txt); \
     }                                                                   \
     while(0)
 // Desaloja la literal textual con el ID dado. Solo puede llamarse entre
 // `PDCRT_MAIN_CONT_BODY_1` y `PDCRT_MAIN_CONT_BODY_2` dentro de
 // `PDCRT_MAIN_CONT`.
-#define PDCRT_DEALOJ_TXTLIT(id)                                         \
-    pdcrt_dealoj_constante(marco->contexto->alojador, &marco->contexto->constantes, id)
+#define PDCRT_DEALOJ_TXTLIT(id);
 
 // Declara, fija y obtiene una variable local.
 #define PDCRT_LOCAL(idx, name)                              \
